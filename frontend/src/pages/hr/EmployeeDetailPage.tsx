@@ -181,7 +181,7 @@ function PayrollHistoryTab({ employeeId }: { employeeId: string }) {
           <tbody>
             {data.map((e: any) => {
               const ded = ['pfAmount','esiAmount','ptAmount','tdsAmount','lopAmount','incentiveRecovery','loanDeduction'].reduce((s: number, k: string) => s + Number(e[k] || 0), 0)
-              const ps = payslipMap.get(e.id)
+              const ps = payslipMap.get(e.id) as any
               return (
                 <Tr key={e.id}>
                   <Td className="font-semibold">{e.cycle?.payrollMonth}</Td>
