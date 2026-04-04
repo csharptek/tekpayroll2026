@@ -14,20 +14,24 @@ const msalConfig: Configuration = {
 
 export const msalInstance = new PublicClientApplication(msalConfig)
 
-// Scopes requested — basic profile + our API
+// Request roles claim by including the app's own scope
+// This is what causes the roles[] array to appear in the token
 export const loginRequest = {
-  scopes: ['openid', 'profile', 'email', 'User.Read'],
+  scopes: [
+    'openid',
+    'profile',
+    'email',
+    'User.Read',
+    `api://${import.meta.env.VITE_AZURE_CLIENT_ID}/access_as_user`,
+  ],
 }
 
 export async function initializeMsal(): Promise<void> {
   await msalInstance.initialize()
-  // Handle redirect response (called after Microsoft redirects back)
-  await msalInstance.handleRedirectPromise()
 }
 
 export async function signInWithMicrosoft(): Promise<string | null> {
   try {
-    // Try silent first (if user already logged in)
     const accounts = msalInstance.getAllAccounts()
     if (accounts.length > 0) {
       const silentResult = await msalInstance.acquireTokenSilent({
@@ -36,10 +40,8 @@ export async function signInWithMicrosoft(): Promise<string | null> {
       })
       return silentResult.idToken
     }
-
-    // Otherwise redirect to Microsoft login
     await msalInstance.loginRedirect(loginRequest)
-    return null // Will return after redirect
+    return null
   } catch (err) {
     console.error('[MSAL] Sign in error:', err)
     throw err
@@ -52,7 +54,6 @@ export async function getTokenAfterRedirect(): Promise<{ token: string; account:
     return { token: result.idToken, account: result.account }
   }
 
-  // Check if already signed in
   const accounts = msalInstance.getAllAccounts()
   if (accounts.length > 0) {
     try {
@@ -65,7 +66,6 @@ export async function getTokenAfterRedirect(): Promise<{ token: string; account:
       return null
     }
   }
-
   return null
 }
 
