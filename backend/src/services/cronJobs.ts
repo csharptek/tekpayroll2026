@@ -200,43 +200,26 @@ export async function cronGeneratePayslips() {
 export async function cronSyncEntraId() {
   console.log('[CRON] cronSyncEntraId — delta sync')
 
-  // Stub until Azure credentials are provided
-  if (process.env.AZURE_TENANT_ID === 'PLACEHOLDER') {
-    console.log('[CRON] Entra ID sync skipped — credentials not configured')
-    await prisma.syncLog.create({
-      data: {
-        syncType:    'DELTA',
-        status:      'failed',
-        errorMessage: 'Azure credentials not configured',
-        startedAt:   new Date(),
-        completedAt: new Date(),
-      },
-    })
-    return
-  }
-
   const startedAt = new Date()
-  let added = 0, updated = 0, deactivated = 0
 
   try {
-    // Real Graph API sync (implemented in Stage 16 when credentials are ready)
-    // Placeholder: will be replaced with:
-    //   1. GET /users/delta with stored deltaToken
-    //   2. Upsert changed employees
-    //   3. Deactivate blocked accounts (accountEnabled = false)
-    //   4. Store new deltaToken for next run
+    const { syncEntraUsers } = await import('./graphSyncService')
+    const result = await syncEntraUsers()
 
     await prisma.syncLog.create({
       data: {
         syncType:           'DELTA',
-        status:             'success',
-        recordsAdded:       added,
-        recordsUpdated:     updated,
-        recordsDeactivated: deactivated,
+        status:             result.errors.length > 0 ? 'partial' : 'success',
+        recordsAdded:       result.added,
+        recordsUpdated:     result.updated,
+        recordsDeactivated: result.deactivated,
+        recordsSkipped:     result.skipped,
         startedAt,
         completedAt:        new Date(),
       },
     })
+
+    console.log(`[CRON] Entra sync: +${result.added} updated ${result.updated} deactivated ${result.deactivated}`)
 
     console.log(`[CRON] Entra sync complete: +${added} updated ${updated} deactivated ${deactivated}`)
   } catch (err: any) {

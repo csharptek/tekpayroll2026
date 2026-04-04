@@ -1,290 +1,313 @@
-import { Decimal } from '@prisma/client/runtime/library';
-import { prisma } from '../utils/prisma';
+import { prisma } from '../utils/prisma'
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
+// ─── TYPES ───────────────────────────────────────────────────────────────────
+
+export interface SalaryInput {
+  annualCtc:       number
+  basicPercent:    number   // default 45
+  hraPercent:      number   // default 35
+  transportMonthly: number | null  // null = use formula (4% of Basic)
+  fbpMonthly:      number | null   // null = use formula (4% of Basic)
+  mediclaim:       number   // annual
+  hasIncentive:    boolean
+  incentivePercent: number  // default 12
+}
 
 export interface SalaryStructure {
-  annualCtc: number;
-  monthlyCtc: number;
-  basic: number;
-  hra: number;
-  allowances: number;
-  grossSalary: number;
-  monthlyIncentive: number;
+  // Annual
+  annualCtc:        number
+  annualBonus:      number  // = CTC × incentivePercent (paid March)
+  // Monthly components
+  basicMonthly:     number
+  hraMonthly:       number
+  transportMonthly: number
+  fbpMonthly:       number
+  hyiMonthly:       number  // balancing figure
+  grandTotalMonthly: number // gross payable monthly
+  // Computed annual equivalents
+  basicAnnual:      number
+  hraAnnual:        number
+  employerPfAnnual: number
+  // Deductions
+  employeePfMonthly: number
 }
 
 export interface ProrationResult {
-  totalDays: number;
-  payableDays: number;
-  isProrated: boolean;
-  proratedGross: number;
+  totalDays:    number
+  payableDays:  number
+  isProrated:   boolean
+  proratedGross: number
 }
 
 export interface DeductionResult {
-  pf: number;
-  esi: number;
-  pt: number;
-  tds: number;
-  lop: number;
-  incentiveRecovery: number;
-  loanDeduction: number;
+  pf:                number
+  esi:               number
+  pt:                number
+  tds:               number
+  lop:               number
+  incentiveRecovery: number
+  loanDeduction:     number
 }
 
 export interface PayrollCalculation {
-  salary: SalaryStructure;
-  proration: ProrationResult;
-  incentive: number;
-  reimbursements: number;
-  deductions: DeductionResult;
-  netSalary: number;
+  salary:         SalaryStructure
+  proration:      ProrationResult
+  isBonusMonth:   boolean
+  annualBonus:    number
+  reimbursements: number
+  deductions:     DeductionResult
+  netSalary:      number
 }
 
-// ─── CONFIG DEFAULTS ─────────────────────────────────────────────────────────
-const PF_CAP = 1800;          // Max PF deduction per month
-const ESI_THRESHOLD = 21000;  // ESI applies only if gross <= this
-const ESI_RATE = 0.0075;      // 0.75%
-const PF_RATE = 0.12;         // 12% of basic
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-// ─── SALARY STRUCTURE ────────────────────────────────────────────────────────
+const EMPLOYER_PF_ANNUAL = 21600   // ₹1,800/month fixed
+const EMPLOYER_PF_MONTHLY = 1800
+const EMPLOYEE_PF_CAP = 1800       // Max employee PF deduction
+const ESI_THRESHOLD = 21000        // ESI only if gross ≤ this
+const ESI_RATE = 0.0075            // 0.75%
+const TRANSPORT_DEFAULT_PCT = 0.04 // 4% of Basic monthly
+const FBP_DEFAULT_PCT = 0.04       // 4% of Basic monthly
+const BONUS_MONTH = 3              // March (0-indexed = 2, but we store 1-indexed = 3)
 
-export function computeSalaryStructure(
-  annualCtc: number,
-  annualIncentive: number = 0
-): SalaryStructure {
-  const monthlyCtc = round2(annualCtc / 12);
-  const basic = round2(monthlyCtc * 0.40);
-  const hra = round2(basic * 0.80);
-  const allowances = round2(monthlyCtc - basic - hra);
-  const grossSalary = round2(basic + hra + allowances); // = monthlyCtc
-  const monthlyIncentive = round2(annualIncentive / 12);
+// ─── CORE SALARY CALCULATOR ──────────────────────────────────────────────────
 
-  return { annualCtc, monthlyCtc, basic, hra, allowances, grossSalary, monthlyIncentive };
+export function computeSalaryStructure(input: SalaryInput): SalaryStructure {
+  const {
+    annualCtc,
+    basicPercent,
+    hraPercent,
+    mediclaim,
+    hasIncentive,
+    incentivePercent,
+  } = input
+
+  // Annual bonus = CTC × incentive% (if applicable)
+  const annualBonus = hasIncentive ? r2(annualCtc * incentivePercent / 100) : 0
+
+  // Employer PF is fixed inside CTC
+  const employerPfAnnual = EMPLOYER_PF_ANNUAL
+
+  // Grand Total Annual = CTC - Annual Bonus - Employer PF - Mediclaim
+  const grandTotalAnnual = annualCtc - annualBonus - employerPfAnnual - mediclaim
+  const grandTotalMonthly = r2(grandTotalAnnual / 12)
+
+  // Basic = CTC × basicPercent%
+  const basicAnnual   = r2(annualCtc * basicPercent / 100)
+  const basicMonthly  = r2(basicAnnual / 12)
+
+  // HRA = CTC × hraPercent%
+  const hraAnnual    = r2(annualCtc * hraPercent / 100)
+  const hraMonthly   = r2(hraAnnual / 12)
+
+  // Transport & FBP — use input if provided, else formula
+  const transportMonthly = input.transportMonthly !== null && input.transportMonthly !== undefined
+    ? r2(input.transportMonthly)
+    : r2(basicMonthly * TRANSPORT_DEFAULT_PCT)
+
+  const fbpMonthly = input.fbpMonthly !== null && input.fbpMonthly !== undefined
+    ? r2(input.fbpMonthly)
+    : r2(basicMonthly * FBP_DEFAULT_PCT)
+
+  // HYI = Grand Total - Basic - HRA - Transport - FBP (balancing figure)
+  const hyiMonthly = r2(grandTotalMonthly - basicMonthly - hraMonthly - transportMonthly - fbpMonthly)
+
+  // Employee PF = min(Basic × 12%, 1800)
+  const employeePfMonthly = Math.min(r2(basicMonthly * 0.12), EMPLOYEE_PF_CAP)
+
+  return {
+    annualCtc,
+    annualBonus,
+    basicMonthly,
+    hraMonthly,
+    transportMonthly,
+    fbpMonthly,
+    hyiMonthly,
+    grandTotalMonthly,
+    basicAnnual,
+    hraAnnual,
+    employerPfAnnual,
+    employeePfMonthly,
+  }
 }
 
 // ─── PRORATION ───────────────────────────────────────────────────────────────
 
 export function computeProration(
-  grossSalary: number,
-  cycleStart: Date,  // 26th of previous month
-  cycleEnd: Date,    // 25th of current month
-  joiningDate?: Date | null,
-  lastWorkingDay?: Date | null
+  grandTotalMonthly: number,
+  cycleStart: Date,
+  cycleEnd:   Date,
+  joiningDate?:     Date | null,
+  lastWorkingDay?:  Date | null
 ): ProrationResult {
-  const totalDays = daysBetween(cycleStart, cycleEnd);
+  const totalDays = daysBetween(cycleStart, cycleEnd)
+  let payableDays = totalDays
+  let isProrated  = false
 
-  let payableDays = totalDays;
-  let isProrated = false;
-
-  // Joiner mid-cycle
   if (joiningDate && joiningDate > cycleStart && joiningDate <= cycleEnd) {
-    payableDays = daysBetween(joiningDate, cycleEnd);
-    isProrated = true;
+    payableDays = daysBetween(joiningDate, cycleEnd)
+    isProrated  = true
   }
 
-  // Resigner mid-cycle
   if (lastWorkingDay && lastWorkingDay >= cycleStart && lastWorkingDay < cycleEnd) {
-    payableDays = daysBetween(cycleStart, lastWorkingDay);
-    isProrated = true;
+    payableDays = daysBetween(cycleStart, lastWorkingDay)
+    isProrated  = true
   }
 
-  const proratedGross = round2((grossSalary / totalDays) * payableDays);
-
-  return { totalDays, payableDays, isProrated, proratedGross };
+  const proratedGross = r2((grandTotalMonthly / totalDays) * payableDays)
+  return { totalDays, payableDays, isProrated, proratedGross }
 }
 
 // ─── LOP ─────────────────────────────────────────────────────────────────────
 
-export function computeLop(grossSalary: number, totalDays: number, lopDays: number): number {
-  if (lopDays <= 0) return 0;
-  return round2((grossSalary / totalDays) * lopDays);
-}
-
-// ─── PF ──────────────────────────────────────────────────────────────────────
-
-export function computePf(basic: number): number {
-  return Math.min(round2(basic * PF_RATE), PF_CAP);
+export function computeLop(grandTotalMonthly: number, totalDays: number, lopDays: number): number {
+  if (lopDays <= 0) return 0
+  return r2((grandTotalMonthly / totalDays) * lopDays)
 }
 
 // ─── ESI ─────────────────────────────────────────────────────────────────────
 
-export function computeEsi(grossSalary: number): number {
-  if (grossSalary > ESI_THRESHOLD) return 0;
-  return round2(grossSalary * ESI_RATE);
+export function computeEsi(grandTotalMonthly: number): number {
+  if (grandTotalMonthly > ESI_THRESHOLD) return 0
+  return r2(grandTotalMonthly * ESI_RATE)
 }
 
-// ─── PROFESSIONAL TAX ─────────────────────────────────────────────────────────
+// ─── PROFESSIONAL TAX ────────────────────────────────────────────────────────
 
-export async function computePt(grossSalary: number, state: string): Promise<number> {
-  if (!state) return 0;
-
+export async function computePt(grandTotalMonthly: number, state: string): Promise<number> {
+  if (!state) return 0
   const slab = await prisma.ptSlab.findFirst({
     where: {
       state: { equals: state, mode: 'insensitive' },
-      minSalary: { lte: grossSalary },
-      OR: [
-        { maxSalary: null },
-        { maxSalary: { gte: grossSalary } },
-      ],
+      minSalary: { lte: grandTotalMonthly },
+      OR: [{ maxSalary: null }, { maxSalary: { gte: grandTotalMonthly } }],
     },
     orderBy: { minSalary: 'desc' },
-  });
-
-  return slab ? Number(slab.ptAmount) : 0;
-}
-
-// ─── INCENTIVE RECOVERY ──────────────────────────────────────────────────────
-
-export function computeIncentiveRecovery(
-  monthlyIncentive: number,
-  resignationDate: Date | null,
-  lastWorkingDay: Date | null
-): number {
-  if (!resignationDate || !lastWorkingDay || monthlyIncentive <= 0) return 0;
-
-  // Determine which slab we're in (Jan-Jun or Jul-Dec)
-  const lwdMonth = lastWorkingDay.getMonth(); // 0-indexed
-  const lwdYear = lastWorkingDay.getFullYear();
-
-  let slabStart: Date;
-  if (lwdMonth <= 5) {
-    // Jan-Jun slab
-    slabStart = new Date(lwdYear, 0, 1); // Jan 1
-  } else {
-    // Jul-Dec slab
-    slabStart = new Date(lwdYear, 6, 1); // Jul 1
-  }
-
-  // Months from slab start to (resignation month - 1)
-  const resignMonth = resignationDate.getMonth();
-  const resignYear = resignationDate.getFullYear();
-
-  const monthsPaid = (resignYear - slabStart.getFullYear()) * 12
-    + resignMonth - slabStart.getMonth();
-
-  if (monthsPaid <= 0) return 0;
-
-  return round2(monthlyIncentive * monthsPaid);
+  })
+  return slab ? Number(slab.ptAmount) : 0
 }
 
 // ─── LOAN DEDUCTION ──────────────────────────────────────────────────────────
 
-export async function computeLoanDeduction(employeeId: string): Promise<{
-  totalDeduction: number;
-  loanIds: string[];
-}> {
-  const activeLoans = await prisma.loan.findMany({
-    where: { employeeId, status: 'ACTIVE' },
-  });
-
-  let totalDeduction = 0;
-  const loanIds: string[] = [];
-
-  for (const loan of activeLoans) {
-    const emi = Number(loan.emiAmount);
-    const outstanding = Number(loan.outstandingBalance);
-    const deduction = Math.min(emi, outstanding);
-    totalDeduction += deduction;
-    loanIds.push(loan.id);
+export async function computeLoanDeduction(employeeId: string): Promise<number> {
+  const loans = await prisma.loan.findMany({ where: { employeeId, status: 'ACTIVE' } })
+  let total = 0
+  for (const loan of loans) {
+    total += Math.min(Number(loan.emiAmount), Number(loan.outstandingBalance))
   }
-
-  return { totalDeduction: round2(totalDeduction), loanIds };
+  return r2(total)
 }
 
-// ─── NET SALARY ──────────────────────────────────────────────────────────────
+// ─── IS BONUS MONTH (March = month 3) ────────────────────────────────────────
 
-export function computeNetSalary(
-  proratedGross: number,
-  incentive: number,
-  reimbursements: number,
-  deductions: DeductionResult
-): number {
-  const totalAdditions = proratedGross + incentive + reimbursements;
-  const totalDeductions =
-    deductions.pf +
-    deductions.esi +
-    deductions.pt +
-    deductions.tds +
-    deductions.lop +
-    deductions.incentiveRecovery +
-    deductions.loanDeduction;
-
-  return round2(Math.max(0, totalAdditions - totalDeductions));
+export function isBonusMonth(payrollMonth: string): boolean {
+  // payrollMonth format: "2026-03"
+  const month = parseInt(payrollMonth.split('-')[1])
+  return month === BONUS_MONTH
 }
 
-// ─── FULL CALCULATION ─────────────────────────────────────────────────────────
+// ─── FULL CALCULATION ────────────────────────────────────────────────────────
 
 export async function calculatePayrollForEmployee(params: {
-  employeeId: string;
-  annualCtc: number;
-  annualIncentive: number;
-  state: string;
-  joiningDate: Date;
-  lastWorkingDay?: Date | null;
-  resignationDate?: Date | null;
-  cycleStart: Date;
-  cycleEnd: Date;
-  lopDays: number;
-  tdsAmount: number;
-  reimbursements: number;
+  employeeId:      string
+  salaryInput:     SalaryInput
+  state:           string
+  joiningDate:     Date
+  lastWorkingDay?: Date | null
+  resignationDate?: Date | null
+  cycleStart:      Date
+  cycleEnd:        Date
+  payrollMonth:    string
+  lopDays:         number
+  tdsMonthly:      number
+  reimbursements:  number
 }): Promise<PayrollCalculation> {
-  const salary = computeSalaryStructure(params.annualCtc, params.annualIncentive);
-  const proration = computeProration(
-    salary.grossSalary,
+
+  const salary     = computeSalaryStructure(params.salaryInput)
+  const proration  = computeProration(
+    salary.grandTotalMonthly,
     params.cycleStart,
     params.cycleEnd,
     params.joiningDate,
     params.lastWorkingDay
-  );
+  )
 
-  const lopAmount = computeLop(salary.grossSalary, proration.totalDays, params.lopDays);
-  const pf = computePf(salary.basic);
-  const esi = computeEsi(salary.grossSalary);
-  const pt = await computePt(salary.grossSalary, params.state);
-  const incentiveRecovery = computeIncentiveRecovery(
-    salary.monthlyIncentive,
-    params.resignationDate || null,
-    params.lastWorkingDay || null
-  );
-  const { totalDeduction: loanDeduction } = await computeLoanDeduction(params.employeeId);
+  const lopAmount       = computeLop(salary.grandTotalMonthly, proration.totalDays, params.lopDays)
+  const esi             = computeEsi(salary.grandTotalMonthly)
+  const pt              = await computePt(salary.grandTotalMonthly, params.state)
+  const loanDeduction   = await computeLoanDeduction(params.employeeId)
+  const bonusMonth      = isBonusMonth(params.payrollMonth)
+  const annualBonus     = bonusMonth ? salary.annualBonus : 0
 
   const deductions: DeductionResult = {
-    pf,
+    pf:                salary.employeePfMonthly,
     esi,
     pt,
-    tds: params.tdsAmount,
-    lop: lopAmount,
-    incentiveRecovery,
+    tds:               params.tdsMonthly,
+    lop:               lopAmount,
+    incentiveRecovery: 0,  // Only applies on F&F
     loanDeduction,
-  };
+  }
 
-  const netSalary = computeNetSalary(
-    proration.proratedGross,
-    salary.monthlyIncentive,
-    params.reimbursements,
-    deductions
-  );
+  // Net = proratedGross + annualBonus (if March) + reimbursements - all deductions
+  const totalDeductions = deductions.pf + deductions.esi + deductions.pt +
+    deductions.tds + deductions.lop + deductions.incentiveRecovery + deductions.loanDeduction
+
+  const netSalary = r2(Math.max(0,
+    proration.proratedGross + annualBonus + params.reimbursements - totalDeductions
+  ))
 
   return {
     salary,
     proration,
-    incentive: salary.monthlyIncentive,
+    isBonusMonth: bonusMonth,
+    annualBonus,
     reimbursements: params.reimbursements,
     deductions,
     netSalary,
-  };
+  }
+}
+
+// ─── PREVIEW BREAKDOWN (for UI — shows all components before saving) ──────────
+
+export function previewSalaryBreakdown(input: SalaryInput): {
+  components: { label: string; monthly: number; annual: number; editable: boolean }[]
+  grossMonthly: number
+  annualBonus: number
+  employerPf: number
+  totalCtc: number
+  employeePf: number
+  netEstimate: number
+} {
+  const s = computeSalaryStructure(input)
+
+  const components = [
+    { label: 'Basic',          monthly: s.basicMonthly,     annual: s.basicAnnual,           editable: false },
+    { label: 'HRA',            monthly: s.hraMonthly,       annual: s.hraAnnual,             editable: false },
+    { label: 'Transportation', monthly: s.transportMonthly, annual: s.transportMonthly * 12, editable: true  },
+    { label: 'FBP',            monthly: s.fbpMonthly,       annual: s.fbpMonthly * 12,       editable: true  },
+    { label: 'HYI',            monthly: s.hyiMonthly,       annual: s.hyiMonthly * 12,       editable: false },
+  ]
+
+  return {
+    components,
+    grossMonthly:  s.grandTotalMonthly,
+    annualBonus:   s.annualBonus,
+    employerPf:    s.employerPfAnnual,
+    totalCtc:      s.annualCtc,
+    employeePf:    s.employeePfMonthly,
+    netEstimate:   r2(s.grandTotalMonthly - s.employeePfMonthly),
+  }
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 function daysBetween(start: Date, end: Date): number {
-  const ms = end.getTime() - start.getTime();
-  return Math.round(ms / (1000 * 60 * 60 * 24)) + 1; // inclusive
+  return Math.round(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 }
 
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
+function r2(n: number): number {
+  return Math.round(n * 100) / 100
 }
 
-export function toNumber(decimal: Decimal | number): number {
-  return typeof decimal === 'number' ? decimal : Number(decimal);
-}
+export { r2 }

@@ -240,3 +240,31 @@ employeeRouter.get('/:id/salary-revisions', requireHR, async (req, res) => {
 
   res.json({ success: true, data: revisions });
 });
+
+// ─── SALARY PREVIEW ──────────────────────────────────────────────────────────
+// POST /api/employees/salary-preview
+// Returns calculated breakdown without saving — used for the manual review screen
+
+employeeRouter.post('/salary-preview', requireHR, async (req, res) => {
+  const {
+    annualCtc, basicPercent = 45, hraPercent = 35,
+    transportMonthly = null, fbpMonthly = null,
+    mediclaim = 0, hasIncentive = false, incentivePercent = 12,
+  } = req.body
+
+  if (!annualCtc) return res.status(400).json({ success: false, error: 'annualCtc is required' })
+
+  const { previewSalaryBreakdown } = await import('../services/payrollEngine')
+  const preview = previewSalaryBreakdown({
+    annualCtc: Number(annualCtc),
+    basicPercent: Number(basicPercent),
+    hraPercent: Number(hraPercent),
+    transportMonthly: transportMonthly !== null ? Number(transportMonthly) : null,
+    fbpMonthly: fbpMonthly !== null ? Number(fbpMonthly) : null,
+    mediclaim: Number(mediclaim),
+    hasIncentive: Boolean(hasIncentive),
+    incentivePercent: Number(incentivePercent),
+  })
+
+  res.json({ success: true, data: preview })
+})

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// CSharpTek Payroll System — Prisma Schema
+// CSharpTek Payroll System — Prisma Schema v2
 // ─────────────────────────────────────────────────────────────────────────────
 
 generator client {
@@ -75,6 +75,7 @@ enum AuditAction {
   LOAN_CREATE
   LOAN_CLOSE
   SYNC_TRIGGER
+  SALARY_REVISION
 }
 
 enum SyncType {
@@ -109,7 +110,7 @@ model Employee {
   companyId      String
   company        Company        @relation(fields: [companyId], references: [id])
 
-  // Synced from Entra ID — read-only in app
+  // Synced from Entra ID
   entraId        String?        @unique
   employeeCode   String         @unique
   name           String
@@ -119,17 +120,36 @@ model Employee {
   mobilePhone    String?
   officeLocation String?
 
-  // Payroll-specific — managed by HR
-  state          String?        // For PT slab lookup
+  // Payroll-specific
+  state          String?
   joiningDate    DateTime
   resignationDate DateTime?
   lastWorkingDay  DateTime?
   status         EmployeeStatus @default(ACTIVE)
   role           UserRole       @default(EMPLOYEE)
 
-  // Salary (current — history tracked in SalaryRevision)
-  annualCtc      Decimal        @db.Decimal(12, 2)
-  annualIncentive Decimal       @default(0) @db.Decimal(12, 2)
+  // ─── NEW SALARY STRUCTURE (v2) ───────────────────────────────────────────
+  annualCtc           Decimal  @db.Decimal(12, 2)
+
+  // Salary component percentages (stored so HR can override per employee)
+  basicPercent        Decimal  @default(45) @db.Decimal(5, 2)   // default 45% of CTC
+  hraPercent          Decimal  @default(35) @db.Decimal(5, 2)   // default 35% of CTC
+
+  // Fixed monthly allowances (HR editable, default = 4% of Basic monthly)
+  transportMonthly    Decimal? @db.Decimal(10, 2)  // null = use default formula
+  fbpMonthly          Decimal? @db.Decimal(10, 2)  // null = use default formula
+
+  // Mediclaim (annual, optional)
+  mediclaim           Decimal  @default(0) @db.Decimal(10, 2)
+
+  // Incentive / Annual Bonus
+  hasIncentive        Boolean  @default(false)
+  incentivePercent    Decimal  @default(12) @db.Decimal(5, 2)   // % of CTC
+  // Annual/Joining bonus = CTC × incentivePercent (paid in March every year)
+  // Computed field — not stored, calculated from above
+
+  // TDS (manual per employee)
+  tdsMonthly          Decimal  @default(0) @db.Decimal(10, 2)
 
   // Compliance
   panNumber      String?
@@ -170,9 +190,8 @@ model BankDetail {
   bankName       String
   accountName    String
 
-  // Change approval gate — HR must approve before next payroll
   pendingChange  Boolean  @default(false)
-  pendingData    Json?    // Stores the proposed new bank details
+  pendingData    Json?
   approvedAt     DateTime?
   approvedBy     String?
 
@@ -188,12 +207,29 @@ model SalaryRevision {
   employee        Employee @relation(fields: [employeeId], references: [id])
 
   effectiveFrom   DateTime
-  previousCtc     Decimal  @db.Decimal(12, 2)
-  newCtc          Decimal  @db.Decimal(12, 2)
-  previousIncentive Decimal @default(0) @db.Decimal(12, 2)
-  newIncentive    Decimal  @default(0) @db.Decimal(12, 2)
+
+  // Full salary snapshot at time of revision
+  previousCtc          Decimal  @db.Decimal(12, 2)
+  newCtc               Decimal  @db.Decimal(12, 2)
+  previousBasicPct     Decimal  @default(45) @db.Decimal(5, 2)
+  newBasicPct          Decimal  @default(45) @db.Decimal(5, 2)
+  previousHraPct       Decimal  @default(35) @db.Decimal(5, 2)
+  newHraPct            Decimal  @default(35) @db.Decimal(5, 2)
+  previousHasIncentive Boolean  @default(false)
+  newHasIncentive      Boolean  @default(false)
+  previousIncentivePct Decimal  @default(12) @db.Decimal(5, 2)
+  newIncentivePct      Decimal  @default(12) @db.Decimal(5, 2)
+  previousTransport    Decimal? @db.Decimal(10, 2)
+  newTransport         Decimal? @db.Decimal(10, 2)
+  previousFbp          Decimal? @db.Decimal(10, 2)
+  newFbp               Decimal? @db.Decimal(10, 2)
+  previousMediclaim    Decimal  @default(0) @db.Decimal(10, 2)
+  newMediclaim         Decimal  @default(0) @db.Decimal(10, 2)
+  previousTds          Decimal  @default(0) @db.Decimal(10, 2)
+  newTds               Decimal  @default(0) @db.Decimal(10, 2)
+
   reason          String?
-  revisedBy       String   // Employee ID of HR who made the change
+  revisedBy       String
   revisedByName   String
 
   createdAt       DateTime @default(now())
@@ -206,12 +242,12 @@ model SalaryRevision {
 
 model PayrollCycle {
   id            String        @id @default(cuid())
-  cycleStart    DateTime      // 26th of previous month
-  cycleEnd      DateTime      // 25th of current month
-  payrollMonth  String        // e.g. "2025-04" — display label
-  payrollDate   DateTime      // 27th — when calculation runs
-  payslipDate   DateTime      // 5th of next month — when payslips release
-  salaryDate    DateTime      // Last day of month — when salary is paid
+  cycleStart    DateTime
+  cycleEnd      DateTime
+  payrollMonth  String
+  payrollDate   DateTime
+  payslipDate   DateTime
+  salaryDate    DateTime
 
   status        PayrollStatus @default(DRAFT)
   lockedAt      DateTime?
@@ -221,8 +257,7 @@ model PayrollCycle {
   unlockReason  String?
   disbursedAt   DateTime?
   disbursedBy   String?
-
-  runAt         DateTime?     // When payroll engine was last run
+  runAt         DateTime?
   runBy         String?
 
   totalGross    Decimal?      @db.Decimal(14, 2)
@@ -234,10 +269,10 @@ model PayrollCycle {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  entries       PayrollEntry[]
-  lopEntries    LopEntry[]
+  entries        PayrollEntry[]
+  lopEntries     LopEntry[]
   reimbursements Reimbursement[]
-  payslips      Payslip[]
+  payslips       Payslip[]
 
   @@index([payrollMonth])
   @@index([status])
@@ -252,13 +287,17 @@ model PayrollEntry {
   employeeId      String
   employee        Employee           @relation(fields: [employeeId], references: [id])
 
-  // Salary structure snapshot at time of calculation
+  // Salary snapshot
   annualCtc       Decimal            @db.Decimal(12, 2)
   monthlyCtc      Decimal            @db.Decimal(12, 2)
   basic           Decimal            @db.Decimal(12, 2)
   hra             Decimal            @db.Decimal(12, 2)
-  allowances      Decimal            @db.Decimal(12, 2)
-  grossSalary     Decimal            @db.Decimal(12, 2)
+  transport       Decimal            @default(0) @db.Decimal(10, 2)
+  fbp             Decimal            @default(0) @db.Decimal(10, 2)
+  hyi             Decimal            @default(0) @db.Decimal(10, 2)   // balancing component
+  grossSalary     Decimal            @db.Decimal(12, 2)               // grand total
+  annualBonus     Decimal            @default(0) @db.Decimal(12, 2)   // March payout
+  isBolusMonth    Boolean            @default(false)                  // true in March
 
   // Proration
   totalDays       Int
@@ -267,7 +306,7 @@ model PayrollEntry {
   proratedGross   Decimal            @db.Decimal(12, 2)
 
   // Additions
-  incentive       Decimal            @default(0) @db.Decimal(12, 2)
+  incentive       Decimal            @default(0) @db.Decimal(12, 2)   // monthly incentive
   reimbursementTotal Decimal         @default(0) @db.Decimal(12, 2)
 
   // Deductions
@@ -280,13 +319,10 @@ model PayrollEntry {
   incentiveRecovery Decimal          @default(0) @db.Decimal(12, 2)
   loanDeduction   Decimal            @default(0) @db.Decimal(12, 2)
 
-  // Net
   netSalary       Decimal            @db.Decimal(12, 2)
 
-  // Adjustment note (if HR manually overrides)
   adjustmentNote  String?
   adjustedBy      String?
-
   status          PayrollEntryStatus @default(PENDING)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
@@ -329,7 +365,7 @@ model Reimbursement {
   employeeId  String
   employee    Employee     @relation(fields: [employeeId], references: [id])
 
-  category    String       // e.g. Travel, Medical, Internet
+  category    String
   amount      Decimal      @db.Decimal(10, 2)
   notes       String?
   addedBy     String
@@ -350,15 +386,14 @@ model Payslip {
   entryId       String        @unique
   entry         PayrollEntry  @relation(fields: [entryId], references: [id])
 
-  pdfUrl        String?       // Cloudflare R2 URL
-  pdfKey        String?       // R2 object key
+  pdfUrl        String?
+  pdfKey        String?
   status        PayslipStatus @default(PENDING)
 
   generatedAt   DateTime?
   emailedAt     DateTime?
-  emailStatus   String?       // delivered / bounced / etc
+  emailStatus   String?
 
-  // Re-generation tracking
   version       Int           @default(1)
   regeneratedAt DateTime?
   regeneratedBy String?
@@ -371,7 +406,7 @@ model Payslip {
   @@index([employeeId])
 }
 
-// ─── FULL & FINAL SETTLEMENT ─────────────────────────────────────────────────
+// ─── F&F SETTLEMENT ──────────────────────────────────────────────────────────
 
 model FnfSettlement {
   id                  String      @id @default(cuid())
@@ -382,14 +417,10 @@ model FnfSettlement {
   lastWorkingDay      DateTime
   noticePeriosDays    Int         @default(0)
 
-  // Salary component
   salaryDays          Int
   salaryAmount        Decimal     @db.Decimal(12, 2)
-
-  // Additions
   reimbursements      Decimal     @default(0) @db.Decimal(12, 2)
 
-  // Deductions
   pfAmount            Decimal     @default(0) @db.Decimal(12, 2)
   esiAmount           Decimal     @default(0) @db.Decimal(12, 2)
   ptAmount            Decimal     @default(0) @db.Decimal(12, 2)
@@ -407,14 +438,13 @@ model FnfSettlement {
 
   pdfUrl              String?
   pdfKey              String?
-
   notes               String?
 
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 }
 
-// ─── LOANS & ADVANCES ────────────────────────────────────────────────────────
+// ─── LOANS ───────────────────────────────────────────────────────────────────
 
 model Loan {
   id              String          @id @default(cuid())
@@ -425,7 +455,7 @@ model Loan {
   disbursedOn     DateTime
   tenureMonths    Int
   emiAmount       Decimal         @db.Decimal(10, 2)
-  interestRate    Decimal         @default(0) @db.Decimal(5, 2) // 0 for interest-free
+  interestRate    Decimal         @default(0) @db.Decimal(5, 2)
   purpose         String?
 
   totalRepaid     Decimal         @default(0) @db.Decimal(12, 2)
@@ -455,7 +485,7 @@ model LoanRepayment {
   entry       PayrollEntry @relation(fields: [entryId], references: [id])
 
   amount      Decimal      @db.Decimal(10, 2)
-  cycleMonth  String       // e.g. "2025-04"
+  cycleMonth  String
   paidOn      DateTime
 
   createdAt   DateTime     @default(now())
@@ -467,7 +497,7 @@ model PtSlab {
   id            String   @id @default(cuid())
   state         String
   minSalary     Decimal  @db.Decimal(10, 2)
-  maxSalary     Decimal? @db.Decimal(10, 2) // null = no upper limit
+  maxSalary     Decimal? @db.Decimal(10, 2)
   ptAmount      Decimal  @db.Decimal(8, 2)
   effectiveFrom DateTime @default(now())
 
@@ -487,30 +517,37 @@ model SystemConfig {
   updatedBy   String?
 }
 
+// ─── SYNC DOMAIN CONFIG ──────────────────────────────────────────────────────
+// Stores which Entra ID domains are selected for sync
+
+model SyncDomainConfig {
+  id        String   @id @default(cuid())
+  domain    String   @unique
+  isEnabled Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // ─── AUDIT LOG ───────────────────────────────────────────────────────────────
 
 model AuditLog {
   id            String      @id @default(cuid())
 
-  // Who did it
-  performedById String
-  performedBy   Employee    @relation("AuditPerformer", fields: [performedById], references: [id])
+  performedById   String
+  performedBy     Employee    @relation("AuditPerformer", fields: [performedById], references: [id])
   performedByName String
   performedByRole UserRole
 
-  // What they did
   action        AuditAction
-  tableName     String?     // e.g. "employees", "payroll_entries"
-  recordId      String?     // ID of the affected record
+  tableName     String?
+  recordId      String?
 
-  // On whom (optional — for employee-specific actions)
   targetEmployeeId String?
   targetEmployee   Employee? @relation("AuditEmployee", fields: [targetEmployeeId], references: [id])
 
-  // The change
-  previousValue Json?       // Before state
-  newValue      Json?       // After state
-  description   String?     // Human-readable summary
+  previousValue Json?
+  newValue      Json?
+  description   String?
 
   ipAddress     String?
   userAgent     String?
@@ -524,21 +561,21 @@ model AuditLog {
   @@index([createdAt])
 }
 
-// ─── GRAPH API SYNC LOG ──────────────────────────────────────────────────────
+// ─── SYNC LOG ────────────────────────────────────────────────────────────────
 
 model SyncLog {
   id                  String     @id @default(cuid())
   syncType            SyncType
-  triggeredBy         String?    // Employee ID if manual, null if cron
+  triggeredBy         String?
   triggeredByName     String?
 
-  status              String     // success / failed / partial
+  status              String
   recordsAdded        Int        @default(0)
   recordsUpdated      Int        @default(0)
   recordsDeactivated  Int        @default(0)
   recordsSkipped      Int        @default(0)
 
-  deltaToken          String?    // Stored for next delta sync
+  deltaToken          String?
   errorMessage        String?
   errorDetails        Json?
 
@@ -560,19 +597,17 @@ model BulkImport {
   successRows   Int          @default(0)
   failedRows    Int          @default(0)
   status        ImportStatus @default(PENDING)
-  errors        Json?        // Array of {row, field, message}
+  errors        Json?
   createdAt     DateTime     @default(now())
   completedAt   DateTime?
 }
 
-// ─── FUTURE: LEAVE MODULE (TABLES READY) ────────────────────────────────────
-// These tables are stubbed out now so the leave module can be added
-// without any schema rework later.
+// ─── LEAVE MODULE (STUBBED) ──────────────────────────────────────────────────
 
 model LeaveType {
   id            String        @id @default(cuid())
-  name          String        // Casual, Sick, Earned, etc.
-  annualQuota   Int           // Days per year
+  name          String
+  annualQuota   Int
   carryForward  Boolean       @default(false)
   maxCarryDays  Int           @default(0)
   isPaid        Boolean       @default(true)
@@ -589,7 +624,7 @@ model LeaveBalance {
   leaveTypeId   String
   leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id])
   year          Int
-  totalDays     Decimal   @db.Decimal(5, 2) // Prorated for mid-year joiners
+  totalDays     Decimal   @db.Decimal(5, 2)
   usedDays      Decimal   @default(0) @db.Decimal(5, 2)
   pendingDays   Decimal   @default(0) @db.Decimal(5, 2)
   balanceDays   Decimal   @db.Decimal(5, 2)
@@ -608,7 +643,7 @@ model LeaveApplication {
   toDate        DateTime
   totalDays     Decimal   @db.Decimal(5, 2)
   reason        String?
-  status        String    @default("PENDING") // PENDING / APPROVED / REJECTED / CANCELLED
+  status        String    @default("PENDING")
   approvedBy    String?
   approvedAt    DateTime?
   rejectionNote String?
