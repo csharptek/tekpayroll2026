@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "name": "csharptek-payroll-frontend",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "env": {
+    "VITE_API_URL": "@csharptek-api-url",
+    "VITE_AZURE_CLIENT_ID": "@csharptek-azure-client-id",
+    "VITE_AZURE_TENANT_ID": "@csharptek-azure-tenant-id",
+    "VITE_AZURE_REDIRECT_URI": "@csharptek-azure-redirect-uri",
+    "VITE_DEV_AUTH_BYPASS": "false"
+  }
+}

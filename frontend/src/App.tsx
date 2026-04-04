@@ -1,0 +1,110 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useAuthStore } from './store/authStore'
+
+// Auth
+import LoginPage from './pages/auth/LoginPage'
+import AccessDeniedPage from './pages/auth/AccessDeniedPage'
+
+// Layout
+import AppLayout from './layouts/AppLayout'
+
+// HR Pages
+import HRDashboard from './pages/hr/HRDashboard'
+import EmployeeListPage from './pages/hr/EmployeeListPage'
+import AddEmployeePage from './pages/hr/AddEmployeePage'
+import EditEmployeePage from './pages/hr/EditEmployeePage'
+import EmployeeDetailPage from './pages/hr/EmployeeDetailPage'
+import RunPayrollPage from './pages/hr/RunPayrollPage'
+import PayrollCyclesPage from './pages/hr/PayrollCyclesPage'
+import PayrollRunDetailPage from './pages/hr/PayrollRunDetailPage'
+import LopManagementPage from './pages/hr/LopManagementPage'
+import ReimbursementsPage from './pages/hr/ReimbursementsPage'
+import LoansPage from './pages/hr/LoansPage'
+import PayslipGenerationPage from './pages/hr/PayslipGenerationPage'
+import FnfPage from './pages/hr/FnfPage'
+import AuditLogPage from './pages/hr/AuditLogPage'
+import ConfigPage from './pages/hr/ConfigPage'
+import SyncPage from './pages/hr/SyncPage'
+import BulkImportPage from './pages/hr/BulkImportPage'
+
+// Employee Pages
+import EmployeeDashboard from './pages/employee/EmployeeDashboard'
+import MyPayslipsPage from './pages/employee/MyPayslipsPage'
+import MyProfilePage from './pages/employee/MyProfilePage'
+import MyLoansPage from './pages/employee/MyLoansPage'
+
+// Management Pages
+import ManagementDashboard from './pages/management/ManagementDashboard'
+import PayrollReportsPage from './pages/management/PayrollReportsPage'
+import CostReportPage from './pages/management/CostReportPage'
+
+// Guard
+function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
+  const { user, isAuthenticated } = useAuthStore()
+
+  if (!isAuthenticated()) return <Navigate to="/login" replace />
+  if (roles && user && !roles.includes(user.role)) return <Navigate to="/access-denied" replace />
+
+  return <>{children}</>
+}
+
+function RoleBasedHome() {
+  const { user } = useAuthStore()
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role === 'EMPLOYEE') return <Navigate to="/my/dashboard" replace />
+  if (user.role === 'MANAGEMENT') return <Navigate to="/management/dashboard" replace />
+  return <Navigate to="/hr/dashboard" replace />
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/access-denied" element={<AccessDeniedPage />} />
+
+        {/* Root redirect */}
+        <Route path="/" element={<RequireAuth><RoleBasedHome /></RequireAuth>} />
+
+        {/* HR & Super Admin */}
+        <Route path="/hr" element={<RequireAuth roles={['HR', 'SUPER_ADMIN']}><AppLayout /></RequireAuth>}>
+          <Route path="dashboard" element={<HRDashboard />} />
+          <Route path="employees" element={<EmployeeListPage />} />
+          <Route path="employees/add" element={<AddEmployeePage />} />
+          <Route path="employees/:id" element={<EmployeeDetailPage />} />
+          <Route path="employees/:id/edit" element={<EditEmployeePage />} />
+          <Route path="payroll" element={<PayrollCyclesPage />} />
+          <Route path="payroll/:id/run" element={<RunPayrollPage />} />
+          <Route path="payroll/:id/detail" element={<PayrollRunDetailPage />} />
+          <Route path="payroll/:id/lop" element={<LopManagementPage />} />
+          <Route path="payroll/:id/reimbursements" element={<ReimbursementsPage />} />
+          <Route path="payslips" element={<PayslipGenerationPage />} />
+          <Route path="loans" element={<LoansPage />} />
+          <Route path="fnf" element={<FnfPage />} />
+          <Route path="import" element={<BulkImportPage />} />
+          <Route path="sync" element={<SyncPage />} />
+          <Route path="audit" element={<AuditLogPage />} />
+          <Route path="config" element={<ConfigPage />} />
+        </Route>
+
+        {/* Employee self-service */}
+        <Route path="/my" element={<RequireAuth><AppLayout /></RequireAuth>}>
+          <Route path="dashboard" element={<EmployeeDashboard />} />
+          <Route path="payslips" element={<MyPayslipsPage />} />
+          <Route path="profile" element={<MyProfilePage />} />
+          <Route path="loans" element={<MyLoansPage />} />
+        </Route>
+
+        {/* Management */}
+        <Route path="/management" element={<RequireAuth roles={['MANAGEMENT', 'HR', 'SUPER_ADMIN']}><AppLayout /></RequireAuth>}>
+          <Route path="dashboard" element={<ManagementDashboard />} />
+          <Route path="reports" element={<PayrollReportsPage />} />
+          <Route path="cost-report" element={<CostReportPage />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
