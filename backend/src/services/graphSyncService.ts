@@ -13,8 +13,8 @@ async function getGraphToken(): Promise<string> {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: cid, client_secret: sec, scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials' }).toString(),
   })
-  if (!res.ok) { const e = await res.json(); throw new Error(`Graph token error: ${e.error_description || e.error}`) }
-  return (await res.json()).access_token
+  if (!res.ok) { const e = await res.json(); throw new Error(`Graph token error: ${(e as any).error_description || (e as any).error}`) }
+  return ((await res.json()) as any).access_token
 }
 
 // ─── FETCH VERIFIED DOMAINS ───────────────────────────────────────────────────
@@ -25,7 +25,7 @@ export async function fetchVerifiedDomains(): Promise<{ name: string; isDefault:
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok) throw new Error('Failed to fetch domains from Entra ID')
-  const data = await res.json()
+  const data = await res.json() as any
   return (data.value || [])
     .filter((d: any) => d.isVerified)
     .map((d: any) => ({ name: d.id, isDefault: d.isDefault, isVerified: d.isVerified }))
@@ -40,7 +40,7 @@ async function getServicePrincipalId(token: string): Promise<string | null> {
     { headers: { Authorization: `Bearer ${token}` } }
   )
   if (!res.ok) return null
-  const data = await res.json()
+  const data = await res.json() as any
   return data.value?.[0]?.id || null
 }
 
@@ -55,7 +55,7 @@ async function fetchRoleAssignments(token: string, spId: string): Promise<Record
     `https://graph.microsoft.com/v1.0/servicePrincipals/${spId}?$select=appRoles`,
     { headers: { Authorization: `Bearer ${token}` } }
   )
-  const spData = await spRes.json()
+  const spData = await spRes.json() as any
   const roleDefs: Record<string, string> = {}
   for (const r of (spData.appRoles || [])) {
     roleDefs[r.id] = r.value
@@ -66,7 +66,7 @@ async function fetchRoleAssignments(token: string, spId: string): Promise<Record
     `https://graph.microsoft.com/v1.0/servicePrincipals/${spId}/appRoleAssignedTo?$top=999`,
     { headers: { Authorization: `Bearer ${token}` } }
   )
-  const assignData = await assignRes.json()
+  const assignData = await assignRes.json() as any
   for (const a of (assignData.value || [])) {
     roleMap[a.principalId] = roleDefs[a.appRoleId] || 'Payroll.Employee'
   }
@@ -87,7 +87,7 @@ async function fetchUsersByDomains(token: string, domains: string[]): Promise<an
     while (url) {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) { console.error(`[SYNC] Failed to fetch users for domain ${domain}`); break }
-      const data = await res.json()
+      const data = await res.json() as any
       allUsers.push(...(data.value || []))
       url = data['@odata.nextLink'] || null
     }
@@ -151,7 +151,7 @@ export async function fetchPreview(domains: string[]): Promise<PreviewUser[]> {
     // Check if exists in DB
     const existing = await prisma.employee.findFirst({
       where: { OR: [{ entraId: gu.id }, { email }] },
-      select: { id: true, name: true, employeeCode: true, joiningDate: true, state: true, status: true },
+      select: { id: true, name: true, employeeCode: true, entraId: true, joiningDate: true, state: true, status: true },
     })
 
     let status: 'NEW' | 'UPDATE' | 'NO_CHANGE' = 'NEW'
@@ -273,7 +273,7 @@ async function assignPayrollRole(userId: string, payrollRole: string): Promise<v
 
   // Get app role id
   const spRes  = await fetch(`https://graph.microsoft.com/v1.0/servicePrincipals/${spId}?$select=appRoles`, { headers: { Authorization: `Bearer ${token}` } })
-  const spData = await spRes.json()
+  const spData = await spRes.json() as any
 
   const roleValueMap: Record<string, string> = {
     SUPER_ADMIN: 'Payroll.SuperAdmin',
@@ -379,10 +379,10 @@ export async function createEntraUser(params: {
 
   if (!res.ok) {
     const err = await res.json()
-    throw new Error(`Failed to create Entra user: ${err.error?.message || JSON.stringify(err)}`)
+    throw new Error(`Failed to create Entra user: ${(err as any).error?.message || JSON.stringify(err)}`)
   }
 
-  const created = await res.json()
+  const created = await res.json() as any
   const entraId = created.id
 
   // Assign payroll role

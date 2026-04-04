@@ -80,31 +80,43 @@ export async function cronRunPayroll() {
           _sum: { amount: true },
         })
 
-        const calc = await calculatePayrollForEmployee({
-          employeeId:       emp.id,
+        const salaryInput = {
           annualCtc:        Number(emp.annualCtc),
-          annualIncentive:  Number(emp.annualIncentive),
-          state:            emp.state || '',
-          joiningDate:      emp.joiningDate,
-          lastWorkingDay:   emp.lastWorkingDay,
-          resignationDate:  emp.resignationDate,
-          cycleStart:       cycle.cycleStart,
-          cycleEnd:         cycle.cycleEnd,
-          lopDays:          lopEntry?.lopDays || 0,
-          tdsAmount:        prevEntry ? Number(prevEntry.tdsAmount) : 0,
-          reimbursements:   Number(reimbs._sum.amount || 0),
+          basicPercent:     Number((emp as any).basicPercent ?? 45),
+          hraPercent:       Number((emp as any).hraPercent ?? 35),
+          transportMonthly: (emp as any).transportMonthly != null ? Number((emp as any).transportMonthly) : null,
+          fbpMonthly:       (emp as any).fbpMonthly != null ? Number((emp as any).fbpMonthly) : null,
+          mediclaim:        Number((emp as any).mediclaim ?? 0),
+          hasIncentive:     Boolean((emp as any).hasIncentive),
+          incentivePercent: Number((emp as any).incentivePercent ?? 12),
+        }
+        const calc = await calculatePayrollForEmployee({
+          employeeId:      emp.id,
+          salaryInput,
+          state:           emp.state || '',
+          joiningDate:     emp.joiningDate,
+          lastWorkingDay:  emp.lastWorkingDay,
+          resignationDate: emp.resignationDate,
+          cycleStart:      cycle.cycleStart,
+          cycleEnd:        cycle.cycleEnd,
+          payrollMonth:    cycle.payrollMonth,
+          lopDays:         lopEntry?.lopDays || 0,
+          tdsMonthly:      Number((emp as any).tdsMonthly ?? 0),
+          reimbursements:  Number(reimbs._sum.amount || 0),
         })
 
         await prisma.payrollEntry.upsert({
           where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: emp.id } },
           create: {
             cycleId: cycle.id, employeeId: emp.id,
-            annualCtc: calc.salary.annualCtc, monthlyCtc: calc.salary.monthlyCtc,
-            basic: calc.salary.basic, hra: calc.salary.hra, allowances: calc.salary.allowances,
-            grossSalary: calc.salary.grossSalary,
+            annualCtc: calc.salary.annualCtc, monthlyCtc: calc.salary.grandTotalMonthly,
+            basic: calc.salary.basicMonthly, hra: calc.salary.hraMonthly,
+            transport: calc.salary.transportMonthly, fbp: calc.salary.fbpMonthly,
+            hyi: calc.salary.hyiMonthly,
+            grossSalary: calc.salary.grandTotalMonthly,
             totalDays: calc.proration.totalDays, payableDays: calc.proration.payableDays,
             isProrated: calc.proration.isProrated, proratedGross: calc.proration.proratedGross,
-            incentive: calc.incentive, reimbursementTotal: calc.reimbursements,
+            incentive: 0, reimbursementTotal: calc.reimbursements,
             lopDays: lopEntry?.lopDays || 0, lopAmount: calc.deductions.lop,
             pfAmount: calc.deductions.pf, esiAmount: calc.deductions.esi,
             ptAmount: calc.deductions.pt, tdsAmount: calc.deductions.tds,
@@ -113,9 +125,11 @@ export async function cronRunPayroll() {
             netSalary: calc.netSalary, status: 'CALCULATED',
           },
           update: {
-            basic: calc.salary.basic, hra: calc.salary.hra, grossSalary: calc.salary.grossSalary,
+            basic: calc.salary.basicMonthly, hra: calc.salary.hraMonthly,
+            transport: calc.salary.transportMonthly, fbp: calc.salary.fbpMonthly,
+            hyi: calc.salary.hyiMonthly, grossSalary: calc.salary.grandTotalMonthly,
             totalDays: calc.proration.totalDays, payableDays: calc.proration.payableDays,
-            proratedGross: calc.proration.proratedGross, incentive: calc.incentive,
+            proratedGross: calc.proration.proratedGross, incentive: 0,
             reimbursementTotal: calc.reimbursements, lopDays: lopEntry?.lopDays || 0,
             lopAmount: calc.deductions.lop, pfAmount: calc.deductions.pf,
             esiAmount: calc.deductions.esi, ptAmount: calc.deductions.pt,
@@ -125,7 +139,7 @@ export async function cronRunPayroll() {
           },
         })
 
-        totalGross += calc.salary.grossSalary
+        totalGross += calc.salary.grandTotalMonthly
         totalNet   += calc.netSalary
         totalPf    += calc.deductions.pf
         totalEsi   += calc.deductions.esi
@@ -221,7 +235,7 @@ export async function cronSyncEntraId() {
 
     console.log(`[CRON] Entra sync: +${result.added} updated ${result.updated} deactivated ${result.deactivated}`)
 
-    console.log(`[CRON] Entra sync complete: +${added} updated ${updated} deactivated ${deactivated}`)
+    console.log(`[CRON] Entra sync complete: +${result.added} updated ${result.updated} deactivated ${result.deactivated}`)
   } catch (err: any) {
     await prisma.syncLog.create({
       data: {

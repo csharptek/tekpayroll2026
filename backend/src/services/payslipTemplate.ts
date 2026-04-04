@@ -3,7 +3,7 @@ import { PayrollEntry, Employee, PayrollCycle, BankDetail } from '@prisma/client
 type FullEntry = PayrollEntry & {
   employee: Employee & { bankDetail: BankDetail | null }
   cycle: PayrollCycle
-}
+} & { [key: string]: any }
 
 function fmt(n: number): string {
   return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -17,8 +17,10 @@ export function generatePayslipHTML(entry: FullEntry): string {
   const monthly   = Number(entry.monthlyCtc)
   const basic     = Number(entry.basic)
   const hra       = Number(entry.hra)
-  const allowances = Number(entry.allowances)
-  const gross     = Number(entry.proratedGross)
+  const transport  = Number((entry as any).transport || 0)
+  const fbp       = Number((entry as any).fbp || 0)
+  const hyi       = Number((entry as any).hyi || 0)
+  const gross     = Number((entry as any).proratedGross)
   const incentive = Number(entry.incentive)
   const reimb     = Number(entry.reimbursementTotal)
   const pf        = Number(entry.pfAmount)
@@ -37,6 +39,9 @@ export function generatePayslipHTML(entry: FullEntry): string {
 
   const earningsRows = [
     { label: `Basic Salary${entry.isProrated ? ` (${entry.payableDays}/${entry.totalDays} days)` : ''}`, amount: gross },
+    { label: 'Transportation', amount: transport },
+    { label: 'FBP', amount: fbp },
+    { label: 'HYI / Special Allowance', amount: hyi },
     ...(incentive > 0 ? [{ label: 'Monthly Incentive', amount: incentive }] : []),
     ...(reimb > 0     ? [{ label: 'Reimbursements',    amount: reimb     }] : []),
   ]
