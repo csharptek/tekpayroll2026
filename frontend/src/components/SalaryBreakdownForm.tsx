@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import api from '../../services/api'
+import api from '../services/api'
 import { Rupee, Alert, Skeleton } from '../ui'
 import clsx from 'clsx'
 
