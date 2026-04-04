@@ -97,3 +97,13 @@ syncRouter.get('/logs', async (_req, res) => {
   const logs = await prisma.syncLog.findMany({ orderBy: { startedAt: 'desc' }, take: 30 })
   res.json({ success: true, data: logs })
 })
+
+// GET /api/sync/test - quick connectivity test
+syncRouter.get('/test', async (_req, res) => {
+  try {
+    const domains = await fetchVerifiedDomains()
+    res.json({ success: true, count: domains.length, domains: domains.map(d => d.name) })
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})

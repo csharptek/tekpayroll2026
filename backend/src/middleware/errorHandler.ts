@@ -48,7 +48,10 @@ export function errorHandler(
 
   return res.status(500).json({
     success: false,
-    error: 'Internal server error. Please try again.',
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error. Please try again.'
+      : err.message,
+    message: err.message,  // always include for debugging
     code: 'INTERNAL_ERROR',
   });
 }

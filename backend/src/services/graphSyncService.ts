@@ -21,14 +21,46 @@ async function getGraphToken(): Promise<string> {
 
 export async function fetchVerifiedDomains(): Promise<{ name: string; isDefault: boolean; isVerified: boolean }[]> {
   const token = await getGraphToken()
-  const res   = await fetch('https://graph.microsoft.com/v1.0/domains', {
+
+  // Try the Domains API first (requires Domain.Read.All permission)
+  const res = await fetch('https://graph.microsoft.com/v1.0/domains', {
     headers: { Authorization: `Bearer ${token}` },
   })
-  if (!res.ok) throw new Error('Failed to fetch domains from Entra ID')
-  const data = await res.json() as any
-  return (data.value || [])
-    .filter((d: any) => d.isVerified)
-    .map((d: any) => ({ name: d.id, isDefault: d.isDefault, isVerified: d.isVerified }))
+
+  if (res.ok) {
+    const data = await res.json() as any
+    return (data.value || [])
+      .filter((d: any) => d.isVerified)
+      .map((d: any) => ({ name: d.id, isDefault: d.isDefault, isVerified: d.isVerified }))
+  }
+
+  // Fallback: extract unique domains from tenant users (requires User.Read.All only)
+  console.warn('[SYNC] Domain.Read.All not available, falling back to user UPN extraction')
+  const usersRes = await fetch(
+    'https://graph.microsoft.com/v1.0/users?$select=userPrincipalName&$top=100',
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+
+  if (!usersRes.ok) {
+    const errData = await usersRes.json() as any
+    throw new Error(`Failed to fetch domains or users: ${errData?.error?.message || errData?.error?.code || usersRes.status}`)
+  }
+
+  const usersData = await usersRes.json() as any
+  const domainSet = new Set<string>()
+
+  for (const user of (usersData.value || [])) {
+    const upn = user.userPrincipalName || ''
+    if (upn.includes('@') && !upn.includes('#EXT#')) {
+      domainSet.add(upn.split('@')[1].toLowerCase())
+    }
+  }
+
+  return Array.from(domainSet).map(domain => ({
+    name: domain,
+    isDefault: false,
+    isVerified: true,
+  }))
 }
 
 // ─── GET SERVICE PRINCIPAL ID ─────────────────────────────────────────────────
