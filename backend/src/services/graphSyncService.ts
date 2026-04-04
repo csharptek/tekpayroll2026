@@ -113,21 +113,50 @@ async function fetchUsersByDomains(token: string, domains: string[]): Promise<an
   const allUsers: any[] = []
 
   for (const domain of domains) {
-    let url: string | null =
-      `https://graph.microsoft.com/v1.0/users?$filter=endsWith(userPrincipalName,'@${domain}')&$select=${fields}&$top=100`
+    console.log(`[SYNC] Fetching users from domain: ${domain}`)
+    let url: string | null = `https://graph.microsoft.com/v1.0/users?$select=${fields}&$top=999`
+    let pageCount = 0
+    let userCount = 0
 
     while (url) {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      if (!res.ok) { console.error(`[SYNC] Failed to fetch users for domain ${domain}`); break }
-      const data = await res.json() as any
-      allUsers.push(...(data.value || []))
-      url = data['@odata.nextLink'] || null
+      try {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+        
+        if (!res.ok) {
+          const errData = await res.json() as any
+          console.error(`[SYNC] Failed to fetch users for domain ${domain}: ${errData?.error?.message || res.status}`)
+          break
+        }
+        
+        const data = await res.json() as any
+        const users = data.value || []
+        const domainUsers = users.filter((u: any) => {
+          const upn = u.userPrincipalName || ''
+          // Filter by domain and exclude external (guest) accounts
+          return upn.toLowerCase().endsWith(`@${domain.toLowerCase()}`) && !upn.includes('#EXT#')
+        })
+        
+        allUsers.push(...domainUsers)
+        userCount += domainUsers.length
+        pageCount++
+        
+        url = data['@odata.nextLink'] || null
+        console.log(`[SYNC] Domain ${domain} - Page ${pageCount}: ${domainUsers.length} users from domain`)
+      } catch (err: any) {
+        console.error(`[SYNC] Error fetching page for domain ${domain}:`, err.message)
+        break
+      }
     }
+    
+    console.log(`[SYNC] Domain ${domain} complete: ${userCount} total users across ${pageCount} pages`)
   }
 
   // Deduplicate by id
   const seen = new Set<string>()
-  return allUsers.filter(u => { if (seen.has(u.id)) return false; seen.add(u.id); return true })
+  const deduped = allUsers.filter(u => { if (seen.has(u.id)) return false; seen.add(u.id); return true })
+  console.log(`[SYNC] Final deduped user count: ${deduped.length}`)
+  
+  return deduped
 }
 
 // ─── MAP ENTRA ROLE → USER ROLE ───────────────────────────────────────────────
