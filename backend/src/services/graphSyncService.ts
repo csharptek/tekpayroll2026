@@ -272,10 +272,30 @@ export async function importSelected(rows: ImportRow[], triggeredBy: string): Pr
       const role = row.payrollRole as any
       const joining = row.joiningDate ? new Date(row.joiningDate) : new Date()
 
-      if (row.existingId) {
-        // Update existing
+      // ─── CRITICAL FIX: If existingId not provided, look it up by entraId or email ─────
+      let existingId = row.existingId
+      if (!existingId) {
+        const existing = await prisma.employee.findFirst({
+          where: {
+            OR: [
+              { entraId: row.entraId },
+              { email: row.email },
+            ],
+          },
+          select: { id: true },
+        })
+        existingId = existing?.id || null
+        
+        if (existingId) {
+          console.log(`[SYNC] Found existing employee for ${row.email} (ID: ${existingId})`)
+        }
+      }
+
+      if (existingId) {
+        // ─── UPDATE EXISTING ─────────────────────────────────────────────────────
+        console.log(`[SYNC] Updating employee: ${row.email} (ID: ${existingId})`)
         await prisma.employee.update({
-          where: { id: row.existingId },
+          where: { id: existingId },
           data: {
             entraId:      row.entraId,
             name:         row.displayName,
@@ -286,13 +306,15 @@ export async function importSelected(rows: ImportRow[], triggeredBy: string): Pr
             role,
             joiningDate:  joining,
             state:        row.state,
-            status:       row.accountEnabled ? undefined : 'INACTIVE',
+            status:       row.accountEnabled ? 'ACTIVE' : 'INACTIVE',
           },
         })
         updated++
+        console.log(`[SYNC] ✓ Updated: ${row.email}`)
       } else {
-        // Create new
-        await prisma.employee.create({
+        // ─── CREATE NEW ──────────────────────────────────────────────────────────
+        console.log(`[SYNC] Creating new employee: ${row.email}`)
+        const created = await prisma.employee.create({
           data: {
             companyId:    company.id,
             entraId:      row.entraId,
@@ -309,19 +331,29 @@ export async function importSelected(rows: ImportRow[], triggeredBy: string): Pr
           },
         })
         added++
-      }
+        console.log(`[SYNC] ✓ Created: ${row.email} (ID: ${created.id})`)
 
-      // Assign Payroll App Role in Entra ID for new employees
-      if (!row.existingId && row.entraRole === null) {
-        await assignPayrollRole(row.entraId, row.payrollRole).catch((e: any) =>
-          console.error(`[SYNC] Role assignment failed for ${row.email}:`, e.message)
-        )
+        // Assign Payroll App Role in Entra ID for new employees
+        if (row.entraRole === null) {
+          try {
+            await assignPayrollRole(row.entraId, row.payrollRole)
+            console.log(`[SYNC] ✓ Role assigned: ${row.email} → ${row.payrollRole}`)
+          } catch (roleErr: any) {
+            console.warn(`[SYNC] ⚠ Role assignment skipped for ${row.email}: ${roleErr.message}`)
+            // Don't block import on role assignment failure, but log it
+            // (Employee is already created in database, which is the important part)
+          }
+        }
       }
     } catch (err: any) {
+      console.error(`[SYNC] Error importing ${row.email}:`, err.message)
       errors.push({ email: row.email, error: err.message })
     }
   }
 
+  console.log(`[SYNC] ═══ Import Complete ═══`)
+  console.log(`[SYNC] Added: ${added}, Updated: ${updated}, Errors: ${errors.length}`)
+  
   return { added, updated, errors }
 }
 
