@@ -15,7 +15,6 @@
     "@azure/msal-node": "^2.6.6",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@prisma/client": "^5.14.0",
-    "aws-sdk": "^2.1650.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -30,7 +29,8 @@
     "puppeteer": "^22.10.0",
     "resend": "^3.2.0",
     "xlsx": "^0.18.5",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@azure/storage-blob": "^12.24.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
