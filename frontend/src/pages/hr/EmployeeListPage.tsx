@@ -16,7 +16,7 @@ export default function EmployeeListPage() {
   const queryClient = useQueryClient()
   const [search, setSearch]       = useState('')
   const [department, setDept]     = useState('All')
-  const [status, setStatus]       = useState('ACTIVE')
+  const [status, setStatus]       = useState('All')
   const [page, setPage]           = useState(1)
   const [deactivateTarget, setDeactivateTarget] = useState<any>(null)
   const [openMenu, setOpenMenu]   = useState<string | null>(null)
