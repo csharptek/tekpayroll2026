@@ -101,17 +101,17 @@ async function validateMsalToken(token: string): Promise<AuthUser> {
         status:       'ACTIVE',
       },
     })
-  } else if (!employee.entraId) {
+  } else {
     // Link existing employee to Entra ID
     await prisma.employee.update({
       where: { id: employee.id },
-      data:  { entraId, role },
+      data:  { entraId, role, name: payload.name || employee.name },
     })
   }
 
   return {
     id:      employee.id,
-    name:    employee.name,
+    name:    payload.name || employee.name,
     email:   employee.email,
     role:    employee.role,
     entraId: employee.entraId || entraId,

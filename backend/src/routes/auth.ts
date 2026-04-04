@@ -79,7 +79,7 @@ authRouter.post('/microsoft/callback', async (req, res) => {
     // Update entraId and role from latest token
     await prisma.employee.update({
       where: { id: employee.id },
-      data:  { entraId, role },
+      data:  { entraId, role, name: name || employee.name },
     })
   }
 
@@ -89,7 +89,7 @@ authRouter.post('/microsoft/callback', async (req, res) => {
     data: {
       user: {
         id:      employee.id,
-        name:    employee.name,
+        name:    name || employee.name,
         email:   employee.email,
         role:    employee.role,
         entraId: employee.entraId,
