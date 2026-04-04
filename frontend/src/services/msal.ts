@@ -14,16 +14,10 @@ const msalConfig: Configuration = {
 
 export const msalInstance = new PublicClientApplication(msalConfig)
 
-// Request roles claim by including the app's own scope
-// This is what causes the roles[] array to appear in the token
+// Only request basic scopes — roles come via optionalClaims in the ID token
+// Do NOT add api:// scope here — it causes redirect URI mismatch
 export const loginRequest = {
-  scopes: [
-    'openid',
-    'profile',
-    'email',
-    'User.Read',
-    `api://${import.meta.env.VITE_AZURE_CLIENT_ID}/access_as_user`,
-  ],
+  scopes: ['openid', 'profile', 'email'],
 }
 
 export async function initializeMsal(): Promise<void> {
