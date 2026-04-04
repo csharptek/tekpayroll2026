@@ -60,8 +60,24 @@ export default function LoginPage() {
         window.location.href = '/hr/dashboard'
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.error || 'Login failed. Make sure your account is registered in the payroll system.'
-      setError(msg)
+      const status = err?.response?.status
+      const msg    = err?.response?.data?.error || ''
+
+      // Token expired — clear MSAL cache silently, user just needs to click Sign In
+      if (status === 401 || msg.toLowerCase().includes('expired')) {
+        try {
+          // Clear all MSAL cache so next sign-in triggers fresh Microsoft login
+          Object.keys(localStorage)
+            .filter(k => k.startsWith('msal.') || k.includes('login.windows.net') || k.includes('msal.token'))
+            .forEach(k => localStorage.removeItem(k))
+        } catch (_) {}
+        setLoading(false)
+        // Don't show error — session just expired, user clicks Sign In normally
+        return
+      }
+
+      const displayMsg = msg || 'Login failed. Make sure your account is registered in the payroll system.'
+      setError(displayMsg)
       setLoading(false)
     }
   }

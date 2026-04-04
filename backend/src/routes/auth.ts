@@ -40,10 +40,18 @@ authRouter.post('/microsoft/callback', async (req, res) => {
   const publicKey = signingKey.getPublicKey()
 
   // Verify token
-  const payload = jwt.verify(token, publicKey, {
-    audience: process.env.AZURE_CLIENT_ID,
-    issuer: `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/v2.0`,
-  }) as jwt.JwtPayload
+  let payload: jwt.JwtPayload
+  try {
+    payload = jwt.verify(token, publicKey, {
+      audience: process.env.AZURE_CLIENT_ID,
+      issuer: `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/v2.0`,
+    }) as jwt.JwtPayload
+  } catch (jwtErr: any) {
+    if (jwtErr.name === 'TokenExpiredError') {
+      throw new AppError('Session expired. Please sign in again.', 401)
+    }
+    throw new AppError('Invalid or expired token. Please sign in again.', 401)
+  }
 
   const entraId = payload.oid || payload.sub
   const email   = payload.email || payload.preferred_username || payload.upn
