@@ -21,7 +21,12 @@ const createEmployeeSchema = z.object({
   state: z.string().optional(),
   joiningDate: z.string().datetime(),
   annualCtc: z.number().positive(),
-  annualIncentive: z.number().min(0).default(0),
+  hasIncentive: z.boolean().default(false),
+  incentivePercent: z.number().min(0).max(100).default(12),
+  transportMonthly: z.number().optional(),
+  fbpMonthly: z.number().optional(),
+  mediclaim: z.number().default(0),
+  tdsMonthly: z.number().default(0),
   panNumber: z.string().optional(),
   aadhaarNumber: z.string().optional(),
   pfNumber: z.string().optional(),
@@ -125,7 +130,8 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
   if (!existing) throw new AppError('Employee not found', 404);
 
   const {
-    annualCtc, annualIncentive, resignationDate, lastWorkingDay,
+    annualCtc, hasIncentive, incentivePercent, transportMonthly, fbpMonthly,
+    mediclaim, tdsMonthly, resignationDate, lastWorkingDay,
     state, joiningDate, panNumber, aadhaarNumber, pfNumber, esiNumber, uanNumber,
     jobTitle, department, mobilePhone, status
   } = req.body;
@@ -149,7 +155,12 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
     updateData.annualCtc = annualCtc;
   }
 
-  if (annualIncentive !== undefined) updateData.annualIncentive = annualIncentive;
+  if (hasIncentive !== undefined) updateData.hasIncentive = hasIncentive;
+  if (incentivePercent !== undefined) updateData.incentivePercent = incentivePercent;
+  if (transportMonthly !== undefined) updateData.transportMonthly = transportMonthly;
+  if (fbpMonthly !== undefined) updateData.fbpMonthly = fbpMonthly;
+  if (mediclaim !== undefined) updateData.mediclaim = mediclaim;
+  if (tdsMonthly !== undefined) updateData.tdsMonthly = tdsMonthly;
   if (resignationDate) updateData.resignationDate = new Date(resignationDate);
   if (lastWorkingDay) updateData.lastWorkingDay = new Date(lastWorkingDay);
   if (state) updateData.state = state;

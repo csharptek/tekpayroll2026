@@ -31,7 +31,7 @@ export async function createAuditLog(params: AuditParams) {
         ipAddress: params.ipAddress,
       },
     });
-  } catch (err) {
+  } catch (err: any) {
     // Audit log failure should never break the main operation
     console.error('[AUDIT] Failed to create audit log:', err);
   }

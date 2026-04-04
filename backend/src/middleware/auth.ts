@@ -132,7 +132,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     const token = authHeader.split(' ')[1]
     req.user = await validateMsalToken(token)
     next()
-  } catch (err) {
+  } catch (err: any) {
     next(err)
   }
 }

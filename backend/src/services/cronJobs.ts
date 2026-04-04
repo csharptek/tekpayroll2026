@@ -17,7 +17,7 @@ async function notifyHR(subject: string, body: string) {
       subject,
       html: `<pre style="font-family:monospace">${body}</pre>`,
     })
-  } catch (err) {
+  } catch (err: any) {
     console.error('[NOTIFY] Failed to send HR alert:', err)
   }
 }

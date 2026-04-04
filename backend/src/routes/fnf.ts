@@ -73,7 +73,7 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
       esiAmount:         calc.esiAmount,
       ptAmount:          calc.ptAmount,
       tdsAmount:         calc.tdsAmount,
-      incentiveRecovery: calc.incentiveRecovery,
+      incentiveRecovery: 0, // handled in F&F separately if needed
       loanOutstanding:   calc.loanOutstanding,
       otherDeductions:   0,
       netPayable:        calc.netPayable,

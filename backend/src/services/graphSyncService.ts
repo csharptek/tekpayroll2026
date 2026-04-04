@@ -13,7 +13,7 @@ async function getGraphToken(): Promise<string> {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: cid, client_secret: sec, scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials' }).toString(),
   })
-  if (!res.ok) { const e = await res.json(); throw new Error(`Graph token error: ${(e as any).error_description || (e as any).error}`) }
+  if (!res.ok) { const e = await res.json() as any; throw new Error(`Graph token error: ${(e as any).error_description || (e as any).error}`) }
   return ((await res.json()) as any).access_token
 }
 
@@ -252,7 +252,7 @@ export async function importSelected(rows: ImportRow[], triggeredBy: string): Pr
 
       // Assign Payroll App Role in Entra ID for new employees
       if (!row.existingId && row.entraRole === null) {
-        await assignPayrollRole(row.entraId, row.payrollRole).catch(e =>
+        await assignPayrollRole(row.entraId, row.payrollRole).catch((e: any) =>
           console.error(`[SYNC] Role assignment failed for ${row.email}:`, e.message)
         )
       }
@@ -328,7 +328,7 @@ export async function pushToEntra(employeeIds: string[]): Promise<{
       })
 
       if (!res.ok) {
-        const err = await res.json()
+        const err = await res.json() as any
         throw new Error(err.error?.message || `HTTP ${res.status}`)
       }
       success++
@@ -378,15 +378,15 @@ export async function createEntraUser(params: {
   })
 
   if (!res.ok) {
-    const err = await res.json()
-    throw new Error(`Failed to create Entra user: ${(err as any).error?.message || JSON.stringify(err)}`)
+    const err = await res.json() as any
+    throw new Error(`Failed to create Entra user: ${err.error?.message || JSON.stringify(err)}`)
   }
 
   const created = await res.json() as any
   const entraId = created.id
 
   // Assign payroll role
-  await assignPayrollRole(entraId, params.payrollRole).catch(e =>
+  await assignPayrollRole(entraId, params.payrollRole).catch((e: any) =>
     console.warn(`[SYNC] Role assignment failed for new user:`, e.message)
   )
 
