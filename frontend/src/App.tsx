@@ -26,6 +26,8 @@ import AuditLogPage from './pages/hr/AuditLogPage'
 import ConfigPage from './pages/hr/ConfigPage'
 import SyncPage from './pages/hr/SyncPage'
 import BulkImportPage from './pages/hr/BulkImportPage'
+import BulkEditEmployeesPage from './pages/hr/BulkEditEmployeesPage'
+import BulkEditEmployeePage from './pages/hr/BulkEditEmployeePage'
 
 // Employee Pages
 import EmployeeDashboard from './pages/employee/EmployeeDashboard'
@@ -74,6 +76,8 @@ export default function App() {
           <Route path="employees/add" element={<AddEmployeePage />} />
           <Route path="employees/:id" element={<EmployeeDetailPage />} />
           <Route path="employees/:id/edit" element={<EditEmployeePage />} />
+          <Route path="employees-bulk-edit" element={<BulkEditEmployeesPage />} />
+          <Route path="employees-bulk-edit" element={<BulkEditEmployeePage />} />
           <Route path="payroll" element={<PayrollCyclesPage />} />
           <Route path="payroll/:id/run" element={<RunPayrollPage />} />
           <Route path="payroll/:id/detail" element={<PayrollRunDetailPage />} />

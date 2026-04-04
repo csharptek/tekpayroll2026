@@ -5,8 +5,8 @@ import {
   LayoutDashboard, Users, CreditCard, FileText, Settings,
   LogOut, ChevronDown, Menu, X, Building2, Shield,
   BarChart3, Receipt, Wallet, GitMerge, Upload,
-  RefreshCw, ScrollText, FileSearch, DollarSign,
-  UserCircle, Banknote, ClipboardList
+  RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
+  UserCircle, Banknote, ClipboardList, Edit3
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -24,6 +24,8 @@ const HR_NAV = [
     items: [
       { label: 'All Employees', icon: Users, to: '/hr/employees' },
       { label: 'Bulk Import', icon: Upload, to: '/hr/import' },
+      { label: 'Bulk Edit', icon: Edit3, to: '/hr/employees-bulk-edit' },
+      { label: 'Bulk Edit Salaries', icon: Table2, to: '/hr/employees-bulk-edit' },
       { label: 'M365 Sync', icon: RefreshCw, to: '/hr/sync' },
     ]
   },
@@ -236,6 +238,8 @@ function usePageTitle() {
     '/hr/fnf': 'Full & Final Settlement',
     '/hr/import': 'Bulk Import',
     '/hr/sync': 'M365 Sync',
+    '/hr/employees-bulk-edit': 'Bulk Edit Employees',
+    '/hr/employees-bulk-edit': 'Bulk Edit Salaries',
     '/hr/audit': 'Audit Log',
     '/hr/config': 'Configuration',
     '/my/dashboard': 'My Dashboard',
