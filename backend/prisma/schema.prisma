@@ -173,6 +173,17 @@ model Employee {
   auditLogs           AuditLog[]       @relation("AuditEmployee")
   performedAudits     AuditLog[]       @relation("AuditPerformer")
 
+  // Extended profile relations
+  profile             EmployeeProfile?
+  address             EmployeeAddress?
+  emergencyContacts   EmergencyContact[]
+  educationRecords    EducationRecord[]
+  workExperiences     WorkExperience[]
+  employmentDetail    EmploymentDetail?
+  bankAccounts        BankAccount[]
+  documents           EmployeeDocument[]
+  governmentId        GovernmentId?
+
   @@index([status])
   @@index([department])
   @@index([entraId])
@@ -649,4 +660,259 @@ model LeaveApplication {
   rejectionNote String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+// ─── EMPLOYEE PROFILE (extended personal info) ───────────────────────────────
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+enum BloodGroup {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
+}
+
+model EmployeeProfile {
+  id              String         @id @default(cuid())
+  employeeId      String         @unique
+  employee        Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  firstName       String?
+  lastName        String?
+  personalEmail   String?
+  dateOfBirth     DateTime?
+  gender          Gender?
+  maritalStatus   MaritalStatus?
+  bloodGroup      BloodGroup?
+  profilePhotoUrl String?
+  profilePhotoKey String?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+// ─── ADDRESS ─────────────────────────────────────────────────────────────────
+
+model EmployeeAddress {
+  id              String   @id @default(cuid())
+  employeeId      String   @unique
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // Current
+  currentLine1    String?
+  currentLine2    String?
+  currentCity     String?
+  currentState    String?
+  currentPin      String?
+  currentCountry  String?  @default("India")
+
+  // Permanent
+  sameAsCurrent   Boolean  @default(false)
+  permanentLine1  String?
+  permanentLine2  String?
+  permanentCity   String?
+  permanentState  String?
+  permanentPin    String?
+  permanentCountry String?  @default("India")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ─── EMERGENCY CONTACTS (multiple) ───────────────────────────────────────────
+
+enum ContactType {
+  EMERGENCY
+  PARENT
+  SPOUSE
+  GUARDIAN
+  OTHER
+}
+
+model EmergencyContact {
+  id             String      @id @default(cuid())
+  employeeId     String
+  employee       Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  name           String
+  relationship   String
+  contactType    ContactType @default(EMERGENCY)
+  phone          String
+  alternatePhone String?
+  email          String?
+  address        String?
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([employeeId])
+}
+
+// ─── EDUCATION (multiple) ─────────────────────────────────────────────────────
+
+model EducationRecord {
+  id              String   @id @default(cuid())
+  employeeId      String
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  degree          String
+  institution     String
+  specialization  String?
+  yearOfPassing   Int?
+  percentageGrade String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([employeeId])
+}
+
+// ─── WORK EXPERIENCE (multiple) ──────────────────────────────────────────────
+
+model WorkExperience {
+  id               String    @id @default(cuid())
+  employeeId       String
+  employee         Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  companyName      String
+  designation      String
+  startDate        DateTime
+  endDate          DateTime?
+  lastDrawnSalary  Decimal?  @db.Decimal(12, 2)
+  reasonForLeaving String?
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([employeeId])
+}
+
+// ─── EMPLOYMENT DETAIL (extended, 1:1) ───────────────────────────────────────
+
+enum EmploymentType {
+  FULL_TIME
+  CONTRACT
+  INTERN
+  PART_TIME
+}
+
+model EmploymentDetail {
+  id                String         @id @default(cuid())
+  employeeId        String         @unique
+  employee          Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  employmentType    EmploymentType @default(FULL_TIME)
+  reportingManagerId String?
+  workLocation      String?
+  probationMonths   Int?           @default(0)
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+// ─── BANK ACCOUNT (multiple, alongside existing BankDetail) ──────────────────
+
+enum AccountType {
+  SAVINGS
+  CURRENT
+}
+
+model BankAccount {
+  id                  String      @id @default(cuid())
+  employeeId          String
+  employee            Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  accountHolderName   String
+  accountNumber       String
+  ifscCode            String
+  bankName            String
+  branchName          String?
+  accountType         AccountType @default(SAVINGS)
+  isPrimary           Boolean     @default(false)
+  documentUrl         String?
+  documentKey         String?
+
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([employeeId])
+}
+
+// ─── EMPLOYEE DOCUMENTS ───────────────────────────────────────────────────────
+
+enum DocumentType {
+  PROFILE_PHOTO
+  PAN_CARD
+  AADHAAR_CARD
+  PASSPORT
+  OFFER_LETTER
+  APPOINTMENT_LETTER
+  EXPERIENCE_LETTER
+  EDUCATION_CERTIFICATE
+  ADDRESS_PROOF
+  BANK_PROOF
+  OTHER
+}
+
+model EmployeeDocument {
+  id           String       @id @default(cuid())
+  employeeId   String
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  documentType DocumentType
+  fileName     String
+  fileUrl      String
+  fileKey      String
+  fileSize     Int?
+  mimeType     String?
+  isVerified   Boolean      @default(false)
+  verifiedBy   String?
+  verifiedAt   DateTime?
+  notes        String?
+
+  uploadedBy   String
+  uploadedAt   DateTime     @default(now())
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([employeeId])
+  @@index([documentType])
+}
+
+// ─── GOVERNMENT IDS (extended from existing fields) ──────────────────────────
+
+model GovernmentId {
+  id             String   @id @default(cuid())
+  employeeId     String   @unique
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  panNumber      String?
+  panDocUrl      String?
+  aadhaarNumber  String?  // stored masked
+  aadhaarDocUrl  String?
+  passportNumber String?
+  passportExpiry DateTime?
+  passportDocUrl String?
+  uanNumber      String?
+  esicNumber     String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
