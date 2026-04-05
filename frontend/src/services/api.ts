@@ -33,6 +33,7 @@ export default api
 export const employeeApi = {
   list: (params?: Record<string, any>) => api.get('/api/employees', { params }),
   get: (id: string) => api.get(`/api/employees/${id}`),
+  getFull: (id: string) => api.get(`/api/employees/${id}/full`),
   create: (data: any) => api.post('/api/employees', data),
   update: (id: string, data: any) => api.put(`/api/employees/${id}`, data),
   deactivate: (id: string) => api.post(`/api/employees/${id}/deactivate`),
