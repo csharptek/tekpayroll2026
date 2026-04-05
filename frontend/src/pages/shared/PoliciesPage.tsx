@@ -4,21 +4,66 @@ import { Plus, Pencil, Trash2, Search, ChevronUp, ChevronDown, X, Save, GripVert
 import { policiesApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { PageHeader, Button, Card, Alert, Skeleton } from '../../components/ui'
-import ReactQuill from 'react-quill'
-import 'react-quill/dist/quill.snow.css'
 
-// ─── QUILL TOOLBAR CONFIG ────────────────────────────────────────────────────
+// ─── RICH EDITOR (no external deps) ─────────────────────────────────────────
 
-const QUILL_MODULES = {
-  toolbar: [
-    [{ header: [2, 3, false] }],
-    ['bold', 'italic', 'underline'],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    ['clean'],
-  ],
+function RichEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Sync initial value once
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== value) {
+      ref.current.innerHTML = value
+    }
+  }, []) // eslint-disable-line
+
+  function exec(cmd: string, arg?: string) {
+    document.execCommand(cmd, false, arg)
+    ref.current?.focus()
+    sync()
+  }
+
+  function sync() {
+    if (ref.current) onChange(ref.current.innerHTML)
+  }
+
+  const btn = (label: string, cmd: string, arg?: string) => (
+    <button
+      type="button"
+      onMouseDown={e => { e.preventDefault(); exec(cmd, arg) }}
+      className="px-2 py-1 text-xs font-medium rounded hover:bg-slate-200 text-slate-600 transition-colors"
+      title={label}
+    >
+      {label}
+    </button>
+  )
+
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 bg-slate-50 border-b border-slate-200">
+        {btn('B', 'bold')}
+        {btn('I', 'italic')}
+        {btn('U', 'underline')}
+        <span className="w-px h-4 bg-slate-300 mx-1" />
+        {btn('H2', 'formatBlock', 'h2')}
+        {btn('H3', 'formatBlock', 'h3')}
+        {btn('¶', 'formatBlock', 'p')}
+        <span className="w-px h-4 bg-slate-300 mx-1" />
+        {btn('• List', 'insertUnorderedList')}
+        {btn('1. List', 'insertOrderedList')}
+      </div>
+      {/* Editable area */}
+      <div
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={sync}
+        className="policy-content min-h-[200px] p-4 text-sm text-slate-700 focus:outline-none"
+      />
+    </div>
+  )
 }
-
-const QUILL_FORMATS = ['header', 'bold', 'italic', 'underline', 'list', 'bullet']
 
 // ─── POLICY FORM (add / edit) ────────────────────────────────────────────────
 
@@ -57,16 +102,7 @@ function PolicyForm({
       </div>
       <div>
         <label className="label mb-1 block">Content</label>
-        <div className="rounded-xl overflow-hidden border border-slate-200">
-          <ReactQuill
-            theme="snow"
-            value={content}
-            onChange={val => { setContent(val); setErr('') }}
-            modules={QUILL_MODULES}
-            formats={QUILL_FORMATS}
-            style={{ minHeight: 220 }}
-          />
-        </div>
+        <RichEditor value={content} onChange={val => { setContent(val); setErr('') }} />
       </div>
       <div className="flex gap-2 justify-end pt-1">
         <Button variant="secondary" onClick={onCancel} disabled={loading}>Cancel</Button>

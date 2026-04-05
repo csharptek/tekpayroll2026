@@ -9,14 +9,6 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  optimizeDeps: {
-    include: ['react-quill'],
-  },
-  build: {
-    commonjsOptions: {
-      include: [/react-quill/, /node_modules/],
-    },
-  },
   server: {
     port: 5173,
     proxy: {
