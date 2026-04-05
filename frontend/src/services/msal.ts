@@ -14,10 +14,23 @@ const msalConfig: Configuration = {
 
 export const msalInstance = new PublicClientApplication(msalConfig)
 
-// Only request basic scopes — roles come via optionalClaims in the ID token
-// Do NOT add api:// scope here — it causes redirect URI mismatch
 export const loginRequest = {
   scopes: ['openid', 'profile', 'email'],
+}
+
+// Flag key — set true after explicit logout so login page doesn't auto-sign-in
+const LOGGED_OUT_KEY = 'csharptek-logged-out'
+
+export function markLoggedOut() {
+  sessionStorage.setItem(LOGGED_OUT_KEY, 'true')
+}
+
+export function clearLoggedOut() {
+  sessionStorage.removeItem(LOGGED_OUT_KEY)
+}
+
+export function wasLoggedOut(): boolean {
+  return sessionStorage.getItem(LOGGED_OUT_KEY) === 'true'
 }
 
 export async function initializeMsal(): Promise<void> {
@@ -26,15 +39,12 @@ export async function initializeMsal(): Promise<void> {
 
 export async function signInWithMicrosoft(): Promise<string | null> {
   try {
-    const accounts = msalInstance.getAllAccounts()
-    if (accounts.length > 0) {
-      const silentResult = await msalInstance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-      })
-      return silentResult.idToken
-    }
-    await msalInstance.loginRedirect(loginRequest)
+    clearLoggedOut() // user is intentionally signing in
+    // Always use prompt: 'select_account' — prevents auto-login with cached account
+    await msalInstance.loginRedirect({
+      ...loginRequest,
+      prompt: 'select_account',
+    })
     return null
   } catch (err) {
     console.error('[MSAL] Sign in error:', err)
@@ -44,28 +54,31 @@ export async function signInWithMicrosoft(): Promise<string | null> {
 
 export async function getTokenAfterRedirect(): Promise<{ token: string; account: AccountInfo } | null> {
   const result = await msalInstance.handleRedirectPromise()
+
+  // Coming back from Microsoft login redirect
   if (result && result.idToken) {
+    clearLoggedOut()
     return { token: result.idToken, account: result.account }
   }
 
-  const accounts = msalInstance.getAllAccounts()
-  if (accounts.length > 0) {
-    try {
-      const silentResult = await msalInstance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-      })
-      return { token: silentResult.idToken, account: accounts[0] }
-    } catch {
-      return null
-    }
-  }
+  // Do NOT silently re-authenticate if the user explicitly logged out
+  if (wasLoggedOut()) return null
+
+  // No redirect result — don't auto-login with cached account
+  // User must click "Sign in with Microsoft" explicitly
   return null
 }
 
 export async function signOut(): Promise<void> {
+  markLoggedOut()
   const accounts = msalInstance.getAllAccounts()
   if (accounts.length > 0) {
-    await msalInstance.logoutRedirect({ account: accounts[0] })
+    // postLogoutRedirectUri sends user back to login page cleanly
+    await msalInstance.logoutRedirect({
+      account: accounts[0],
+      postLogoutRedirectUri: window.location.origin + '/login',
+    })
+  } else {
+    window.location.href = '/login'
   }
 }

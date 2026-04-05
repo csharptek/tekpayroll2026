@@ -1,3 +1,4 @@
+import { signOut } from '../../services/msal'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { ShieldOff } from 'lucide-react'
@@ -21,7 +22,7 @@ export default function AccessDeniedPage() {
         </p>
         <div className="flex gap-3 justify-center">
           <button onClick={() => navigate(-1)} className="btn-secondary">Go Back</button>
-          <button onClick={() => { logout(); navigate('/login') }} className="btn-primary">Sign Out</button>
+          <button onClick={async () => { logout(); await signOut() }} className="btn-primary">Sign Out</button>
         </div>
       </div>
     </div>

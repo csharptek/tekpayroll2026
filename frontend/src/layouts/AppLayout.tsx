@@ -105,9 +105,9 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate()
   const nav = getNav(user?.role || 'EMPLOYEE')
 
-  function handleLogout() {
-    logout()
-    navigate('/login')
+  async function handleLogout() {
+    logout()          // clear zustand store
+    await signOut()   // clear MSAL session + redirect to /login
   }
 
   return (
