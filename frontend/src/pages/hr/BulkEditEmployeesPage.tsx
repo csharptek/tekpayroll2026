@@ -110,6 +110,7 @@ export default function BulkEditEmployeesPage() {
     setRows(prev => prev.map(r => r.id === row.id ? { ...r, saving: true, error: '' } : r))
     try {
       await employeeApi.update(row.id, {
+        employeeCode:     row.employeeCode,
         jobTitle:         row.jobTitle,
         department:       row.department,
         state:            row.state,
@@ -232,8 +233,15 @@ export default function BulkEditEmployeesPage() {
                     !row.annualCtc && 'bg-slate-50/60',
                   )}
                 >
-                  {/* Emp Code — read only */}
-                  <td className="px-3 py-2 font-mono text-xs text-slate-500">{row.employeeCode}</td>
+                  {/* Emp Code — editable for ID migration */}
+                  <td className="px-2 py-1">
+                    <input
+                      className="input text-xs w-full font-mono"
+                      value={row.employeeCode}
+                      onChange={e => updateRow(row.id, 'employeeCode', e.target.value)}
+                      placeholder="e.g. C#TEK186"
+                    />
+                  </td>
 
                   {/* Name — read only */}
                   <td className="px-3 py-2 font-medium text-slate-800 text-xs">{row.name}</td>

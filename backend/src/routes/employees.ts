@@ -34,6 +34,35 @@ const createEmployeeSchema = z.object({
   uanNumber: z.string().optional(),
 });
 
+// ─── NEXT EMPLOYEE CODE ───────────────────────────────────────────────────────
+// GET /api/employees/next-code?type=EMPLOYEE|TRAINEE
+
+employeeRouter.get('/next-code', requireHR, async (req, res) => {
+  const type = (req.query.type as string) === 'TRAINEE' ? 'TRAINEE' : 'EMPLOYEE'
+  const prefix = type === 'TRAINEE' ? 'C#TEKT' : 'C#TEK'
+
+  // Find all employee codes matching this prefix, extract numbers, return max+1
+  // Note: C#TEK is a substring of C#TEKT — for EMPLOYEE type we must exclude trainee codes
+  const allCodes = await prisma.employee.findMany({ select: { employeeCode: true } })
+  let maxNum = 0
+  for (const emp of allCodes) {
+    const code = emp.employeeCode
+    if (type === 'EMPLOYEE') {
+      // Must start with C#TEK but NOT C#TEKT
+      if (!code.startsWith('C#TEK') || code.startsWith('C#TEKT')) continue
+      const num = parseInt(code.replace('C#TEK', ''), 10)
+      if (!isNaN(num) && num > maxNum) maxNum = num
+    } else {
+      // Trainee: must start with C#TEKT
+      if (!code.startsWith('C#TEKT')) continue
+      const num = parseInt(code.replace('C#TEKT', ''), 10)
+      if (!isNaN(num) && num > maxNum) maxNum = num
+    }
+  }
+
+  res.json({ success: true, data: { nextCode: `${prefix}${maxNum + 1}`, type, prefix, lastNum: maxNum } })
+})
+
 // ─── GET ALL EMPLOYEES ───────────────────────────────────────────────────────
 
 employeeRouter.get('/', async (req, res) => {
@@ -130,6 +159,7 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
   if (!existing) throw new AppError('Employee not found', 404);
 
   const {
+    employeeCode,
     annualCtc, hasIncentive, incentivePercent, transportMonthly, fbpMonthly,
     mediclaim, tdsMonthly, resignationDate, lastWorkingDay,
     state, joiningDate, panNumber, aadhaarNumber, pfNumber, esiNumber, uanNumber,
@@ -138,6 +168,7 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
 
   // Handle CTC revision — log it separately
   const updateData: any = {};
+  if (employeeCode && employeeCode !== existing.employeeCode) updateData.employeeCode = employeeCode;
   if (annualCtc && annualCtc !== Number(existing.annualCtc)) {
     await prisma.salaryRevision.create({
       data: {

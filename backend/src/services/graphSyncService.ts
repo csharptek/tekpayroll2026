@@ -191,6 +191,7 @@ export interface PreviewUser {
   employeeCode:   string
   joiningDate:    string | null  // ISO date string
   state:          string | null
+  employeeType:   'EMPLOYEE' | 'TRAINEE'  // HR assigns for NEW records
 }
 
 export async function fetchPreview(domains: string[]): Promise<PreviewUser[]> {
@@ -235,6 +236,7 @@ export async function fetchPreview(domains: string[]): Promise<PreviewUser[]> {
       employeeCode:   existing?.employeeCode || gu.employeeId || `M365-${gu.id.slice(0, 8).toUpperCase()}`,
       joiningDate:    existing?.joiningDate?.toISOString().split('T')[0] || null,
       state:          existing?.state || null,
+      employeeType:   'EMPLOYEE',  // default; HR can change in preview for NEW records
     })
   }
 
@@ -256,6 +258,7 @@ export interface ImportRow {
   accountEnabled: boolean
   existingId:     string | null
   entraRole:      string | null
+  employeeType:   'EMPLOYEE' | 'TRAINEE'  // used to auto-generate code for NEW records
 }
 
 export async function importSelected(rows: ImportRow[], triggeredBy: string): Promise<{
@@ -291,6 +294,29 @@ export async function importSelected(rows: ImportRow[], triggeredBy: string): Pr
         }
       }
 
+      // ─── AUTO-GENERATE EMPLOYEE CODE FOR NEW RECORDS ────────────────────────
+      // If code looks like fallback M365-XXXX, replace with proper C#TEK / C#TEKT code
+      let finalEmployeeCode = row.employeeCode
+      if (!existingId && (!finalEmployeeCode || finalEmployeeCode.startsWith('M365-'))) {
+        const prefix = row.employeeType === 'TRAINEE' ? 'C#TEKT' : 'C#TEK'
+        const allCodes = await prisma.employee.findMany({ select: { employeeCode: true } })
+        let maxNum = 0
+        for (const emp of allCodes) {
+          const code = emp.employeeCode
+          if (row.employeeType === 'EMPLOYEE') {
+            if (!code.startsWith('C#TEK') || code.startsWith('C#TEKT')) continue
+            const num = parseInt(code.replace('C#TEK', ''), 10)
+            if (!isNaN(num) && num > maxNum) maxNum = num
+          } else {
+            if (!code.startsWith('C#TEKT')) continue
+            const num = parseInt(code.replace('C#TEKT', ''), 10)
+            if (!isNaN(num) && num > maxNum) maxNum = num
+          }
+        }
+        finalEmployeeCode = `${prefix}${maxNum + 1}`
+        console.log(`[SYNC] Auto-generated employee code: ${finalEmployeeCode} for ${row.email}`)
+      }
+
       if (existingId) {
         // ─── UPDATE EXISTING ─────────────────────────────────────────────────────
         console.log(`[SYNC] Updating employee: ${row.email} (ID: ${existingId})`)
@@ -318,7 +344,7 @@ export async function importSelected(rows: ImportRow[], triggeredBy: string): Pr
           data: {
             companyId:    company.id,
             entraId:      row.entraId,
-            employeeCode: row.employeeCode,
+            employeeCode: finalEmployeeCode,
             name:         row.displayName,
             email:        row.email,
             jobTitle:     row.jobTitle,

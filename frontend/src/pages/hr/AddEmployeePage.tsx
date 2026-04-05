@@ -29,6 +29,10 @@ export default function AddEmployeePage() {
   const navigate    = useNavigate()
   const queryClient = useQueryClient()
 
+  // Employee type controls ID prefix
+  const [employeeType, setEmployeeType] = useState<'EMPLOYEE' | 'TRAINEE'>('EMPLOYEE')
+  const [codeLoading, setCodeLoading]   = useState(false)
+
   // Personal / Employment fields
   const [form, setForm] = useState({
     name:           '',
@@ -46,6 +50,23 @@ export default function AddEmployeePage() {
     esiNumber:      '',
     uanNumber:      '',
   })
+
+  // Auto-fetch next code when employeeType changes
+  async function handleTypeChange(type: 'EMPLOYEE' | 'TRAINEE') {
+    setEmployeeType(type)
+    setCodeLoading(true)
+    try {
+      const res = await employeeApi.nextCode(type)
+      setForm(prev => ({ ...prev, employeeCode: res.data.data.nextCode }))
+    } catch {
+      // silently fail — HR can type manually
+    } finally {
+      setCodeLoading(false)
+    }
+  }
+
+  // Fetch initial next code on mount
+  useState(() => { handleTypeChange('EMPLOYEE') })
 
   // Salary state — driven by SalaryBreakdownForm
   const [salaryInput, setSalaryInput] = useState({
@@ -147,10 +168,39 @@ export default function AddEmployeePage() {
           <div className="p-5">
             <SectionHeading icon={Briefcase} title="Employment Details" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="label">Employee Type *</label>
+                <div className="flex gap-3 mt-1">
+                  {(['EMPLOYEE', 'TRAINEE'] as const).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleTypeChange(t)}
+                      className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
+                        employeeType === t
+                          ? 'border-brand-600 bg-brand-50 text-brand-700'
+                          : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                      }`}
+                    >
+                      {t === 'EMPLOYEE' ? '👤 Employee' : '🎓 Trainee'}
+                      <span className="ml-2 text-xs font-mono opacity-60">
+                        {t === 'EMPLOYEE' ? 'C#TEK###' : 'C#TEKT####'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <label className="label">Employee ID *</label>
-                <input className="input" placeholder="e.g. CST-001"
-                  value={form.employeeCode} onChange={e => setField('employeeCode', e.target.value)} />
+                <div className="relative">
+                  <input className="input font-mono" placeholder="Auto-generated"
+                    value={form.employeeCode}
+                    onChange={e => setField('employeeCode', e.target.value)} />
+                  {codeLoading && (
+                    <span className="absolute right-3 top-2.5 text-xs text-slate-400">Loading...</span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Auto-filled — edit only if needed</p>
               </div>
               <div>
                 <label className="label">Joining Date *</label>
