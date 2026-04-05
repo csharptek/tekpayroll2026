@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { authenticate, requireHR } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
-import { BlobServiceClient } from '@azure/storage-blob'
+import { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters, StorageSharedKeyCredential } from '@azure/storage-blob'
 import multer from 'multer'
 import { randomUUID } from 'crypto'
 import path from 'path'
@@ -32,6 +32,41 @@ function getConnStr(): string {
   return connStr
 }
 
+// Parse account name + key from connection string for SAS generation
+function getSharedKeyCredential(): { accountName: string; credential: StorageSharedKeyCredential } {
+  const connStr = getConnStr()
+  const accountNameMatch = connStr.match(/AccountName=([^;]+)/)
+  const accountKeyMatch  = connStr.match(/AccountKey=([^;]+)/)
+  if (!accountNameMatch || !accountKeyMatch) throw new AppError('Invalid Azure connection string', 500)
+  return {
+    accountName: accountNameMatch[1],
+    credential:  new StorageSharedKeyCredential(accountNameMatch[1], accountKeyMatch[1]),
+  }
+}
+
+// Generate a SAS URL valid for 3 years (photos/docs don't change often)
+function generateSasUrl(
+  containerName: string,
+  blobKey: string,
+  accountName: string,
+  credential: StorageSharedKeyCredential,
+): string {
+  const expiresOn = new Date()
+  expiresOn.setFullYear(expiresOn.getFullYear() + 3)
+
+  const sasQuery = generateBlobSASQueryParameters(
+    {
+      containerName,
+      blobName:   blobKey,
+      permissions: BlobSASPermissions.parse('r'), // read-only
+      expiresOn,
+    },
+    credential,
+  ).toString()
+
+  return `https://${accountName}.blob.core.windows.net/${containerName}/${blobKey}?${sasQuery}`
+}
+
 function sanitizeName(name: string): string {
   // Azure blob folder name safe: lowercase, alphanumeric + hyphens only
   return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40)
@@ -57,7 +92,9 @@ async function uploadToBlob(
     (containerEnvKey === 'AZURE_PHOTOS_CONTAINER' ? 'emp-photos' : 'emp-documents')
   const client        = BlobServiceClient.fromConnectionString(connStr)
   const container     = client.getContainerClient(containerName)
-  await container.createIfNotExists({ access: 'blob' })
+
+  // Create container as PRIVATE (no public access — works on all Azure storage accounts)
+  await container.createIfNotExists()
 
   const ext      = path.extname(originalName)
   const key      = `${blobPath}/${randomUUID()}${ext}`
@@ -67,7 +104,12 @@ async function uploadToBlob(
     : 'image/jpeg'
 
   await blob.uploadData(buffer, { blobHTTPHeaders: { blobContentType: mimeType } })
-  return { url: blob.url, key }
+
+  // Generate a 3-year SAS URL (private blob — no public access needed)
+  const { accountName, credential } = getSharedKeyCredential()
+  const url = generateSasUrl(containerName, key, accountName, credential)
+
+  return { url, key }
 }
 
 async function deleteBlob(
