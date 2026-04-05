@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
+import { signOut } from '../services/msal'
 import {
   LayoutDashboard, Users, CreditCard, FileText, Settings,
   LogOut, ChevronDown, Menu, X, Building2, Shield,
