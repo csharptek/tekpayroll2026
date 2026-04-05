@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate, requireHR } from '../middleware/auth'
+import { authenticate, requireSuperAdmin } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
@@ -7,7 +7,7 @@ import { AuditAction } from '@prisma/client'
 import { calculateFnf } from '../services/fnfService'
 
 export const fnfRouter = Router()
-fnfRouter.use(authenticate, requireHR)
+fnfRouter.use(authenticate, requireSuperAdmin)
 
 fnfRouter.get('/', async (_req, res) => {
   const settlements = await prisma.fnfSettlement.findMany({

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate, requireHR, requireSuperAdmin } from '../middleware/auth'
+import { authenticate, requireSuperAdmin } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
@@ -21,7 +21,7 @@ payrollRouter.get('/cycles', async (_req, res) => {
 
 // ─── GET CYCLE DETAIL ────────────────────────────────────────────────────────
 
-payrollRouter.get('/cycles/:id', requireHR, async (req, res) => {
+payrollRouter.get("/cycles/:id", requireSuperAdmin, async (req, res) => {
   const cycle = await prisma.payrollCycle.findUnique({
     where: { id: req.params.id },
     include: {
@@ -39,7 +39,7 @@ payrollRouter.get('/cycles/:id', requireHR, async (req, res) => {
 
 // ─── CREATE CYCLE ─────────────────────────────────────────────────────────────
 
-payrollRouter.post('/cycles', requireHR, async (req, res) => {
+payrollRouter.post('/cycles', requireSuperAdmin, async (req, res) => {
   const { cycleStart, cycleEnd, payrollMonth } = req.body
   const existing = await prisma.payrollCycle.findFirst({ where: { payrollMonth } })
   if (existing) throw new AppError(`Payroll cycle for ${payrollMonth} already exists`, 409)
@@ -76,7 +76,7 @@ function buildSalaryInput(emp: any) {
 
 // ─── RUN PAYROLL ─────────────────────────────────────────────────────────────
 
-payrollRouter.post('/cycles/:id/run', requireHR, async (req, res) => {
+payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
   const cycle = await prisma.payrollCycle.findUnique({ where: { id: req.params.id } })
   if (!cycle) throw new AppError('Payroll cycle not found', 404)
   if (cycle.status === PayrollStatus.LOCKED || cycle.status === PayrollStatus.DISBURSED) {
@@ -225,7 +225,7 @@ payrollRouter.post('/cycles/:id/run', requireHR, async (req, res) => {
 
 // ─── LOCK CYCLE ───────────────────────────────────────────────────────────────
 
-payrollRouter.post('/cycles/:id/lock', requireHR, async (req, res) => {
+payrollRouter.post('/cycles/:id/lock', requireSuperAdmin, async (req, res) => {
   const cycle = await prisma.payrollCycle.findUnique({ where: { id: req.params.id } })
   if (!cycle) throw new AppError('Payroll cycle not found', 404)
   if (cycle.status !== PayrollStatus.CALCULATED) throw new AppError('Only calculated cycles can be locked', 400)
@@ -262,7 +262,7 @@ payrollRouter.post('/cycles/:id/unlock', requireSuperAdmin, async (req, res) => 
 
 // ─── DISBURSE ─────────────────────────────────────────────────────────────────
 
-payrollRouter.post('/cycles/:id/disburse', requireHR, async (req, res) => {
+payrollRouter.post('/cycles/:id/disburse', requireSuperAdmin, async (req, res) => {
   const cycle = await prisma.payrollCycle.findUnique({ where: { id: req.params.id } })
   if (!cycle) throw new AppError('Payroll cycle not found', 404)
   if (cycle.status !== PayrollStatus.LOCKED) throw new AppError('Only locked cycles can be disbursed', 400)
@@ -277,7 +277,7 @@ payrollRouter.post('/cycles/:id/disburse', requireHR, async (req, res) => {
 
 // ─── UPDATE SINGLE ENTRY (TDS override etc) ───────────────────────────────────
 
-payrollRouter.put('/entries/:id', requireHR, async (req, res) => {
+payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
   const entry = await prisma.payrollEntry.findUnique({ where: { id: req.params.id } })
   if (!entry) throw new AppError('Entry not found', 404)
 
@@ -308,7 +308,7 @@ payrollRouter.get('/employee/:employeeId', async (req, res) => {
 
 // ─── REPORTS ─────────────────────────────────────────────────────────────────
 
-payrollRouter.get('/cycles/:id/summary', requireHR, async (req, res) => {
+payrollRouter.get('/cycles/:id/summary', requireSuperAdmin, async (req, res) => {
   const entries = await prisma.payrollEntry.findMany({
     where: { cycleId: req.params.id },
     include: { employee: { select: { name: true, employeeCode: true, department: true } } },

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, requireHR } from '../middleware/auth';
+import { authenticate, requireHR, requireSuperAdmin } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { createAuditLog } from '../middleware/audit';
@@ -322,7 +322,7 @@ employeeRouter.get('/:id/payroll-history', async (req, res) => {
 
 // ─── GET SALARY REVISIONS ────────────────────────────────────────────────────
 
-employeeRouter.get('/:id/salary-revisions', requireHR, async (req, res) => {
+employeeRouter.get('/:id/salary-revisions', requireSuperAdmin, async (req, res) => {
   const revisions = await prisma.salaryRevision.findMany({
     where: { employeeId: req.params.id },
     orderBy: { effectiveFrom: 'desc' },
@@ -335,7 +335,7 @@ employeeRouter.get('/:id/salary-revisions', requireHR, async (req, res) => {
 // POST /api/employees/salary-preview
 // Returns calculated breakdown without saving — used for the manual review screen
 
-employeeRouter.post('/salary-preview', requireHR, async (req, res) => {
+employeeRouter.post('/salary-preview', requireSuperAdmin, async (req, res) => {
   const {
     annualCtc, basicPercent = 45, hraPercent = 35,
     transportMonthly = null, fbpMonthly = null,

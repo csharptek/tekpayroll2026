@@ -33,7 +33,10 @@ export default function EmployeeDetailPage() {
   const qc          = useQueryClient()
   const { user }    = useAuthStore()
   const [tab, setTab] = useState('personal')
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const isHR = user?.role === 'HR' || user?.role === 'SUPER_ADMIN'
+  // HR cannot see salary/CTC — only SUPER_ADMIN
+  const visibleTabs = TABS.filter(t => t.key !== 'salary' || isSuperAdmin)
 
   const { data: emp, isLoading, error } = useQuery({
     queryKey: ['employee-full', id],

@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { authenticate, requireHR } from '../middleware/auth';
+import { authenticate, requireSuperAdmin } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
 
 export const lopRouter = Router();
-lopRouter.use(authenticate, requireHR);
+lopRouter.use(authenticate, requireSuperAdmin);
 
 lopRouter.get('/:cycleId', async (req, res) => {
   const entries = await prisma.lopEntry.findMany({

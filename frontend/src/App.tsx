@@ -73,7 +73,7 @@ export default function App() {
         {/* Root redirect */}
         <Route path="/" element={<RequireAuth><RoleBasedHome /></RequireAuth>} />
 
-        {/* HR & Super Admin */}
+        {/* HR & Super Admin — shared routes */}
         <Route path="/hr" element={<RequireAuth roles={['HR', 'SUPER_ADMIN']}><AppLayout /></RequireAuth>}>
           <Route path="dashboard" element={<HRDashboard />} />
           <Route path="employees" element={<EmployeeListPage />} />
@@ -82,14 +82,6 @@ export default function App() {
           <Route path="employees/:id/edit" element={<EditEmployeePage />} />
           <Route path="employees-bulk-edit" element={<BulkEditEmployeesPage />} />
           <Route path="employees-bulk-edit" element={<BulkEditEmployeePage />} />
-          <Route path="payroll" element={<PayrollCyclesPage />} />
-          <Route path="payroll/:id/run" element={<RunPayrollPage />} />
-          <Route path="payroll/:id/detail" element={<PayrollRunDetailPage />} />
-          <Route path="payroll/:id/lop" element={<LopManagementPage />} />
-          <Route path="payroll/:id/reimbursements" element={<ReimbursementsPage />} />
-          <Route path="payslips" element={<PayslipGenerationPage />} />
-          <Route path="loans" element={<LoansPage />} />
-          <Route path="fnf" element={<FnfPage />} />
           <Route path="import" element={<BulkImportPage />} />
           <Route path="sync" element={<SyncPage />} />
           <Route path="audit" element={<AuditLogPage />} />
@@ -97,6 +89,16 @@ export default function App() {
           <Route path="leaves" element={<HRLeavePage />} />
           <Route path="public-holidays" element={<PublicHolidaysPage />} />
           <Route path="leave-config" element={<LeaveConfigPage />} />
+
+          {/* Financial routes — SUPER_ADMIN only */}
+          <Route path="payroll" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollCyclesPage /></RequireAuth>} />
+          <Route path="payroll/:id/run" element={<RequireAuth roles={['SUPER_ADMIN']}><RunPayrollPage /></RequireAuth>} />
+          <Route path="payroll/:id/detail" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollRunDetailPage /></RequireAuth>} />
+          <Route path="payroll/:id/lop" element={<RequireAuth roles={['SUPER_ADMIN']}><LopManagementPage /></RequireAuth>} />
+          <Route path="payroll/:id/reimbursements" element={<RequireAuth roles={['SUPER_ADMIN']}><ReimbursementsPage /></RequireAuth>} />
+          <Route path="payslips" element={<RequireAuth roles={['SUPER_ADMIN']}><PayslipGenerationPage /></RequireAuth>} />
+          <Route path="loans" element={<RequireAuth roles={['SUPER_ADMIN']}><LoansPage /></RequireAuth>} />
+          <Route path="fnf" element={<RequireAuth roles={['SUPER_ADMIN']}><FnfPage /></RequireAuth>} />
         </Route>
 
         {/* Employee self-service */}

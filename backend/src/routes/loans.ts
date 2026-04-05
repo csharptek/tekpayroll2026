@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, requireHR } from '../middleware/auth';
+import { authenticate, requireSuperAdmin } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { createAuditLog } from '../middleware/audit';
@@ -8,7 +8,7 @@ import { AuditAction } from '@prisma/client';
 export const loanRouter = Router();
 loanRouter.use(authenticate);
 
-loanRouter.get('/', requireHR, async (_req, res) => {
+loanRouter.get('/', requireSuperAdmin, async (_req, res) => {
   const loans = await prisma.loan.findMany({
     include: { employee: { select: { name: true, employeeCode: true } } },
     orderBy: { createdAt: 'desc' },
@@ -26,7 +26,7 @@ loanRouter.get('/employee/:employeeId', async (req, res) => {
   res.json({ success: true, data: loans });
 });
 
-loanRouter.post('/', requireHR, async (req, res) => {
+loanRouter.post('/', requireSuperAdmin, async (req, res) => {
   const { employeeId, principalAmount, disbursedOn, tenureMonths, emiAmount, purpose } = req.body;
   const loan = await prisma.loan.create({
     data: {
@@ -39,7 +39,7 @@ loanRouter.post('/', requireHR, async (req, res) => {
   res.status(201).json({ success: true, data: loan });
 });
 
-loanRouter.post('/:id/close', requireHR, async (req, res) => {
+loanRouter.post('/:id/close', requireSuperAdmin, async (req, res) => {
   const loan = await prisma.loan.findUnique({ where: { id: req.params.id } });
   if (!loan) throw new AppError('Loan not found', 404);
   const updated = await prisma.loan.update({

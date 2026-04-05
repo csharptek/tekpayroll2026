@@ -13,7 +13,58 @@ import clsx from 'clsx'
 
 // ─── NAV STRUCTURE ───────────────────────────────────────────────────────────
 
+// HR nav: employee management + leave admin only (no financial/payroll access)
 const HR_NAV = [
+  {
+    section: 'Overview',
+    items: [
+      { label: 'Dashboard', icon: LayoutDashboard, to: '/hr/dashboard' },
+    ]
+  },
+  {
+    section: 'Employees',
+    items: [
+      { label: 'All Employees',      icon: Users,      to: '/hr/employees' },
+      { label: 'Bulk Import',        icon: Upload,     to: '/hr/import' },
+      { label: 'Bulk Edit',          icon: Edit3,      to: '/hr/employees-bulk-edit' },
+      { label: 'Bulk Edit Salaries', icon: Table2,     to: '/hr/salaries-bulk-edit' },
+      { label: 'M365 Sync',          icon: RefreshCw,  to: '/hr/sync' },
+    ]
+  },
+  {
+    section: 'Leave',
+    items: [
+      { label: 'Leave Applications', icon: CalendarCheck, to: '/hr/leaves' },
+      { label: 'Public Holidays',    icon: CalendarDays,  to: '/hr/public-holidays' },
+      { label: 'Leave Config',       icon: CalendarClock, to: '/hr/leave-config' },
+    ]
+  },
+  {
+    section: 'Admin',
+    items: [
+      { label: 'Audit Log',     icon: ScrollText, to: '/hr/audit' },
+      { label: 'Configuration', icon: Settings,   to: '/hr/config' },
+    ]
+  },
+  // HR is also an employee — they can access their own payroll & leave data
+  {
+    section: 'My Payroll',
+    items: [
+      { label: 'My Payslips', icon: FileText,   to: '/my/payslips' },
+      { label: 'My Profile',  icon: UserCircle, to: '/my/profile' },
+      { label: 'My Loans',    icon: Wallet,     to: '/my/loans' },
+    ]
+  },
+  {
+    section: 'My Leave',
+    items: [
+      { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
+    ]
+  },
+]
+
+// SUPER_ADMIN nav: full access including financial/payroll
+const SUPER_ADMIN_NAV = [
   {
     section: 'Overview',
     items: [
@@ -33,10 +84,10 @@ const HR_NAV = [
   {
     section: 'Payroll',
     items: [
-      { label: 'Payroll Cycles',  icon: CreditCard, to: '/hr/payroll' },
-      { label: 'Payslips',        icon: FileText,   to: '/hr/payslips' },
-      { label: 'Loans & Advances',icon: Wallet,     to: '/hr/loans' },
-      { label: 'F&F Settlement',  icon: GitMerge,   to: '/hr/fnf' },
+      { label: 'Payroll Cycles',   icon: CreditCard, to: '/hr/payroll' },
+      { label: 'Payslips',         icon: FileText,   to: '/hr/payslips' },
+      { label: 'Loans & Advances', icon: Wallet,     to: '/hr/loans' },
+      { label: 'F&F Settlement',   icon: GitMerge,   to: '/hr/fnf' },
     ]
   },
   {
@@ -52,6 +103,21 @@ const HR_NAV = [
     items: [
       { label: 'Audit Log',     icon: ScrollText, to: '/hr/audit' },
       { label: 'Configuration', icon: Settings,   to: '/hr/config' },
+    ]
+  },
+  // Super Admin is also an employee
+  {
+    section: 'My Payroll',
+    items: [
+      { label: 'My Payslips', icon: FileText,   to: '/my/payslips' },
+      { label: 'My Profile',  icon: UserCircle, to: '/my/profile' },
+      { label: 'My Loans',    icon: Wallet,     to: '/my/loans' },
+    ]
+  },
+  {
+    section: 'My Leave',
+    items: [
+      { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
     ]
   },
 ]
@@ -78,22 +144,31 @@ const MANAGEMENT_NAV = [
   {
     section: 'Analytics',
     items: [
-      { label: 'Dashboard', icon: BarChart3, to: '/management/dashboard' },
+      { label: 'Dashboard',       icon: BarChart3,  to: '/management/dashboard' },
       { label: 'Payroll Reports', icon: FileSearch, to: '/management/reports' },
-      { label: 'Cost Analysis', icon: DollarSign, to: '/management/cost-report' },
+      { label: 'Cost Analysis',   icon: DollarSign, to: '/management/cost-report' },
     ]
   },
+  // Management is also an employee
   {
     section: 'My Payroll',
     items: [
-      { label: 'My Payslips', icon: FileText, to: '/my/payslips' },
-      { label: 'My Profile', icon: UserCircle, to: '/my/profile' },
+      { label: 'My Payslips', icon: FileText,   to: '/my/payslips' },
+      { label: 'My Profile',  icon: UserCircle, to: '/my/profile' },
+      { label: 'My Loans',    icon: Wallet,     to: '/my/loans' },
+    ]
+  },
+  {
+    section: 'My Leave',
+    items: [
+      { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
     ]
   },
 ]
 
 function getNav(role: string) {
-  if (role === 'HR' || role === 'SUPER_ADMIN') return HR_NAV
+  if (role === 'SUPER_ADMIN') return SUPER_ADMIN_NAV
+  if (role === 'HR') return HR_NAV
   if (role === 'MANAGEMENT') return MANAGEMENT_NAV
   return EMPLOYEE_NAV
 }

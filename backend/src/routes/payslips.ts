@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate, requireHR } from '../middleware/auth'
+import { authenticate, requireSuperAdmin } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
@@ -44,7 +44,7 @@ payslipRouter.get('/:id', async (req, res) => {
 })
 
 // POST generate payslips for a cycle (HR only)
-payslipRouter.post('/generate/:cycleId', requireHR, async (req, res) => {
+payslipRouter.post('/generate/:cycleId', requireSuperAdmin, async (req, res) => {
   const { cycleId } = req.params
   const { employeeIds } = req.body // optional — generate for specific employees only
 
@@ -77,7 +77,7 @@ payslipRouter.post('/generate/:cycleId', requireHR, async (req, res) => {
 })
 
 // POST regenerate single payslip (HR only)
-payslipRouter.post('/regenerate/:entryId', requireHR, async (req, res) => {
+payslipRouter.post('/regenerate/:entryId', requireSuperAdmin, async (req, res) => {
   const entry = await prisma.payrollEntry.findUnique({ where: { id: req.params.entryId } })
   if (!entry) throw new AppError('Payroll entry not found', 404)
 

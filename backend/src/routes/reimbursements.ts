@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { authenticate, requireHR } from '../middleware/auth';
+import { authenticate, requireSuperAdmin } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 
 export const reimbursementRouter = Router();
-reimbursementRouter.use(authenticate, requireHR);
+reimbursementRouter.use(authenticate, requireSuperAdmin);
 
 reimbursementRouter.get('/:cycleId', async (req, res) => {
   const items = await prisma.reimbursement.findMany({
