@@ -21,32 +21,64 @@ const upload = multer({
   },
 })
 
-async function uploadToBlob(buffer: Buffer, originalName: string, folder: string): Promise<{ url: string; key: string }> {
-  const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING
-  if (!connStr || connStr === 'PLACEHOLDER') {
-    throw new AppError('Azure storage not configured', 500)
-  }
+// ─── ENV CONTAINER NAMES ─────────────────────────────────────────────────────
+// AZURE_PHOTOS_CONTAINER — for employee profile photos      (default: emp-photos)
+// AZURE_DOCS_CONTAINER   — for employee documents           (default: emp-documents)
+// AZURE_STORAGE_CONTAINER — payslips only (untouched)
 
-  const client    = BlobServiceClient.fromConnectionString(connStr)
-  const container = client.getContainerClient(process.env.AZURE_STORAGE_CONTAINER || 'payslips')
+function getConnStr(): string {
+  const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING
+  if (!connStr || connStr === 'PLACEHOLDER') throw new AppError('Azure storage not configured', 500)
+  return connStr
+}
+
+function sanitizeName(name: string): string {
+  // Azure blob folder name safe: lowercase, alphanumeric + hyphens only
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40)
+}
+
+async function getEmpFolder(employeeId: string): Promise<string> {
+  const emp = await prisma.employee.findUnique({
+    where:  { id: employeeId },
+    select: { employeeCode: true, name: true },
+  })
+  if (!emp) throw new AppError('Employee not found', 404)
+  return `${sanitizeName(emp.employeeCode)}-${sanitizeName(emp.name)}`
+}
+
+async function uploadToBlob(
+  buffer: Buffer,
+  originalName: string,
+  containerEnvKey: 'AZURE_PHOTOS_CONTAINER' | 'AZURE_DOCS_CONTAINER',
+  blobPath: string,   // full path inside container e.g. "c-tek186-john-doe/profile/uuid.jpg"
+): Promise<{ url: string; key: string }> {
+  const connStr       = getConnStr()
+  const containerName = process.env[containerEnvKey] ||
+    (containerEnvKey === 'AZURE_PHOTOS_CONTAINER' ? 'emp-photos' : 'emp-documents')
+  const client        = BlobServiceClient.fromConnectionString(connStr)
+  const container     = client.getContainerClient(containerName)
   await container.createIfNotExists({ access: 'blob' })
 
-  const ext  = path.extname(originalName)
-  const key  = `${folder}/${randomUUID()}${ext}`
-  const blob = container.getBlockBlobClient(key)
+  const ext      = path.extname(originalName)
+  const key      = `${blobPath}/${randomUUID()}${ext}`
+  const blob     = container.getBlockBlobClient(key)
+  const mimeType = originalName.toLowerCase().endsWith('.pdf') ? 'application/pdf'
+    : originalName.toLowerCase().match(/\.(png|webp)$/) ? `image/${originalName.split('.').pop()}`
+    : 'image/jpeg'
 
-  await blob.uploadData(buffer, {
-    blobHTTPHeaders: { blobContentType: originalName.includes('.pdf') ? 'application/pdf' : 'image/jpeg' },
-  })
-
+  await blob.uploadData(buffer, { blobHTTPHeaders: { blobContentType: mimeType } })
   return { url: blob.url, key }
 }
 
-async function deleteBlob(key: string) {
-  const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING
-  if (!connStr || connStr === 'PLACEHOLDER') return
+async function deleteBlob(
+  key: string,
+  containerEnvKey: 'AZURE_PHOTOS_CONTAINER' | 'AZURE_DOCS_CONTAINER',
+): Promise<void> {
+  const connStr       = getConnStr()
+  const containerName = process.env[containerEnvKey] ||
+    (containerEnvKey === 'AZURE_PHOTOS_CONTAINER' ? 'emp-photos' : 'emp-documents')
   const client    = BlobServiceClient.fromConnectionString(connStr)
-  const container = client.getContainerClient(process.env.AZURE_STORAGE_CONTAINER || 'payslips')
+  const container = client.getContainerClient(containerName)
   await container.getBlockBlobClient(key).deleteIfExists()
 }
 
@@ -123,9 +155,10 @@ employeeProfileRouter.post('/:id/profile/photo', requireHR, upload.single('photo
 
   // Delete old photo
   const existing = await prisma.employeeProfile.findUnique({ where: { employeeId: req.params.id } })
-  if (existing?.profilePhotoKey) await deleteBlob(existing.profilePhotoKey)
+  if (existing?.profilePhotoKey) await deleteBlob(existing.profilePhotoKey, 'AZURE_PHOTOS_CONTAINER')
 
-  const { url, key } = await uploadToBlob(req.file.buffer, req.file.originalname, 'photos')
+  const empFolder = await getEmpFolder(req.params.id)
+  const { url, key } = await uploadToBlob(req.file.buffer, req.file.originalname, 'AZURE_PHOTOS_CONTAINER', `${empFolder}/profile`)
 
   const profile = await prisma.employeeProfile.upsert({
     where:  { employeeId: req.params.id },
@@ -419,7 +452,7 @@ employeeProfileRouter.put('/:id/bank-accounts/:accountId', requireHR, async (req
 
 employeeProfileRouter.delete('/:id/bank-accounts/:accountId', requireHR, async (req, res) => {
   const account = await prisma.bankAccount.findUnique({ where: { id: req.params.accountId } })
-  if (account?.documentKey) await deleteBlob(account.documentKey)
+  if (account?.documentKey) await deleteBlob(account.documentKey, 'AZURE_DOCS_CONTAINER')
   await prisma.bankAccount.delete({ where: { id: req.params.accountId } })
   res.json({ success: true })
 })
@@ -439,7 +472,8 @@ employeeProfileRouter.post('/:id/documents', requireHR, upload.single('file'), a
   const { documentType, notes } = req.body
   if (!documentType) throw new AppError('Document type is required', 400)
 
-  const { url, key } = await uploadToBlob(req.file.buffer, req.file.originalname, `docs/${req.params.id}`)
+  const empFolder = await getEmpFolder(req.params.id)
+  const { url, key } = await uploadToBlob(req.file.buffer, req.file.originalname, 'AZURE_DOCS_CONTAINER', empFolder)
 
   const doc = await prisma.employeeDocument.create({
     data: {
@@ -467,7 +501,7 @@ employeeProfileRouter.put('/:id/documents/:docId/verify', requireHR, async (req,
 
 employeeProfileRouter.delete('/:id/documents/:docId', requireHR, async (req, res) => {
   const doc = await prisma.employeeDocument.findUnique({ where: { id: req.params.docId } })
-  if (doc?.fileKey) await deleteBlob(doc.fileKey)
+  if (doc?.fileKey) await deleteBlob(doc.fileKey, 'AZURE_DOCS_CONTAINER')
   await prisma.employeeDocument.delete({ where: { id: req.params.docId } })
   res.json({ success: true })
 })
