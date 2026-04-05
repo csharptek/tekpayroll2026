@@ -126,21 +126,14 @@ leaveRouter.delete('/holidays/:id', requireHR, async (req, res) => {
 
 // ─── LEAVE BALANCE ────────────────────────────────────────────────────────────
 
-// GET /api/leave/balance/my — employee's own balance
+// GET /api/leave/balance/my — employee's own balance  (MUST be before /:employeeId)
 leaveRouter.get('/balance/my', async (req, res) => {
   const year = req.query.year ? parseInt(req.query.year as string) : getCurrentLeaveYear()
   const balance = await getEmployeeBalance(req.user!.id, year)
   res.json({ success: true, data: balance })
 })
 
-// GET /api/leave/balance/:employeeId — HR/admin
-leaveRouter.get('/balance/:employeeId', requireHR, async (req, res) => {
-  const year = req.query.year ? parseInt(req.query.year as string) : getCurrentLeaveYear()
-  const balance = await getEmployeeBalance(req.params.employeeId, year)
-  res.json({ success: true, data: balance })
-})
-
-// GET /api/leave/balance — all employees, HR/admin
+// GET /api/leave/balance — all employees (MUST be before /:employeeId)
 leaveRouter.get('/balance', requireHR, async (req, res) => {
   const year = req.query.year ? parseInt(req.query.year as string) : getCurrentLeaveYear()
   const employees = await prisma.employee.findMany({
@@ -157,13 +150,20 @@ leaveRouter.get('/balance', requireHR, async (req, res) => {
   res.json({ success: true, data: result })
 })
 
-// GET /api/leave/balance/:employeeId/history — month snapshots
+// GET /api/leave/balance/:employeeId/history — month snapshots (MUST be before /:employeeId)
 leaveRouter.get('/balance/:employeeId/history', requireHR, async (req, res) => {
   const snapshots = await prisma.leaveBalanceSnapshot.findMany({
     where: { employeeId: req.params.employeeId },
     orderBy: { snapshotMonth: 'desc' },
   })
   res.json({ success: true, data: snapshots })
+})
+
+// GET /api/leave/balance/:employeeId — HR/admin (parameterised — always last)
+leaveRouter.get('/balance/:employeeId', requireHR, async (req, res) => {
+  const year = req.query.year ? parseInt(req.query.year as string) : getCurrentLeaveYear()
+  const balance = await getEmployeeBalance(req.params.employeeId, year)
+  res.json({ success: true, data: balance })
 })
 
 // ─── LEAVE APPLICATIONS ───────────────────────────────────────────────────────
