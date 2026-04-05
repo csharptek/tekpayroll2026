@@ -8,7 +8,7 @@ import {
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
-  CalendarCheck, CalendarClock, Palmtree, BookOpen
+  CalendarCheck, CalendarClock, Palmtree, BookOpen, FlaskConical
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -89,8 +89,9 @@ const SUPER_ADMIN_NAV = [
   {
     section: 'Payroll',
     items: [
-      { label: 'Payroll Cycles',   icon: CreditCard, to: '/hr/payroll' },
-      { label: 'Payslips',         icon: FileText,   to: '/hr/payslips' },
+      { label: 'Payroll Cycles',   icon: CreditCard,     to: '/hr/payroll' },
+      { label: 'Dry Run',          icon: FlaskConical,   to: '/hr/payroll/dry-run' },
+      { label: 'Payslips',         icon: FileText,       to: '/hr/payslips' },
       { label: 'Loans & Advances', icon: Wallet,     to: '/hr/loans' },
       { label: 'F&F Settlement',   icon: GitMerge,   to: '/hr/fnf' },
     ]
@@ -346,6 +347,7 @@ function usePageTitle() {
     '/hr/employees': 'Employees',
     '/hr/employees/add': 'Add Employee',
     '/hr/payroll': 'Payroll Cycles',
+    '/hr/payroll/dry-run': 'Payroll Dry Run',
     '/hr/payslips': 'Payslip Generation',
     '/hr/loans': 'Loans & Advances',
     '/hr/fnf': 'Full & Final Settlement',
