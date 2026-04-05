@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
+import { msalInstance, loginRequest } from './msal'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000',
@@ -17,13 +18,65 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Track if we're already refreshing to avoid infinite loops
+let isRefreshing = false
+let refreshQueue: Array<(token: string) => void> = []
+
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      useAuthStore.getState().logout()
-      window.location.href = '/login'
+  async (err) => {
+    const { isDevMode, setUser, logout } = useAuthStore.getState()
+
+    if (err.response?.status === 401 && !isDevMode && !err.config._retry) {
+      // Try silent token refresh before giving up
+      if (isRefreshing) {
+        // Queue this request until refresh completes
+        return new Promise((resolve, reject) => {
+          refreshQueue.push((newToken: string) => {
+            err.config._retry = true
+            err.config.headers['Authorization'] = `Bearer ${newToken}`
+            resolve(api(err.config))
+          })
+        })
+      }
+
+      isRefreshing = true
+      err.config._retry = true
+
+      try {
+        const accounts = msalInstance.getAllAccounts()
+        if (accounts.length === 0) throw new Error('No accounts')
+
+        const result = await msalInstance.acquireTokenSilent({
+          ...loginRequest,
+          account: accounts[0],
+          forceRefresh: true,
+        })
+
+        const newToken = result.idToken
+
+        // Update stored token
+        const { user } = useAuthStore.getState()
+        if (user) setUser(user, newToken)
+
+        // Flush queued requests
+        refreshQueue.forEach(cb => cb(newToken))
+        refreshQueue = []
+        isRefreshing = false
+
+        // Retry original request with new token
+        err.config.headers['Authorization'] = `Bearer ${newToken}`
+        return api(err.config)
+      } catch (refreshErr) {
+        // Refresh failed — clear session and redirect to login
+        refreshQueue = []
+        isRefreshing = false
+        logout()
+        window.location.href = '/login'
+        return Promise.reject(refreshErr)
+      }
     }
+
     return Promise.reject(err)
   }
 )

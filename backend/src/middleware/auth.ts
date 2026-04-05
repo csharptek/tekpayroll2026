@@ -133,7 +133,21 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     req.user = await validateMsalToken(token)
     next()
   } catch (err: any) {
-    next(err)
+    // Surface the real JWT/MSAL error instead of a generic NO_TOKEN
+    if (err instanceof AppError) return next(err)
+
+    if (err.name === 'TokenExpiredError') {
+      return next(new AppError('Session expired. Please sign in again.', 401, 'TOKEN_EXPIRED'))
+    }
+    if (err.name === 'JsonWebTokenError') {
+      return next(new AppError(`Invalid token: ${err.message}`, 401, 'INVALID_TOKEN'))
+    }
+    if (err.name === 'SigningKeyNotFoundError' || err.code === 'ECONNREFUSED') {
+      return next(new AppError('Auth service unavailable. Please try again.', 503, 'AUTH_UNAVAILABLE'))
+    }
+
+    console.error('[AUTH] Unexpected auth error:', err.name, err.message)
+    return next(new AppError('Authentication failed', 401, 'AUTH_FAILED'))
   }
 }
 
