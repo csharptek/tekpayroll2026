@@ -223,6 +223,132 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
   res.json({ success: true, data: { cycle: cycle.payrollMonth, results, totalGross, totalNet } })
 })
 
+
+// ─── DRY RUN (no DB writes) ───────────────────────────────────────────────────
+
+payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
+  const { cycleStart, cycleEnd, payrollMonth, overrides = {} } = req.body
+  if (!cycleStart || !cycleEnd || !payrollMonth) {
+    throw new AppError('cycleStart, cycleEnd and payrollMonth are required', 400)
+  }
+
+  const start = new Date(cycleStart)
+  const end   = new Date(cycleEnd)
+
+  const employees = await prisma.employee.findMany({
+    where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
+    orderBy: { name: 'asc' },
+  })
+
+  const bonusMonth = isBonusMonth(payrollMonth)
+  const results    = []
+  let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0, totalTds = 0, totalLoan = 0
+
+  for (const emp of employees) {
+    try {
+      // Use overrides if provided, else fall back to real cycle data
+      const override = overrides[emp.id] || {}
+      let lopDays      = override.lopDays      !== undefined ? Number(override.lopDays)      : 0
+      let reimbAmount  = override.reimbursements !== undefined ? Number(override.reimbursements) : 0
+
+      // If no override, try to find real cycle data
+      if (override.lopDays === undefined || override.reimbursements === undefined) {
+        const [lopEntry, reimbs] = await Promise.all([
+          prisma.lopEntry.findFirst({ where: { employeeId: emp.id, cycle: { payrollMonth } } }),
+          prisma.reimbursement.aggregate({ where: { employeeId: emp.id, cycle: { payrollMonth } }, _sum: { amount: true } }),
+        ])
+        if (override.lopDays === undefined)       lopDays     = lopEntry?.lopDays || 0
+        if (override.reimbursements === undefined) reimbAmount = Number(reimbs._sum.amount || 0)
+      }
+
+      const calc = await calculatePayrollForEmployee({
+        employeeId:      emp.id,
+        salaryInput:     buildSalaryInput(emp),
+        state:           emp.state || '',
+        joiningDate:     emp.joiningDate,
+        lastWorkingDay:  emp.lastWorkingDay,
+        resignationDate: emp.resignationDate,
+        cycleStart:      start,
+        cycleEnd:        end,
+        payrollMonth,
+        lopDays,
+        tdsMonthly:      Number(emp.tdsMonthly ?? 0),
+        reimbursements:  reimbAmount,
+      })
+
+      const s = calc.salary
+
+      totalGross += calc.proration.proratedGross
+      totalNet   += calc.netSalary
+      totalPf    += calc.deductions.pf
+      totalEsi   += calc.deductions.esi
+      totalTds   += calc.deductions.tds
+      totalLoan  += calc.deductions.loanDeduction
+
+      results.push({
+        employeeId:       emp.id,
+        employeeCode:     emp.employeeCode,
+        name:             emp.name,
+        department:       emp.department,
+        designation:      emp.jobTitle,
+        annualCtc:        s.annualCtc,
+        grossMonthly:     s.grandTotalMonthly,
+        basic:            s.basicMonthly,
+        hra:              s.hraMonthly,
+        transport:        s.transportMonthly,
+        fbp:              s.fbpMonthly,
+        hyi:              s.hyiMonthly,
+        annualBonus:      bonusMonth ? s.annualBonus : 0,
+        isBonusMonth:     bonusMonth,
+        totalDays:        calc.proration.totalDays,
+        payableDays:      calc.proration.payableDays,
+        isProrated:       calc.proration.isProrated,
+        proratedGross:    calc.proration.proratedGross,
+        reimbursements:   reimbAmount,
+        lopDays:          lopDays,
+        lopAmount:        calc.deductions.lop,
+        pfAmount:         calc.deductions.pf,
+        esiAmount:        calc.deductions.esi,
+        ptAmount:         calc.deductions.pt,
+        tdsAmount:        calc.deductions.tds,
+        loanDeduction:    calc.deductions.loanDeduction,
+        netSalary:        calc.netSalary,
+        status:           'ok',
+      })
+    } catch (err: any) {
+      results.push({
+        employeeId:   emp.id,
+        employeeCode: emp.employeeCode,
+        name:         emp.name,
+        department:   emp.department,
+        status:       'error',
+        error:        err.message,
+        netSalary:    0,
+      })
+    }
+  }
+
+  res.json({
+    success: true,
+    data: {
+      payrollMonth,
+      cycleStart,
+      cycleEnd,
+      isBonusMonth: bonusMonth,
+      employeeCount: employees.length,
+      summary: {
+        totalGross: Math.round(totalGross * 100) / 100,
+        totalNet:   Math.round(totalNet   * 100) / 100,
+        totalPf:    Math.round(totalPf    * 100) / 100,
+        totalEsi:   Math.round(totalEsi   * 100) / 100,
+        totalTds:   Math.round(totalTds   * 100) / 100,
+        totalLoan:  Math.round(totalLoan  * 100) / 100,
+      },
+      results,
+    },
+  })
+})
+
 // ─── LOCK CYCLE ───────────────────────────────────────────────────────────────
 
 payrollRouter.post('/cycles/:id/lock', requireSuperAdmin, async (req, res) => {
