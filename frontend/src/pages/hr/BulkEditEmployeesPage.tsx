@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, RefreshCw, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { employeeApi } from '../../services/api'
@@ -74,19 +74,25 @@ export default function BulkEditEmployeesPage() {
   const qc = useQueryClient()
   const [rows, setRows]               = useState<EmpRow[]>([])
   const [showBreakdown, setShowBreakdown] = useState(false)
-  const [savedCount, setSavedCount]   = useState<number | null>(null)
+  const [savedCount, setSavedCount]   = useState(0)
   const [globalError, setGlobalError] = useState('')
   const [selected, setSelected]       = useState<Set<string>>(new Set())
   const [deleting, setDeleting]       = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [saveProgress, setSaveProgress] = useState<{ current: number; total: number } | null>(null)
+  const initialised = useRef(false)   // only populate rows once — never overwrite edits
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ['employees-all'],
-    queryFn:  () => employeeApi.list({ limit: 200 }).then(r => r.data.data),
+    queryFn:  () => employeeApi.list({ limit: 500 }).then(r => r.data.data),
+    staleTime: Infinity,           // never auto-refetch — HR manages this session manually
+    refetchOnWindowFocus: false,   // don't reset rows when user switches tabs
+    refetchOnMount: true,          // fetch fresh on first mount
   })
 
   useEffect(() => {
-    if (!employees) return
+    if (!employees || initialised.current) return   // never overwrite rows after first load
+    initialised.current = true
     setRows(employees.map((e: any) => ({
       id:               e.id,
       employeeCode:     e.employeeCode,
@@ -120,7 +126,7 @@ export default function BulkEditEmployeesPage() {
         jobTitle:         row.jobTitle,
         department:       row.department,
         state:            row.state,
-        joiningDate:      row.joiningDate || undefined,  // send as YYYY-MM-DD, backend parses safely
+        joiningDate:      row.joiningDate || undefined,  // send as YYYY-MM-DD — backend parses safely, no UTC shift
         annualCtc:        row.annualCtc,
         hasIncentive:     row.hasIncentive,
         incentivePercent: row.incentivePercent,
@@ -147,10 +153,15 @@ export default function BulkEditEmployeesPage() {
     setGlobalError('')
     const dirty = rows.filter(r => r.dirty && !r.saving)
     if (dirty.length === 0) return
-    setSavedCount(0)  // reset so the count reflects only this Save All run
+    setSavedCount(0)
+    setSaveProgress({ current: 0, total: dirty.length })
+    let done = 0
     for (const row of dirty) {
       await saveRow(row)
+      done++
+      setSaveProgress({ current: done, total: dirty.length })
     }
+    setSaveProgress(null)
   }
 
   function toggleSelect(id: string) {
@@ -224,16 +235,37 @@ export default function BulkEditEmployeesPage() {
             )}
             <Button
               icon={<Save size={14} />}
-              disabled={dirtyCount === 0}
+              disabled={dirtyCount === 0 || saveProgress !== null}
               onClick={saveAll}
             >
-              Save All Changes ({dirtyCount})
+              {saveProgress
+                ? `Saving ${saveProgress.current} of ${saveProgress.total}…`
+                : `Save All Changes (${dirtyCount})`}
             </Button>
           </div>
         }
       />
 
       {globalError && <Alert type="error" message={globalError} />}
+
+      {/* Progress bar for Save All */}
+      {saveProgress !== null && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4">
+          <RefreshCw size={15} className="animate-spin text-brand-600 shrink-0" />
+          <div className="flex-1">
+            <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+              <span>Saving changes…</span>
+              <span className="font-medium">{saveProgress.current} / {saveProgress.total}</span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-1.5">
+              <div
+                className="bg-brand-600 h-1.5 rounded-full transition-all duration-300"
+                style={{ width: `${(saveProgress.current / saveProgress.total) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {noCtcCount > 0 && (
         <Alert
@@ -243,8 +275,8 @@ export default function BulkEditEmployeesPage() {
         />
       )}
 
-      {savedCount !== null && savedCount > 0 && (
-        <Alert type="success" message={`${savedCount} employee${savedCount > 1 ? 's' : ''} saved successfully.`} />
+      {savedCount > 0 && saveProgress === null && (
+        <Alert type="success" message={`${savedCount} employee${savedCount !== 1 ? 's' : ''} saved successfully.`} />
       )}
 
       {/* ── DELETE CONFIRMATION MODAL ── */}
