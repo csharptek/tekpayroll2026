@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { authenticate, requireHR, requireSuperAdmin } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
-import { LeaveKind, HalfDaySlot } from '@prisma/client'
+import { LeaveKind, HalfDaySlot, CancellationStatus } from '@prisma/client'
 import {
   getLeavePolicy, getEmployeeBalance, applyLeave, approveLeave, declineLeave,
   requestCancellation, cancelLeaveDirectly, approveCancellationRequest,
@@ -228,7 +228,7 @@ leaveRouter.get('/applications', requireHR, async (req, res) => {
       where,
       include: {
         employee: { select: { name: true, employeeCode: true, department: true } },
-        cancellationRequests: { where: { status: 'PENDING' }, take: 1 },
+        cancellationRequests: { where: { status: CancellationStatus.PENDING }, take: 1 },
       },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,
@@ -288,7 +288,7 @@ leaveRouter.post('/applications/:id/cancel', async (req, res) => {
 // GET /api/leave/cancellations — HR/admin sees all pending cancellation requests
 leaveRouter.get('/cancellations', requireHR, async (_req, res) => {
   const requests = await prisma.lvCancellationRequest.findMany({
-    where: { status: 'PENDING' },
+    where: { status: CancellationStatus.PENDING },
     include: {
       application: {
         include: {

@@ -1,5 +1,5 @@
 import { prisma } from '../utils/prisma'
-import { LeaveKind, LeaveStatus, HalfDaySlot } from '@prisma/client'
+import { LeaveKind, LeaveStatus, HalfDaySlot, CancellationStatus } from '@prisma/client'
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
@@ -356,7 +356,7 @@ export async function requestCancellation(params: {
   const { applicationId, requestedById, requestedByName, requestedByRole, reason } = params
   const app = await prisma.lvApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('Leave application not found')
-  if (![LeaveStatus.PENDING, LeaveStatus.APPROVED, LeaveStatus.AUTO_APPROVED].includes(app.status)) {
+  if (!([LeaveStatus.PENDING, LeaveStatus.APPROVED, LeaveStatus.AUTO_APPROVED] as string[]).includes(app.status as string)) {
     throw new Error('This leave cannot be cancelled')
   }
 
@@ -365,7 +365,7 @@ export async function requestCancellation(params: {
 
   if (notStarted) {
     // Auto-cancel immediately
-    await cancelLeaveDirectly(applicationId, requestedById, requestedByName, 'AUTO_CANCELLED')
+    await cancelLeaveDirectly(applicationId, requestedById, requestedByName, LeaveStatus.CANCELLED)
     return { autoCancelled: true }
   }
 
@@ -380,7 +380,7 @@ export async function requestCancellation(params: {
     data: {
       applicationId, requestedById, requestedByName, requestedByRole,
       type: 'FULL', daysToRestore, reason,
-      status: 'PENDING',
+      status: CancellationStatus.PENDING,
     },
   })
   return { autoCancelled: false, request: req }
@@ -392,7 +392,7 @@ export async function cancelLeaveDirectly(
   applicationId:  string,
   cancelledById:  string,
   cancelledByName: string,
-  statusOverride?: string,
+  statusOverride?: LeaveStatus,
   newEndDate?:    Date  // for partial cancellation
 ) {
   const app = await prisma.lvApplication.findUnique({ where: { id: applicationId } })
@@ -428,7 +428,7 @@ export async function cancelLeaveDirectly(
   }
 
   // Restore balance
-  const wasApproved = [LeaveStatus.APPROVED, LeaveStatus.AUTO_APPROVED].includes(app.status)
+  const wasApproved = ([LeaveStatus.APPROVED, LeaveStatus.AUTO_APPROVED] as string[]).includes(app.status as string)
   await prisma.leaveEntitlement.update({
     where: { employeeId_leaveKind_year: { employeeId: app.employeeId, leaveKind: app.leaveKind, year } },
     data: wasApproved
@@ -452,7 +452,7 @@ export async function approveCancellationRequest(
 
   await prisma.lvCancellationRequest.update({
     where: { id: requestId },
-    data: { status: 'APPROVED', respondedById, respondedByName, respondedAt: new Date() },
+    data: { status: CancellationStatus.APPROVED, respondedById, respondedByName, respondedAt: new Date() },
   })
 }
 
@@ -466,7 +466,7 @@ export async function declineCancellationRequest(
 ) {
   await prisma.lvCancellationRequest.update({
     where: { id: requestId },
-    data: { status: 'DECLINED', respondedById, respondedByName, respondedAt: new Date(), declineReason },
+    data: { status: CancellationStatus.DECLINED, respondedById, respondedByName, respondedAt: new Date(), declineReason },
   })
 }
 
@@ -613,11 +613,11 @@ async function createLopFromLeave(employeeId: string, leaveApplicationId: string
     create: {
       cycleId: cycle.id,
       employeeId,
-      lopDays,
+      lopDays: Math.round(lopDays),
       reason: `Auto-LOP from leave application`,
     },
     update: {
-      lopDays: { increment: lopDays },
+      lopDays: { increment: Math.round(lopDays) },
     },
   })
 }
