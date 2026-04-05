@@ -1,3 +1,4 @@
+import { AppError } from '../middleware/errorHandler'
 import { prisma } from '../utils/prisma'
 import { LeaveKind, LeaveStatus, HalfDaySlot, CancellationStatus } from '@prisma/client'
 
@@ -83,7 +84,7 @@ export function calculateProRataLeaves(
 // Get or create leave policy for company
 export async function getLeavePolicy() {
   const company = await prisma.company.findFirst()
-  if (!company) throw new Error('Company not configured')
+  if (!company) throw new AppError('Company not configured', 500)
 
   let policy = await prisma.leavePolicy.findUnique({ where: { companyId: company.id } })
   if (!policy) {
@@ -165,9 +166,7 @@ export async function validateLeaveApplication(params: {
   applyFrom.setDate(applyFrom.getDate() + advanceDays)
 
   if (!isBackdated && startDate < applyFrom) {
-    throw new Error(
-      `${leaveKind} leave requires at least ${advanceDays} day(s) advance notice`
-    )
+    throw new AppError(`${leaveKind} leave requires at least ${advanceDays} day(s) advance notice`, 400)
   }
 
   // 2. Backdated casual — never auto-approve, handled in apply logic
@@ -181,7 +180,7 @@ export async function validateLeaveApplication(params: {
       ],
     },
   })
-  if (overlap) throw new Error('You already have a leave application overlapping these dates')
+  if (overlap) throw new AppError('You already have a leave application overlapping these dates', 400)
 
   return true
 }
@@ -208,7 +207,7 @@ export async function applyLeave(params: {
   await validateLeaveApplication({ employeeId, leaveKind, startDate, endDate, isHalfDay, isBackdated })
 
   const totalDays = await countWorkingDays(startDate, endDate, isHalfDay)
-  if (totalDays === 0) throw new Error('No working days in selected date range')
+  if (totalDays === 0) throw new AppError('No working days in the selected date range. Please avoid weekends and public holidays.', 400)
 
   const year = getLeaveYear(startDate)
   const policy = await getLeavePolicy()
@@ -285,8 +284,8 @@ export async function approveLeave(
   approvedByName: string
 ) {
   const app = await prisma.lvApplication.findUnique({ where: { id: applicationId } })
-  if (!app) throw new Error('Leave application not found')
-  if (app.status !== LeaveStatus.PENDING) throw new Error('Only pending applications can be approved')
+  if (!app) throw new AppError('Leave application not found', 404)
+  if (app.status !== LeaveStatus.PENDING) throw new AppError('Only pending applications can be approved', 400)
 
   const year = getLeaveYear(app.startDate)
 
@@ -325,8 +324,8 @@ export async function declineLeave(
   reason:         string
 ) {
   const app = await prisma.lvApplication.findUnique({ where: { id: applicationId } })
-  if (!app) throw new Error('Leave application not found')
-  if (app.status !== LeaveStatus.PENDING) throw new Error('Only pending applications can be declined')
+  if (!app) throw new AppError('Leave application not found', 404)
+  if (app.status !== LeaveStatus.PENDING) throw new AppError('Only pending applications can be declined', 400)
 
   const year = getLeaveYear(app.startDate)
 
@@ -355,9 +354,9 @@ export async function requestCancellation(params: {
 }) {
   const { applicationId, requestedById, requestedByName, requestedByRole, reason } = params
   const app = await prisma.lvApplication.findUnique({ where: { id: applicationId } })
-  if (!app) throw new Error('Leave application not found')
+  if (!app) throw new AppError('Leave application not found', 404)
   if (!([LeaveStatus.PENDING, LeaveStatus.APPROVED, LeaveStatus.AUTO_APPROVED] as string[]).includes(app.status as string)) {
-    throw new Error('This leave cannot be cancelled')
+    throw new AppError('This leave cannot be cancelled', 400)
   }
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -396,7 +395,7 @@ export async function cancelLeaveDirectly(
   newEndDate?:    Date  // for partial cancellation
 ) {
   const app = await prisma.lvApplication.findUnique({ where: { id: applicationId } })
-  if (!app) throw new Error('Leave application not found')
+  if (!app) throw new AppError('Leave application not found', 404)
 
   const year = getLeaveYear(app.startDate)
   const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -446,7 +445,7 @@ export async function approveCancellationRequest(
   newEndDate?:    Date
 ) {
   const req = await prisma.lvCancellationRequest.findUnique({ where: { id: requestId } })
-  if (!req) throw new Error('Cancellation request not found')
+  if (!req) throw new AppError('Cancellation request not found', 404)
 
   await cancelLeaveDirectly(req.applicationId, respondedById, respondedByName, undefined, newEndDate)
 
@@ -535,7 +534,7 @@ export async function triggerYearEndRollover(triggeredById: string, triggeredByN
   const day   = today.getDate()
 
   const inWindow = (month === 11 && day >= 28) || (month === 0 && day <= 5)
-  if (!inWindow) throw new Error('Rollover can only be triggered between 28 December and 5 January')
+  if (!inWindow) throw new AppError('Rollover can only be triggered between 28 December and 5 January', 400)
 
   const fromYear = month === 11 ? today.getFullYear() : today.getFullYear() - 1
   const toYear   = fromYear + 1
@@ -543,7 +542,7 @@ export async function triggerYearEndRollover(triggeredById: string, triggeredByN
 
   // Check not already done
   const existing = await prisma.leaveRolloverHistory.findFirst({ where: { fromYear } })
-  if (existing) throw new Error(`Rollover for ${fromYear} → ${toYear} already completed on ${existing.triggeredAt.toDateString()}`)
+  if (existing) throw new AppError(`Rollover for ${fromYear} → ${toYear} already completed on ${existing.triggeredAt.toDateString()}`, 400)
 
   const employees = await prisma.employee.findMany({
     where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },

@@ -86,7 +86,7 @@ export default function MyLeavesPage() {
       qc.invalidateQueries({ queryKey: ['my-leave-balance'] })
       qc.invalidateQueries({ queryKey: ['my-applications'] })
     },
-    onError: (err: any) => setError(err?.response?.data?.error || 'Failed to apply leave'),
+    onError: (err: any) => setError(err?.response?.data?.error || err?.response?.data?.message || 'Failed to apply leave'),
   })
 
   const cancelMutation = useMutation({
@@ -104,10 +104,32 @@ export default function MyLeavesPage() {
   const balance = balData || {}
   const today = new Date().toISOString().slice(0, 10)
 
+  function isWeekend(dateStr: string): boolean {
+    const d = new Date(dateStr)
+    const day = d.getUTCDay()
+    return day === 0 || day === 6
+  }
+
   function handleApply() {
     setError('')
     if (!form.startDate || !form.reasonLabel) { setError('Please fill all required fields'); return }
     if (!form.isHalfDay && !form.endDate) { setError('End date is required'); return }
+
+    // Client-side weekend check
+    if (!form.isHalfDay) {
+      const start = new Date(form.startDate)
+      const end   = new Date(form.endDate)
+      let allWeekends = true
+      const cur = new Date(start)
+      while (cur <= end) {
+        if (cur.getUTCDay() !== 0 && cur.getUTCDay() !== 6) { allWeekends = false; break }
+        cur.setDate(cur.getDate() + 1)
+      }
+      if (allWeekends) { setError('Selected dates fall on weekends. Please choose working days.'); return }
+    } else {
+      if (isWeekend(form.startDate)) { setError('Selected date is a weekend. Please choose a working day.'); return }
+    }
+
     const selectedReason = reasons?.find((r: any) => r.id === form.reasonId)
     const label = selectedReason?.label || form.reasonLabel
     const isOther = label === 'Other'
