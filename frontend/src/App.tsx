@@ -39,6 +39,9 @@ import MyProfilePage from './pages/employee/MyProfilePage'
 import MyLoansPage from './pages/employee/MyLoansPage'
 import MyLeavesPage from './pages/employee/MyLeavesPage'
 
+// Shared Pages
+import PoliciesPage from './pages/shared/PoliciesPage'
+
 // Management Pages
 import ManagementDashboard from './pages/management/ManagementDashboard'
 import PayrollReportsPage from './pages/management/PayrollReportsPage'
@@ -115,6 +118,11 @@ export default function App() {
           <Route path="dashboard" element={<ManagementDashboard />} />
           <Route path="reports" element={<PayrollReportsPage />} />
           <Route path="cost-report" element={<CostReportPage />} />
+        </Route>
+
+        {/* Policies — all authenticated roles */}
+        <Route path="/policies" element={<RequireAuth><AppLayout /></RequireAuth>}>
+          <Route index element={<PoliciesPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

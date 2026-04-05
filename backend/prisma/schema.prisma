@@ -1159,3 +1159,17 @@ model LeaveRolloverHistory {
 
   @@index([fromYear])
 }
+
+// ─── COMPANY POLICY ──────────────────────────────────────────────────────────
+
+model CompanyPolicy {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   @db.Text
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sortOrder])
+}

@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { payslipApi, employeeApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { Card, Rupee, Button, StatusBadge, Skeleton } from '../../components/ui'
+import MonthCalendar from '../../components/MonthCalendar'
 
 export default function EmployeeDashboard() {
   const { user } = useAuthStore()
@@ -80,6 +81,8 @@ export default function EmployeeDashboard() {
           }
         </div>
       </div>
+
+      <MonthCalendar />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Salary breakdown */}

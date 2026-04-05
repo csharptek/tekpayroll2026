@@ -201,3 +201,15 @@ export const leaveApi = {
   // Seed
   seedReasons:        () => api.post('/api/leave/seed-reasons', {}),
 }
+
+export const policiesApi = {
+  list:   ()                        => api.get('/api/policies'),
+  create: (data: any)               => api.post('/api/policies', data),
+  update: (id: string, data: any)   => api.put(`/api/policies/${id}`, data),
+  delete: (id: string)              => api.delete(`/api/policies/${id}`),
+  reorder:(ids: string[])           => api.put('/api/policies/reorder', { ids }),
+}
+
+export const calendarApi = {
+  birthdays: (month: number) => api.get('/api/employees/birthdays/month', { params: { month } }),
+}

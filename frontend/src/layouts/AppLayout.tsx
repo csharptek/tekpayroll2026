@@ -8,7 +8,7 @@ import {
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
-  CalendarCheck, CalendarClock, Palmtree
+  CalendarCheck, CalendarClock, Palmtree, BookOpen
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -43,6 +43,12 @@ const HR_NAV = [
     section: 'Admin',
     items: [
       { label: 'Audit Log', icon: ScrollText, to: '/hr/audit' },
+    ]
+  },
+  {
+    section: 'Company',
+    items: [
+      { label: 'Policies', icon: BookOpen, to: '/policies' },
     ]
   },
   // HR is also an employee — they can access their own payroll & leave data
@@ -104,6 +110,12 @@ const SUPER_ADMIN_NAV = [
       { label: 'Configuration', icon: Settings,   to: '/hr/config' },
     ]
   },
+  {
+    section: 'Company',
+    items: [
+      { label: 'Policies', icon: BookOpen, to: '/policies' },
+    ]
+  },
   // Super Admin is also an employee
   {
     section: 'My Payroll',
@@ -122,6 +134,12 @@ const SUPER_ADMIN_NAV = [
 ]
 
 const EMPLOYEE_NAV = [
+  {
+    section: 'Company',
+    items: [
+      { label: 'Policies', icon: BookOpen, to: '/policies' },
+    ]
+  },
   {
     section: 'My Payroll',
     items: [
@@ -146,6 +164,12 @@ const MANAGEMENT_NAV = [
       { label: 'Dashboard',       icon: BarChart3,  to: '/management/dashboard' },
       { label: 'Payroll Reports', icon: FileSearch, to: '/management/reports' },
       { label: 'Cost Analysis',   icon: DollarSign, to: '/management/cost-report' },
+    ]
+  },
+  {
+    section: 'Company',
+    items: [
+      { label: 'Policies', icon: BookOpen, to: '/policies' },
     ]
   },
   // Management is also an employee
@@ -339,6 +363,7 @@ function usePageTitle() {
     '/my/profile': 'My Profile',
     '/my/loans': 'My Loans',
     '/my/leaves': 'My Leaves',
+    '/policies': 'Company Policies',
     '/management/dashboard': 'Management Dashboard',
     '/management/reports': 'Payroll Reports',
     '/management/cost-report': 'Cost Analysis',

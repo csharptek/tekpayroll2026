@@ -4,6 +4,7 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { reportApi } from '../../services/api'
 import { Card, Rupee, Skeleton, StatCard } from '../../components/ui'
 import { format } from 'date-fns'
+import MonthCalendar from '../../components/MonthCalendar'
 
 const DEPT_COLORS = ['#1f4e79','#2e75b6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4']
 
@@ -64,6 +65,8 @@ export default function ManagementDashboard() {
           value={lastCycle?.status ?? '—'} sub={lastCycle?.payrollMonth}
           icon={<BarChart3 size={18} />} color="amber" loading={loadingSummary} />
       </div>
+
+      <MonthCalendar />
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
