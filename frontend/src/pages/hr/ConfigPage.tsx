@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { Navigate } from 'react-router-dom'
+import { useAuthStore } from '../../store/authStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, Shield, Calendar, DollarSign } from 'lucide-react'
 import { configApi } from '../../services/api'
@@ -21,6 +23,9 @@ function Section({ icon: Icon, title, children }: any) {
 }
 
 export default function ConfigPage() {
+  const { user: _authUser } = useAuthStore()
+  if (_authUser?.role !== 'SUPER_ADMIN') return <Navigate to="/access-denied" replace />
+
   const qc = useQueryClient()
   const [saved, setSaved] = useState(false)
   const [configValues, setConfigValues] = useState<Record<string, string>>({})

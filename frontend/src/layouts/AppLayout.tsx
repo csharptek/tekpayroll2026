@@ -25,11 +25,10 @@ const HR_NAV = [
   {
     section: 'Employees',
     items: [
-      { label: 'All Employees',      icon: Users,      to: '/hr/employees' },
-      { label: 'Bulk Import',        icon: Upload,     to: '/hr/import' },
-      { label: 'Bulk Edit',          icon: Edit3,      to: '/hr/employees-bulk-edit' },
-      { label: 'Bulk Edit Salaries', icon: Table2,     to: '/hr/salaries-bulk-edit' },
-      { label: 'M365 Sync',          icon: RefreshCw,  to: '/hr/sync' },
+      { label: 'All Employees', icon: Users,     to: '/hr/employees' },
+      { label: 'Bulk Import',   icon: Upload,    to: '/hr/import' },
+      { label: 'Bulk Edit',     icon: Edit3,     to: '/hr/employees-bulk-edit' },
+      { label: 'M365 Sync',     icon: RefreshCw, to: '/hr/sync' },
     ]
   },
   {
@@ -43,8 +42,7 @@ const HR_NAV = [
   {
     section: 'Admin',
     items: [
-      { label: 'Audit Log',     icon: ScrollText, to: '/hr/audit' },
-      { label: 'Configuration', icon: Settings,   to: '/hr/config' },
+      { label: 'Audit Log', icon: ScrollText, to: '/hr/audit' },
     ]
   },
   // HR is also an employee — they can access their own payroll & leave data

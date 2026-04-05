@@ -98,14 +98,16 @@ export default function EmployeeDetailPage() {
               {emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
             </p>
           </div>
-          <div>
-            <p className="text-xs text-slate-400 mb-0.5">Annual CTC</p>
-            <p className="text-sm font-medium">
-              {Number(emp.annualCtc) > 0
-                ? <span className="text-slate-700">₹{Number(emp.annualCtc).toLocaleString('en-IN')}</span>
-                : <span className="text-amber-500">Not set</span>}
-            </p>
-          </div>
+          {isSuperAdmin && (
+            <div>
+              <p className="text-xs text-slate-400 mb-0.5">Annual CTC</p>
+              <p className="text-sm font-medium">
+                {Number(emp.annualCtc) > 0
+                  ? <span className="text-slate-700">₹{Number(emp.annualCtc).toLocaleString('en-IN')}</span>
+                  : <span className="text-amber-500">Not set</span>}
+              </p>
+            </div>
+          )}
           <div>
             <p className="text-xs text-slate-400 mb-0.5">Employment</p>
             <p className="text-sm text-slate-700 font-medium">

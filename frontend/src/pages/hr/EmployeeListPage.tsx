@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Upload, RefreshCw, Eye, Pencil, UserX, MoreHorizontal } from 'lucide-react'
 import { employeeApi } from '../../services/api'
+import { useAuthStore } from '../../store/authStore'
 import {
   PageHeader, Button, SearchBar, StatusBadge,
   Table, Th, Td, Tr, EmptyState, TableSkeleton, Card, Modal
@@ -20,6 +21,8 @@ export default function EmployeeListPage() {
   const [page, setPage]           = useState(1)
   const [deactivateTarget, setDeactivateTarget] = useState<any>(null)
   const [openMenu, setOpenMenu]   = useState<string | null>(null)
+  const { user } = useAuthStore()
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN'
 
   const params: any = { page, limit: 20 }
   if (search)              params.search = search
@@ -103,7 +106,7 @@ export default function EmployeeListPage() {
                 <Th>ID</Th>
                 <Th>Department</Th>
                 <Th>Designation</Th>
-                <Th className="text-right">Annual CTC</Th>
+                {isSuperAdmin && <Th className="text-right">Annual CTC</Th>}
                 <Th>Status</Th>
                 <Th>Actions</Th>
               </tr>
@@ -131,11 +134,13 @@ export default function EmployeeListPage() {
                   </Td>
                   <Td>{emp.department || <span className="text-slate-300">—</span>}</Td>
                   <Td>{emp.jobTitle || <span className="text-slate-300">—</span>}</Td>
-                  <Td className="text-right">
-                    <span className="rupee text-sm font-semibold text-slate-800">
-                      ₹{Number(emp.annualCtc).toLocaleString('en-IN')}
-                    </span>
-                  </Td>
+                  {isSuperAdmin && (
+                    <Td className="text-right">
+                      <span className="rupee text-sm font-semibold text-slate-800">
+                        ₹{Number(emp.annualCtc).toLocaleString('en-IN')}
+                      </span>
+                    </Td>
+                  )}
                   <Td><StatusBadge status={emp.status} /></Td>
                   <Td>
                     <div

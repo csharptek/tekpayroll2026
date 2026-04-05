@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { Navigate } from 'react-router-dom'
+import { useAuthStore } from '../../store/authStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, RefreshCw, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { employeeApi } from '../../services/api'
@@ -71,6 +73,9 @@ function fmt(n: number) {
 }
 
 export default function BulkEditEmployeesPage() {
+  const { user: _authUser } = useAuthStore()
+  if (_authUser?.role !== 'SUPER_ADMIN') return <Navigate to="/access-denied" replace />
+
   const qc = useQueryClient()
   const [rows, setRows]               = useState<EmpRow[]>([])
   const [showBreakdown, setShowBreakdown] = useState(false)
