@@ -184,6 +184,11 @@ model Employee {
   documents           EmployeeDocument[]
   governmentId        GovernmentId?
 
+  // Leave module relations (new — no change to existing fields)
+  leaveEntitlements   LeaveEntitlement[]     @relation("EmployeeLeaveEntitlements")
+  leaveApplications   LvApplication[]        @relation("EmployeeLeaveApplications")
+  leaveSnapshots      LeaveBalanceSnapshot[] @relation("EmployeeLeaveSnapshots")
+
   @@index([status])
   @@index([department])
   @@index([entraId])
@@ -915,4 +920,242 @@ model GovernmentId {
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LEAVE MODULE — all new models, zero changes to existing schema
+// Leave FY: January – December (independent of payroll FY Apr–Mar)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum LeaveKind {
+  SICK
+  CASUAL
+  PLANNED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+  AUTO_APPROVED
+  LOP
+}
+
+enum HalfDaySlot {
+  FIRST   // 9:00am – 1:30pm
+  SECOND  // 1:30pm – 6:00pm
+}
+
+enum CancellationStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  AUTO_CANCELLED
+}
+
+// ─── LEAVE POLICY ─────────────────────────────────────────────────────────────
+// One record per company. HR can edit quotas + advance days.
+// SUPER_ADMIN only can edit carry forward rules.
+
+model LeavePolicy {
+  id                        String   @id @default(cuid())
+  companyId                 String   @unique
+
+  // Annual quotas (HR editable)
+  sickDaysPerYear           Int      @default(4)
+  casualDaysPerYear         Int      @default(8)
+  plannedDaysPerYear        Int      @default(8)
+
+  // Advance notice in days (HR editable)
+  sickAdvanceDays           Int      @default(0)
+  casualAdvanceDays         Int      @default(2)
+  plannedAdvanceDays        Int      @default(7)
+
+  // Carry forward rules (SUPER_ADMIN only)
+  plannedCarryForwardMax    Int      @default(8)
+  plannedBalanceCap         Int      @default(16)
+
+  // Half day slots
+  firstHalfStart            String   @default("09:00")
+  firstHalfEnd              String   @default("13:30")
+  secondHalfStart           String   @default("13:30")
+  secondHalfEnd             String   @default("18:00")
+
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+// ─── LEAVE REASONS ────────────────────────────────────────────────────────────
+// HR/SUPER_ADMIN managed. Seeded with defaults per leave type.
+
+model LeaveReason {
+  id          String    @id @default(cuid())
+  leaveKind   LeaveKind
+  label       String
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([leaveKind, isActive])
+}
+
+// ─── PUBLIC HOLIDAYS ──────────────────────────────────────────────────────────
+
+model PublicHoliday {
+  id              String   @id @default(cuid())
+  date            DateTime
+  name            String
+  description     String?
+  greetingMessage String?  // sent via email on the day (cron)
+  year            Int      // extracted from date for easy filtering
+  greetingSent    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([date])
+  @@index([year])
+}
+
+// ─── LEAVE ENTITLEMENT ────────────────────────────────────────────────────────
+// Balance per employee per leave kind per calendar year (Jan–Dec)
+
+model LeaveEntitlement {
+  id              String    @id @default(cuid())
+  employeeId      String
+  employee        Employee  @relation("EmployeeLeaveEntitlements", fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveKind       LeaveKind
+  year            Int       // calendar year e.g. 2026
+
+  totalDays       Decimal   @db.Decimal(5, 2)   // granted (pro-rata on join)
+  usedDays        Decimal   @default(0) @db.Decimal(5, 2)
+  pendingDays     Decimal   @default(0) @db.Decimal(5, 2)  // applied but not yet approved
+  lopDays         Decimal   @default(0) @db.Decimal(5, 2)  // auto-LOP days
+  carryForward    Decimal   @default(0) @db.Decimal(5, 2)  // brought from previous year (planned only)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([employeeId, leaveKind, year])
+  @@index([employeeId, year])
+}
+
+// ─── LEAVE APPLICATION ────────────────────────────────────────────────────────
+// New model — old LeaveApplication left untouched
+
+model LvApplication {
+  id              String      @id @default(cuid())
+  employeeId      String
+  employee        Employee    @relation("EmployeeLeaveApplications", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  leaveKind       LeaveKind
+  startDate       DateTime
+  endDate         DateTime
+  totalDays       Decimal     @db.Decimal(5, 2)  // computed, excludes weekends + holidays
+
+  isHalfDay       Boolean     @default(false)
+  halfDaySlot     HalfDaySlot?  // only when isHalfDay = true
+
+  reasonId        String?     // from LeaveReason
+  reasonLabel     String      // stored as text (in case reason deleted later)
+  customReason    String?     // free text when "Other" selected
+  isBackdated     Boolean     @default(false)
+
+  status          LeaveStatus @default(PENDING)
+  isLop           Boolean     @default(false)
+  lopDays         Decimal     @default(0) @db.Decimal(5, 2)
+
+  approvedById    String?
+  approvedByName  String?
+  approvedAt      DateTime?
+  declineReason   String?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  cancellationRequests LvCancellationRequest[]
+
+  @@index([employeeId, status])
+  @@index([employeeId, leaveKind])
+  @@index([startDate, endDate])
+}
+
+// ─── LEAVE CANCELLATION REQUEST ───────────────────────────────────────────────
+
+model LvCancellationRequest {
+  id                String             @id @default(cuid())
+  applicationId     String
+  application       LvApplication      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  requestedById     String             // employee or HR/admin
+  requestedByName   String
+  requestedByRole   String             // EMPLOYEE / HR / SUPER_ADMIN
+
+  type              String             @default("FULL")  // FULL or PARTIAL
+  newEndDate        DateTime?          // for partial cancellation (HR/admin only)
+  daysToRestore     Decimal            @db.Decimal(5, 2)
+
+  reason            String?
+  status            CancellationStatus @default(PENDING)
+
+  respondedById     String?
+  respondedByName   String?
+  respondedAt       DateTime?
+  declineReason     String?
+
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([applicationId])
+  @@index([status])
+}
+
+// ─── LEAVE BALANCE SNAPSHOT ───────────────────────────────────────────────────
+// Taken on every payroll run. Month-on-month history.
+
+model LeaveBalanceSnapshot {
+  id              String    @id @default(cuid())
+  employeeId      String
+  employee        Employee  @relation("EmployeeLeaveSnapshots", fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollCycleId  String    // links to PayrollCycle
+  snapshotMonth   String    // e.g. "2026-03"
+  year            Int       // leave year
+
+  sickTotal       Decimal   @db.Decimal(5, 2)
+  sickUsed        Decimal   @db.Decimal(5, 2)
+  sickPending     Decimal   @db.Decimal(5, 2)
+  sickBalance     Decimal   @db.Decimal(5, 2)
+
+  casualTotal     Decimal   @db.Decimal(5, 2)
+  casualUsed      Decimal   @db.Decimal(5, 2)
+  casualPending   Decimal   @db.Decimal(5, 2)
+  casualBalance   Decimal   @db.Decimal(5, 2)
+
+  plannedTotal    Decimal   @db.Decimal(5, 2)
+  plannedUsed     Decimal   @db.Decimal(5, 2)
+  plannedPending  Decimal   @db.Decimal(5, 2)
+  plannedBalance  Decimal   @db.Decimal(5, 2)
+  plannedCarry    Decimal   @db.Decimal(5, 2)
+
+  createdAt       DateTime  @default(now())
+
+  @@unique([employeeId, snapshotMonth])
+  @@index([employeeId])
+  @@index([payrollCycleId])
+}
+
+// ─── LEAVE ROLLOVER HISTORY ───────────────────────────────────────────────────
+
+model LeaveRolloverHistory {
+  id              String   @id @default(cuid())
+  fromYear        Int      // e.g. 2025
+  toYear          Int      // e.g. 2026
+  triggeredById   String
+  triggeredByName String
+  triggeredAt     DateTime @default(now())
+  employeeCount   Int
+  summary         Json     // array of { employeeId, name, plannedCarried, newPlannedTotal }
+
+  @@index([fromYear])
 }

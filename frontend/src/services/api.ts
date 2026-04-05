@@ -102,3 +102,49 @@ export const fnfApi = {
   approve:         (id: string, notes?: string) => api.post(`/api/fnf/${id}/approve`, { notes }),
   update:          (id: string, data: any) => api.put(`/api/fnf/${id}`, data),
 }
+
+export const leaveApi = {
+  // Policy
+  policy:             ()           => api.get('/api/leave/policy'),
+  updatePolicy:       (data: any)  => api.put('/api/leave/policy', data),
+
+  // Reasons
+  reasons:            (kind?: string) => api.get('/api/leave/reasons', { params: kind ? { kind } : {} }),
+  addReason:          (data: any)  => api.post('/api/leave/reasons', data),
+  updateReason:       (id: string, data: any) => api.put(`/api/leave/reasons/${id}`, data),
+  deleteReason:       (id: string) => api.delete(`/api/leave/reasons/${id}`),
+
+  // Public Holidays
+  holidays:           (year?: number) => api.get('/api/leave/holidays', { params: year ? { year } : {} }),
+  addHoliday:         (data: any)  => api.post('/api/leave/holidays', data),
+  updateHoliday:      (id: string, data: any) => api.put(`/api/leave/holidays/${id}`, data),
+  deleteHoliday:      (id: string) => api.delete(`/api/leave/holidays/${id}`),
+
+  // Balance
+  myBalance:          (year?: number) => api.get('/api/leave/balance/my', { params: year ? { year } : {} }),
+  employeeBalance:    (id: string, year?: number) => api.get(`/api/leave/balance/${id}`, { params: year ? { year } : {} }),
+  allBalances:        (year?: number) => api.get('/api/leave/balance', { params: year ? { year } : {} }),
+  balanceHistory:     (id: string) => api.get(`/api/leave/balance/${id}/history`),
+
+  // Applications
+  apply:              (data: any)  => api.post('/api/leave/apply', data),
+  myApplications:     (params?: any) => api.get('/api/leave/my', { params }),
+  allApplications:    (params?: any) => api.get('/api/leave/applications', { params }),
+  approve:            (id: string) => api.put(`/api/leave/applications/${id}/approve`, {}),
+  decline:            (id: string, reason: string) => api.put(`/api/leave/applications/${id}/decline`, { reason }),
+  cancelDirect:       (id: string, newEndDate?: string) => api.put(`/api/leave/applications/${id}/cancel-direct`, { newEndDate }),
+
+  // Cancellation requests (employee)
+  requestCancel:      (id: string, reason?: string) => api.post(`/api/leave/applications/${id}/cancel`, { reason }),
+  cancellationRequests: () => api.get('/api/leave/cancellations'),
+  approveCancellation: (id: string, newEndDate?: string) => api.put(`/api/leave/cancellations/${id}/approve`, { newEndDate }),
+  declineCancellation: (id: string, reason: string) => api.put(`/api/leave/cancellations/${id}/decline`, { reason }),
+
+  // Rollover
+  rolloverStatus:     () => api.get('/api/leave/rollover/status'),
+  triggerRollover:    () => api.post('/api/leave/rollover', {}),
+  rolloverHistory:    () => api.get('/api/leave/rollover/history'),
+
+  // Seed
+  seedReasons:        () => api.post('/api/leave/seed-reasons', {}),
+}

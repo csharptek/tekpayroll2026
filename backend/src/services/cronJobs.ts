@@ -249,3 +249,78 @@ export async function cronSyncEntraId() {
     throw err
   }
 }
+
+// ─── LEAVE: PUBLIC HOLIDAY GREETING EMAILS ───────────────────────────────────
+// Runs daily. Sends greeting email if today is a public holiday.
+
+export async function cronSendHolidayGreetings() {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  const holiday = await prisma.publicHoliday.findFirst({
+    where: { date: { gte: today, lt: tomorrow }, greetingSent: false },
+  })
+  if (!holiday) return
+
+  const employees = await prisma.employee.findMany({
+    where: { status: 'ACTIVE' },
+    select: { name: true, email: true },
+  })
+
+  const { Resend } = await import('resend')
+  const resend = new Resend(process.env.RESEND_API_KEY)
+
+  const message = holiday.greetingMessage || `Wishing you a wonderful ${holiday.name}!`
+
+  for (const emp of employees) {
+    try {
+      await resend.emails.send({
+        from:    'TekPayroll <noreply@csharptek.com>',
+        to:      emp.email,
+        subject: `🎉 ${holiday.name} — Holiday Greetings`,
+        html:    `<p>Dear ${emp.name},</p><p>${message}</p><p>Enjoy your holiday!</p><p>— CSharpTek HR Team</p>`,
+      })
+    } catch (err) {
+      console.error(`[CRON] Holiday greeting failed for ${emp.email}:`, err)
+    }
+  }
+
+  await prisma.publicHoliday.update({ where: { id: holiday.id }, data: { greetingSent: true } })
+  console.log(`[CRON] Holiday greetings sent for ${holiday.name} to ${employees.length} employees`)
+}
+
+// ─── LEAVE: ROLLOVER REMINDER EMAIL ──────────────────────────────────────────
+// Runs on Dec 25. Reminds HR that rollover window opens in 3 days.
+
+export async function cronLeaveRolloverReminder() {
+  const today = new Date()
+  if (today.getMonth() !== 11 || today.getDate() !== 25) return // Only Dec 25
+
+  const { Resend } = await import('resend')
+  const resend = new Resend(process.env.RESEND_API_KEY)
+
+  const hrUsers = await prisma.employee.findMany({
+    where: { role: { in: ['HR', 'SUPER_ADMIN'] }, status: 'ACTIVE' },
+    select: { name: true, email: true },
+  })
+
+  const year = today.getFullYear()
+  for (const hr of hrUsers) {
+    try {
+      await resend.emails.send({
+        from:    'TekPayroll <noreply@csharptek.com>',
+        to:      hr.email,
+        subject: `⚠️ Leave Rollover Reminder — Window opens Dec 28`,
+        html:    `<p>Dear ${hr.name},</p>
+          <p>This is a reminder that the <strong>Leave Year-End Rollover</strong> window for ${year} opens on <strong>December 28</strong> and closes on <strong>January 5, ${year + 1}</strong>.</p>
+          <p>Please log in to TekPayroll and trigger the rollover before the window closes.</p>
+          <p>— TekPayroll System</p>`,
+      })
+    } catch (err) {
+      console.error(`[CRON] Rollover reminder failed for ${hr.email}:`, err)
+    }
+  }
+  console.log(`[CRON] Rollover reminder sent to ${hrUsers.length} HR/admin users`)
+}

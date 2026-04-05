@@ -9,7 +9,11 @@ function fmt(n: number): string {
   return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
 
-export function generatePayslipHTML(entry: FullEntry): string {
+export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
+  sick?:    { total: number; used: number; remaining: number }
+  casual?:  { total: number; used: number; remaining: number }
+  planned?: { total: number; used: number; remaining: number; carryForward: number }
+}): string {
   const emp    = entry.employee
   const cycle  = entry.cycle
   const bank   = emp.bankDetail
@@ -289,6 +293,42 @@ export function generatePayslipHTML(entry: FullEntry): string {
     <div class="bank-item"><div class="bl">Account Number</div><div class="bv">${'•'.repeat(8)}${bank.accountNumber.slice(-4)}</div></div>
     <div class="bank-item"><div class="bl">IFSC Code</div><div class="bv">${bank.ifscCode}</div></div>
     <div class="bank-item"><div class="bl">Account Name</div><div class="bv">${bank.accountName}</div></div>
+  </div>` : ''}
+
+  <!-- Leave Balance -->
+  ${leaveBalance ? `
+  <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+    <div style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#475569;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Leave Balance — ${new Date().getFullYear()}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead>
+        <tr style="background:#f1f5f9;">
+          <th style="padding:6px 14px;text-align:left;color:#64748b;font-weight:600;">Type</th>
+          <th style="padding:6px 14px;text-align:center;color:#64748b;font-weight:600;">Allocated</th>
+          <th style="padding:6px 14px;text-align:center;color:#64748b;font-weight:600;">Used</th>
+          <th style="padding:6px 14px;text-align:center;color:#64748b;font-weight:600;">Remaining</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${leaveBalance.sick ? `<tr style="border-top:1px solid #f1f5f9;">
+          <td style="padding:6px 14px;color:#334155;">Sick Leave</td>
+          <td style="padding:6px 14px;text-align:center;color:#334155;">${leaveBalance.sick.total}</td>
+          <td style="padding:6px 14px;text-align:center;color:#ef4444;">${leaveBalance.sick.used}</td>
+          <td style="padding:6px 14px;text-align:center;font-weight:600;color:#16a34a;">${leaveBalance.sick.remaining}</td>
+        </tr>` : ''}
+        ${leaveBalance.casual ? `<tr style="border-top:1px solid #f1f5f9;">
+          <td style="padding:6px 14px;color:#334155;">Casual Leave</td>
+          <td style="padding:6px 14px;text-align:center;color:#334155;">${leaveBalance.casual.total}</td>
+          <td style="padding:6px 14px;text-align:center;color:#ef4444;">${leaveBalance.casual.used}</td>
+          <td style="padding:6px 14px;text-align:center;font-weight:600;color:#16a34a;">${leaveBalance.casual.remaining}</td>
+        </tr>` : ''}
+        ${leaveBalance.planned ? `<tr style="border-top:1px solid #f1f5f9;">
+          <td style="padding:6px 14px;color:#334155;">Planned Leave ${leaveBalance.planned.carryForward > 0 ? `<span style="color:#7c3aed;font-size:10px;">(+${leaveBalance.planned.carryForward} C/F)</span>` : ''}</td>
+          <td style="padding:6px 14px;text-align:center;color:#334155;">${leaveBalance.planned.total}</td>
+          <td style="padding:6px 14px;text-align:center;color:#ef4444;">${leaveBalance.planned.used}</td>
+          <td style="padding:6px 14px;text-align:center;font-weight:600;color:#16a34a;">${leaveBalance.planned.remaining}</td>
+        </tr>` : ''}
+      </tbody>
+    </table>
   </div>` : ''}
 
   <!-- Footer -->

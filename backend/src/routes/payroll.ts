@@ -211,6 +211,15 @@ payrollRouter.post('/cycles/:id/run', requireHR, async (req, res) => {
     description: `Payroll run for ${cycle.payrollMonth} — ${employees.length} employees`,
   })
 
+  // Leave module hooks — auto-approve pending leaves + take monthly balance snapshot
+  try {
+    const { autoApprovePendingLeaves, takeMonthlySnapshot } = await import('../services/leaveService')
+    await autoApprovePendingLeaves()
+    await takeMonthlySnapshot(cycle.id, cycle.payrollMonth)
+  } catch (err) {
+    console.error('[LEAVE] Leave hooks failed on payroll run:', err)
+  }
+
   res.json({ success: true, data: { cycle: cycle.payrollMonth, results, totalGross, totalNet } })
 })
 

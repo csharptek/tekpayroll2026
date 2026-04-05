@@ -1,17 +1,12 @@
 import { Router } from 'express'
-import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId } from '../services/cronJobs'
+import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder } from '../services/cronJobs'
 
 export const cronRouter = Router()
 
-// These endpoints are called by Railway Cron on schedule.
-// They are protected by a shared secret header.
 function verifyCronSecret(req: any, res: any, next: any) {
   const secret = req.headers['x-cron-secret']
   const expected = process.env.CRON_SECRET
-
-  // In dev, allow without secret
   if (process.env.NODE_ENV !== 'production') return next()
-
   if (!expected || secret !== expected) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
@@ -37,4 +32,18 @@ cronRouter.post('/sync-entra', verifyCronSecret, async (_req, res) => {
   console.log('[CRON ENDPOINT] sync-entra triggered')
   await cronSyncEntraId()
   res.json({ success: true, message: 'Entra sync complete' })
+})
+
+// POST /api/cron/holiday-greetings → runs daily at 08:00
+cronRouter.post('/holiday-greetings', verifyCronSecret, async (_req, res) => {
+  console.log('[CRON ENDPOINT] holiday-greetings triggered')
+  await cronSendHolidayGreetings()
+  res.json({ success: true, message: 'Holiday greetings processed' })
+})
+
+// POST /api/cron/rollover-reminder → runs daily at 09:00 (fires only on Dec 25)
+cronRouter.post('/rollover-reminder', verifyCronSecret, async (_req, res) => {
+  console.log('[CRON ENDPOINT] rollover-reminder triggered')
+  await cronLeaveRolloverReminder()
+  res.json({ success: true, message: 'Rollover reminder processed' })
 })

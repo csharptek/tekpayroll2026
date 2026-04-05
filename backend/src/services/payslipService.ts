@@ -141,7 +141,20 @@ export async function generateAndDeliverPayslips(
 
   for (const entry of entries) {
     try {
-      const html      = generatePayslipHTML(entry as any)
+      // Fetch leave balance for payslip
+      let leaveBalance: any = undefined
+      try {
+        const { getEmployeeBalance, getCurrentLeaveYear } = await import('./leaveService')
+        const bal = await getEmployeeBalance(entry.employeeId, getCurrentLeaveYear())
+        const s = (kind: string) => bal[kind]
+        leaveBalance = {
+          sick:    s('SICK')    ? { total: s('SICK').total,    used: s('SICK').used,    remaining: s('SICK').remaining }    : undefined,
+          casual:  s('CASUAL')  ? { total: s('CASUAL').total,  used: s('CASUAL').used,  remaining: s('CASUAL').remaining }  : undefined,
+          planned: s('PLANNED') ? { total: s('PLANNED').total, used: s('PLANNED').used, remaining: s('PLANNED').remaining, carryForward: s('PLANNED').carryForward } : undefined,
+        }
+      } catch { /* leave module not yet set up — skip */ }
+
+      const html      = generatePayslipHTML(entry as any, leaveBalance)
       const pdfBuffer = await generatePDF(html)
 
       // Blob path: payslips/2025-04/CST-001/payslip-CST-001-2025-04.pdf

@@ -6,7 +6,8 @@ import {
   LogOut, ChevronDown, Menu, X, Building2, Shield,
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
-  UserCircle, Banknote, ClipboardList, Edit3
+  UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
+  CalendarCheck, CalendarClock, Palmtree
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -22,27 +23,35 @@ const HR_NAV = [
   {
     section: 'Employees',
     items: [
-      { label: 'All Employees', icon: Users, to: '/hr/employees' },
-      { label: 'Bulk Import', icon: Upload, to: '/hr/import' },
-      { label: 'Bulk Edit', icon: Edit3, to: '/hr/employees-bulk-edit' },
-      { label: 'Bulk Edit Salaries', icon: Table2, to: '/hr/salaries-bulk-edit' },
-      { label: 'M365 Sync', icon: RefreshCw, to: '/hr/sync' },
+      { label: 'All Employees',      icon: Users,      to: '/hr/employees' },
+      { label: 'Bulk Import',        icon: Upload,     to: '/hr/import' },
+      { label: 'Bulk Edit',          icon: Edit3,      to: '/hr/employees-bulk-edit' },
+      { label: 'Bulk Edit Salaries', icon: Table2,     to: '/hr/salaries-bulk-edit' },
+      { label: 'M365 Sync',          icon: RefreshCw,  to: '/hr/sync' },
     ]
   },
   {
     section: 'Payroll',
     items: [
-      { label: 'Payroll Cycles', icon: CreditCard, to: '/hr/payroll' },
-      { label: 'Payslips', icon: FileText, to: '/hr/payslips' },
-      { label: 'Loans & Advances', icon: Wallet, to: '/hr/loans' },
-      { label: 'F&F Settlement', icon: GitMerge, to: '/hr/fnf' },
+      { label: 'Payroll Cycles',  icon: CreditCard, to: '/hr/payroll' },
+      { label: 'Payslips',        icon: FileText,   to: '/hr/payslips' },
+      { label: 'Loans & Advances',icon: Wallet,     to: '/hr/loans' },
+      { label: 'F&F Settlement',  icon: GitMerge,   to: '/hr/fnf' },
+    ]
+  },
+  {
+    section: 'Leave',
+    items: [
+      { label: 'Leave Applications', icon: CalendarCheck, to: '/hr/leaves' },
+      { label: 'Public Holidays',    icon: CalendarDays,  to: '/hr/public-holidays' },
+      { label: 'Leave Config',       icon: CalendarClock, to: '/hr/leave-config' },
     ]
   },
   {
     section: 'Admin',
     items: [
-      { label: 'Audit Log', icon: ScrollText, to: '/hr/audit' },
-      { label: 'Configuration', icon: Settings, to: '/hr/config' },
+      { label: 'Audit Log',     icon: ScrollText, to: '/hr/audit' },
+      { label: 'Configuration', icon: Settings,   to: '/hr/config' },
     ]
   },
 ]
@@ -51,10 +60,16 @@ const EMPLOYEE_NAV = [
   {
     section: 'My Payroll',
     items: [
-      { label: 'Dashboard', icon: LayoutDashboard, to: '/my/dashboard' },
-      { label: 'My Payslips', icon: FileText, to: '/my/payslips' },
-      { label: 'My Loans', icon: Wallet, to: '/my/loans' },
-      { label: 'My Profile', icon: UserCircle, to: '/my/profile' },
+      { label: 'Dashboard',  icon: LayoutDashboard, to: '/my/dashboard' },
+      { label: 'My Payslips',icon: FileText,        to: '/my/payslips' },
+      { label: 'My Loans',   icon: Wallet,          to: '/my/loans' },
+      { label: 'My Profile', icon: UserCircle,      to: '/my/profile' },
+    ]
+  },
+  {
+    section: 'Leave',
+    items: [
+      { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
     ]
   },
 ]
@@ -242,10 +257,14 @@ function usePageTitle() {
     '/hr/salaries-bulk-edit': 'Bulk Edit Salaries',
     '/hr/audit': 'Audit Log',
     '/hr/config': 'Configuration',
+    '/hr/leaves': 'Leave Management',
+    '/hr/public-holidays': 'Public Holidays',
+    '/hr/leave-config': 'Leave Configuration',
     '/my/dashboard': 'My Dashboard',
     '/my/payslips': 'My Payslips',
     '/my/profile': 'My Profile',
     '/my/loans': 'My Loans',
+    '/my/leaves': 'My Leaves',
     '/management/dashboard': 'Management Dashboard',
     '/management/reports': 'Payroll Reports',
     '/management/cost-report': 'Cost Analysis',

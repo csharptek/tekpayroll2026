@@ -21,6 +21,7 @@ import { configRouter } from './routes/config';
 import { auditRouter } from './routes/audit';
 import { importRouter } from './routes/import';
 import { syncRouter } from './routes/sync'
+import { leaveRouter } from './routes/leave'
 import { employeeProfileRouter } from './routes/employeeProfile'
 import { cronRouter } from './routes/cron';
 
@@ -62,6 +63,7 @@ app.use('/api/config', configRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/import', importRouter);
 app.use('/api/sync', syncRouter)
+app.use('/api/leave', leaveRouter)
 app.use('/api/employees', employeeProfileRouter)
 app.use('/api/cron', cronRouter);
 

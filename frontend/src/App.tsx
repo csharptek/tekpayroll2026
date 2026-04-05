@@ -28,12 +28,16 @@ import SyncPage from './pages/hr/SyncPage'
 import BulkImportPage from './pages/hr/BulkImportPage'
 import BulkEditEmployeesPage from './pages/hr/BulkEditEmployeesPage'
 import BulkEditEmployeePage from './pages/hr/BulkEditEmployeePage'
+import HRLeavePage from './pages/hr/HRLeavePage'
+import PublicHolidaysPage from './pages/hr/PublicHolidaysPage'
+import LeaveConfigPage from './pages/hr/LeaveConfigPage'
 
 // Employee Pages
 import EmployeeDashboard from './pages/employee/EmployeeDashboard'
 import MyPayslipsPage from './pages/employee/MyPayslipsPage'
 import MyProfilePage from './pages/employee/MyProfilePage'
 import MyLoansPage from './pages/employee/MyLoansPage'
+import MyLeavesPage from './pages/employee/MyLeavesPage'
 
 // Management Pages
 import ManagementDashboard from './pages/management/ManagementDashboard'
@@ -90,6 +94,9 @@ export default function App() {
           <Route path="sync" element={<SyncPage />} />
           <Route path="audit" element={<AuditLogPage />} />
           <Route path="config" element={<ConfigPage />} />
+          <Route path="leaves" element={<HRLeavePage />} />
+          <Route path="public-holidays" element={<PublicHolidaysPage />} />
+          <Route path="leave-config" element={<LeaveConfigPage />} />
         </Route>
 
         {/* Employee self-service */}
@@ -98,6 +105,7 @@ export default function App() {
           <Route path="payslips" element={<MyPayslipsPage />} />
           <Route path="profile" element={<MyProfilePage />} />
           <Route path="loans" element={<MyLoansPage />} />
+          <Route path="leaves" element={<MyLeavesPage />} />
         </Route>
 
         {/* Management */}
