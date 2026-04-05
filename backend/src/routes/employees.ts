@@ -68,15 +68,22 @@ employeeRouter.get('/next-code', requireHR, async (req, res) => {
 // Returns employees with birthday in given month (no financial data)
 employeeRouter.get('/birthdays/month', async (req, res) => {
   const month = parseInt(req.query.month as string) || new Date().getMonth() + 1
-  const employees = await prisma.employee.findMany({
-    where: { status: 'ACTIVE', dateOfBirth: { not: null } },
-    select: { id: true, name: true, dateOfBirth: true, department: true, jobTitle: true },
+  const profiles = await prisma.employeeProfile.findMany({
+    where: { dateOfBirth: { not: null }, employee: { status: 'ACTIVE' } },
+    select: {
+      dateOfBirth: true,
+      employee: { select: { id: true, name: true, department: true, jobTitle: true } },
+    },
   })
-  // Filter by month (month is 1-indexed)
-  const filtered = employees.filter(e => {
-    if (!e.dateOfBirth) return false
-    return new Date(e.dateOfBirth).getMonth() + 1 === month
-  })
+  const filtered = profiles
+    .filter(p => p.dateOfBirth && new Date(p.dateOfBirth).getMonth() + 1 === month)
+    .map(p => ({
+      id:          p.employee.id,
+      name:        p.employee.name,
+      department:  p.employee.department,
+      jobTitle:    p.employee.jobTitle,
+      dateOfBirth: p.dateOfBirth,
+    }))
   res.json({ success: true, data: filtered })
 })
 
