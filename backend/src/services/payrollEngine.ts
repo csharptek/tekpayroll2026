@@ -61,9 +61,7 @@ export interface PayrollCalculation {
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const EMPLOYER_PF_ANNUAL = 21600   // ₹1,800/month fixed
-const EMPLOYER_PF_MONTHLY = 1800
-const EMPLOYEE_PF_CAP = 1800       // Max employee PF deduction
+const EMPLOYEE_PF_CAP = 1800       // Max employee/employer PF = ₹1,800/month = ₹21,600/year
 const ESI_THRESHOLD = 21000        // ESI only if gross ≤ this
 const ESI_RATE = 0.0075            // 0.75%
 const TRANSPORT_DEFAULT_PCT = 0.04 // 4% of Basic monthly
@@ -85,16 +83,17 @@ export function computeSalaryStructure(input: SalaryInput): SalaryStructure {
   // Annual bonus = CTC × incentive% (if applicable)
   const annualBonus = hasIncentive ? r2(annualCtc * incentivePercent / 100) : 0
 
-  // Employer PF is fixed inside CTC
-  const employerPfAnnual = EMPLOYER_PF_ANNUAL
+  // Basic = CTC × basicPercent%
+  const basicAnnual   = r2(annualCtc * basicPercent / 100)
+  const basicMonthly  = r2(basicAnnual / 12)
+
+  // Employer PF = min(Basic × 12%, 1800) per month — same rule as employee PF
+  const employerPfMonthly = Math.min(r2(basicMonthly * 0.12), EMPLOYEE_PF_CAP)
+  const employerPfAnnual  = r2(employerPfMonthly * 12)
 
   // Grand Total Annual = CTC - Annual Bonus - Employer PF - Mediclaim
   const grandTotalAnnual = annualCtc - annualBonus - employerPfAnnual - mediclaim
   const grandTotalMonthly = r2(grandTotalAnnual / 12)
-
-  // Basic = CTC × basicPercent%
-  const basicAnnual   = r2(annualCtc * basicPercent / 100)
-  const basicMonthly  = r2(basicAnnual / 12)
 
   // HRA = CTC × hraPercent%
   const hraAnnual    = r2(annualCtc * hraPercent / 100)
@@ -112,7 +111,7 @@ export function computeSalaryStructure(input: SalaryInput): SalaryStructure {
   // HYI = Grand Total - Basic - HRA - Transport - FBP (balancing figure)
   const hyiMonthly = r2(grandTotalMonthly - basicMonthly - hraMonthly - transportMonthly - fbpMonthly)
 
-  // Employee PF = min(Basic × 12%, 1800)
+  // Employee PF = min(Basic × 12%, 1800) — mirrors employer PF rule
   const employeePfMonthly = Math.min(r2(basicMonthly * 0.12), EMPLOYEE_PF_CAP)
 
   return {
