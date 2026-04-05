@@ -74,7 +74,7 @@ export default function BulkEditEmployeesPage() {
   const qc = useQueryClient()
   const [rows, setRows]               = useState<EmpRow[]>([])
   const [showBreakdown, setShowBreakdown] = useState(false)
-  const [savedCount, setSavedCount]   = useState(0)
+  const [savedCount, setSavedCount]   = useState<number | null>(null)
   const [globalError, setGlobalError] = useState('')
   const [selected, setSelected]       = useState<Set<string>>(new Set())
   const [deleting, setDeleting]       = useState(false)
@@ -120,7 +120,7 @@ export default function BulkEditEmployeesPage() {
         jobTitle:         row.jobTitle,
         department:       row.department,
         state:            row.state,
-        joiningDate:      row.joiningDate ? new Date(row.joiningDate).toISOString() : undefined,
+        joiningDate:      row.joiningDate || undefined,  // send as YYYY-MM-DD, backend parses safely
         annualCtc:        row.annualCtc,
         hasIncentive:     row.hasIncentive,
         incentivePercent: row.incentivePercent,
@@ -146,6 +146,8 @@ export default function BulkEditEmployeesPage() {
   async function saveAll() {
     setGlobalError('')
     const dirty = rows.filter(r => r.dirty && !r.saving)
+    if (dirty.length === 0) return
+    setSavedCount(0)  // reset so the count reflects only this Save All run
     for (const row of dirty) {
       await saveRow(row)
     }
@@ -241,8 +243,8 @@ export default function BulkEditEmployeesPage() {
         />
       )}
 
-      {savedCount > 0 && (
-        <Alert type="success" message={`${savedCount} employees saved successfully.`} />
+      {savedCount !== null && savedCount > 0 && (
+        <Alert type="success" message={`${savedCount} employee${savedCount > 1 ? 's' : ''} saved successfully.`} />
       )}
 
       {/* ── DELETE CONFIRMATION MODAL ── */}

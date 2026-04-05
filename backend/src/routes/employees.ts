@@ -194,16 +194,21 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
   if (tdsMonthly !== undefined) updateData.tdsMonthly = tdsMonthly;
   if (resignationDate) updateData.resignationDate = new Date(resignationDate);
   if (lastWorkingDay) updateData.lastWorkingDay = new Date(lastWorkingDay);
-  if (state) updateData.state = state;
-  if (joiningDate) updateData.joiningDate = new Date(joiningDate);
-  if (panNumber) updateData.panNumber = panNumber;
-  if (aadhaarNumber) updateData.aadhaarNumber = aadhaarNumber;
-  if (pfNumber) updateData.pfNumber = pfNumber;
-  if (esiNumber) updateData.esiNumber = esiNumber;
-  if (uanNumber) updateData.uanNumber = uanNumber;
-  if (jobTitle) updateData.jobTitle = jobTitle;
-  if (department) updateData.department = department;
-  if (mobilePhone) updateData.mobilePhone = mobilePhone;
+  // Use !== undefined (not truthy) so empty strings and cleared values are persisted
+  if (state !== undefined) updateData.state = state;
+  if (joiningDate !== undefined && joiningDate !== null) {
+    // Parse as local date to avoid UTC timezone shift (e.g. "2023-04-01" → correct date)
+    const [yyyy, mm, dd] = (joiningDate as string).split('T')[0].split('-').map(Number);
+    updateData.joiningDate = new Date(yyyy, mm - 1, dd, 12, 0, 0); // noon local = safe
+  }
+  if (panNumber !== undefined) updateData.panNumber = panNumber;
+  if (aadhaarNumber !== undefined) updateData.aadhaarNumber = aadhaarNumber;
+  if (pfNumber !== undefined) updateData.pfNumber = pfNumber;
+  if (esiNumber !== undefined) updateData.esiNumber = esiNumber;
+  if (uanNumber !== undefined) updateData.uanNumber = uanNumber;
+  if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
+  if (department !== undefined) updateData.department = department;
+  if (mobilePhone !== undefined) updateData.mobilePhone = mobilePhone;
   if (status) updateData.status = status;
 
   // If resignation date set, put employee on notice
