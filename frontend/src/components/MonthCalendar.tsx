@@ -186,19 +186,16 @@ export default function MonthCalendar() {
     get(format(match, 'yyyy-MM-dd')).birthdays.push({ name: b.name, department: b.department })
   })
 
-  // Upcoming events (next 10 days from today)
-  const today = new Date()
+  // All events in the displayed month, sorted by date
   const upcoming: { date: Date; icon: string; label: string; color: string }[] = []
-  for (let i = 0; i <= 13; i++) {
-    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i)
-    if (d.getMonth() + 1 !== month || d.getFullYear() !== year) continue
+  days.forEach(d => {
     const key  = format(d, 'yyyy-MM-dd')
     const meta = metaMap.get(key)
-    if (!meta) continue
+    if (!meta) return
     meta.holidays.forEach(h => upcoming.push({ date: d, icon: '🏖️', label: h.name, color: 'bg-emerald-50 text-emerald-800 border-emerald-200' }))
     meta.birthdays.forEach(b => upcoming.push({ date: d, icon: '🎂', label: `${b.name}'s Birthday`, color: 'bg-amber-50 text-amber-800 border-amber-200' }))
     meta.leaves.slice(0, 3).forEach(l => upcoming.push({ date: d, icon: '🌿', label: `${l.name} on leave`, color: 'bg-blue-50 text-blue-800 border-blue-200' }))
-  }
+  })
 
   const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
