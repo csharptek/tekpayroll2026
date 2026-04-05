@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Save, RefreshCw, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { employeeApi } from '../../services/api'
 import { PageHeader, Button, Alert, Skeleton, Rupee } from '../../components/ui'
 import clsx from 'clsx'
@@ -76,6 +76,9 @@ export default function BulkEditEmployeesPage() {
   const [showBreakdown, setShowBreakdown] = useState(false)
   const [savedCount, setSavedCount]   = useState(0)
   const [globalError, setGlobalError] = useState('')
+  const [selected, setSelected]       = useState<Set<string>>(new Set())
+  const [deleting, setDeleting]       = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ['employees-all'],
@@ -148,6 +151,40 @@ export default function BulkEditEmployeesPage() {
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll(checked: boolean) {
+    setSelected(checked ? new Set(rows.map(r => r.id)) : new Set())
+  }
+
+  async function deleteSelected() {
+    setDeleting(true)
+    setGlobalError('')
+    const ids = Array.from(selected)
+    let failed = 0
+    for (const id of ids) {
+      try {
+        await employeeApi.delete(id)
+        setRows(prev => prev.filter(r => r.id !== id))
+      } catch (err: any) {
+        failed++
+      }
+    }
+    setSelected(new Set())
+    setDeleting(false)
+    setDeleteConfirm(false)
+    if (failed > 0) setGlobalError(`${failed} employees could not be deleted.`)
+    else setSavedCount(c => c + ids.length)
+    qc.invalidateQueries({ queryKey: ['employees'] })
+    qc.invalidateQueries({ queryKey: ['employees-all'] })
+  }
+
   const dirtyCount = rows.filter(r => r.dirty).length
   const noCtcCount = rows.filter(r => !r.annualCtc || r.annualCtc <= 0).length
 
@@ -172,6 +209,17 @@ export default function BulkEditEmployeesPage() {
             >
               {showBreakdown ? 'Hide' : 'Show'} Breakdown
             </Button>
+            {selected.size > 0 && (
+              <Button
+                variant="secondary"
+                icon={<Trash2 size={14} />}
+                loading={deleting}
+                onClick={() => setDeleteConfirm(true)}
+                className="text-red-600 border-red-200 hover:bg-red-50"
+              >
+                Delete Selected ({selected.size})
+              </Button>
+            )}
             <Button
               icon={<Save size={14} />}
               disabled={dirtyCount === 0}
@@ -197,10 +245,53 @@ export default function BulkEditEmployeesPage() {
         <Alert type="success" message={`${savedCount} employees saved successfully.`} />
       )}
 
+      {/* ── DELETE CONFIRMATION MODAL ── */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 size={18} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Permanently Delete Employees</h3>
+                <p className="text-xs text-slate-500 mt-0.5">This cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600">
+              You are about to permanently delete <span className="font-semibold text-red-600">{selected.size} employee{selected.size > 1 ? 's' : ''}</span> and all their related data (payroll, loans, documents, etc.) from the database.
+            </p>
+            <div className="flex gap-3 justify-end pt-2">
+              <button
+                onClick={() => setDeleteConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteSelected}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : `Delete ${selected.size} Employee${selected.size > 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-sm min-w-[1400px]">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
+              <th className="px-3 py-3 w-10">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded"
+                  checked={rows.length > 0 && selected.size === rows.length}
+                  onChange={e => toggleAll(e.target.checked)}
+                />
+              </th>
               <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3 w-32">Emp Code</th>
               <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3 w-44">Name</th>
               <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3 w-36">Job Title</th>
@@ -236,6 +327,14 @@ export default function BulkEditEmployeesPage() {
                     !row.annualCtc && 'bg-slate-50/60',
                   )}
                 >
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded"
+                      checked={selected.has(row.id)}
+                      onChange={() => toggleSelect(row.id)}
+                    />
+                  </td>
                   {/* Emp Code — editable for ID migration */}
                   <td className="px-2 py-1">
                     <input

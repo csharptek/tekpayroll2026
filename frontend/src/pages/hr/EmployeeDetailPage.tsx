@@ -81,7 +81,11 @@ export default function EmployeeDetailPage() {
             : <span className="text-3xl font-display font-bold text-brand-600">{emp.name?.charAt(0)?.toUpperCase()}</span>
           }
         </div>
-        <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="flex-1 grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div>
+            <p className="text-xs text-slate-400 mb-0.5">Employee ID</p>
+            <p className="text-sm text-slate-800 font-mono font-semibold">{emp.employeeCode}</p>
+          </div>
           <div><p className="text-xs text-slate-400 mb-0.5">Email</p><p className="text-sm text-slate-700 font-medium truncate">{emp.email}</p></div>
           <div>
             <p className="text-xs text-slate-400 mb-0.5">Joined</p>

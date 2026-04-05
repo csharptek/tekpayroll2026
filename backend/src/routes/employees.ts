@@ -253,6 +253,46 @@ employeeRouter.post('/:id/deactivate', requireHR, async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
+// ─── DELETE EMPLOYEE (hard delete — SUPER_ADMIN only) ────────────────────────
+
+employeeRouter.delete('/:id', async (req, res) => {
+  if (req.user!.role !== 'SUPER_ADMIN') {
+    throw new AppError('Only Super Admins can permanently delete employees', 403);
+  }
+
+  const employee = await prisma.employee.findUnique({ where: { id: req.params.id } });
+  if (!employee) throw new AppError('Employee not found', 404);
+
+  // Delete in FK-safe order
+  await prisma.loanRepayment.deleteMany({ where: { loan: { employeeId: employee.id } } });
+  await prisma.loan.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.payslip.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.payrollEntry.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.lopEntry.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.reimbursement.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.fnfSettlement.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.salaryRevision.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.auditLog.deleteMany({
+    where: { OR: [{ performedById: employee.id }, { targetEmployeeId: employee.id }] },
+  });
+  await prisma.employeeDocument.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.governmentId.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.bankAccount.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.workExperience.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.educationRecord.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.emergencyContact.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.employmentDetail.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.employeeAddress.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.employeeProfile.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.bankDetail.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.leaveBalance.deleteMany({ where: { employeeId: employee.id } });
+  await prisma.leaveApplication.deleteMany({ where: { employeeId: employee.id } });
+
+  await prisma.employee.delete({ where: { id: employee.id } });
+
+  res.json({ success: true, message: `Employee ${employee.name} permanently deleted` });
+});
+
 // ─── GET PAYROLL HISTORY FOR EMPLOYEE ────────────────────────────────────────
 
 employeeRouter.get('/:id/payroll-history', async (req, res) => {

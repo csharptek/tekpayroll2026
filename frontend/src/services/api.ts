@@ -35,6 +35,7 @@ export const employeeApi = {
   get: (id: string) => api.get(`/api/employees/${id}`),
   getFull: (id: string) => api.get(`/api/employees/${id}/full`),
   nextCode: (type: 'EMPLOYEE' | 'TRAINEE') => api.get(`/api/employees/next-code?type=${type}`),
+  delete: (id: string) => api.delete(`/api/employees/${id}`),
   create: (data: any) => api.post('/api/employees', data),
   update: (id: string, data: any) => api.put(`/api/employees/${id}`, data),
   deactivate: (id: string) => api.post(`/api/employees/${id}/deactivate`),

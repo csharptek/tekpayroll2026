@@ -131,7 +131,8 @@ export default function EditEmployeePage() {
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-10 w-48" /><Skeleton className="h-64 rounded-xl" /></div>
   if (!employee) return <Alert type="error" message="Employee not found." />
 
-  const isSynced   = !!employee.entraId
+  const isSynced      = !!employee.entraId
+  const isSuperAdmin  = employee && (window as any).__authRole === 'SUPER_ADMIN'
   const ctcChanged = employee && salaryInput.annualCtc > 0 && salaryInput.annualCtc !== Number(employee.annualCtc)
 
   return (
@@ -184,6 +185,19 @@ export default function EditEmployeePage() {
           <div className="p-5">
             <SectionHeading icon={Briefcase} title="Employment Details" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Employee ID</label>
+                <div className="relative">
+                  <input
+                    className="input font-mono bg-slate-50"
+                    value={employee.employeeCode}
+                    disabled
+                    readOnly
+                  />
+                  <span className="absolute right-3 top-2.5 text-xs text-slate-400">Read-only</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Change via Bulk Edit (Super Admin only)</p>
+              </div>
               <div>
                 <label className="label">Designation</label>
                 <input className="input" value={form.jobTitle}
