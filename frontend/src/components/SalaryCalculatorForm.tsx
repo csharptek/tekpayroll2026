@@ -87,9 +87,9 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? 0.0325)
   const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? 21000)
 
-  const employerPfActual = ri(components.basic * 0.12)           // actual uncapped — shown informally
-  const employerPfInCtc  = Math.min(employerPfActual, 1800)  // stays integer since employerPfActual is integer      // capped — what was deducted from CTC
-  const employerPf       = employerPfActual                       // display alias
+  const employerPfActual = ri(components.basic * 0.12)      // actual uncapped 12%
+  const employerPfInCtc  = Math.min(employerPfActual, 1800)  // capped — deducted from CTC
+  const employerPf       = employerPfInCtc                    // display in table = capped amount
   const employeePf       = Math.min(ri(components.basic * 0.12), 1800) // employee PF capped ₹1,800
   const annualBonus   = hasIncentive ? r2(ctc * incentivePct / 100) : 0
   const allocated     = r2(components.basic + components.hra + components.transport + components.fbp + components.hyi)

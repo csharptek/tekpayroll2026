@@ -118,8 +118,8 @@ export default function AddEmployeePage() {
       hraPercent:         salaryInput.hraPercent,
       hasIncentive:       salaryInput.hasIncentive,
       incentivePercent:   salaryInput.incentivePercent,
-      transportMonthly:   salaryInput.transportMonthly ?? undefined,
-      fbpMonthly:         salaryInput.fbpMonthly ?? undefined,
+      transportMonthly:   salaryInput.transportMonthly,  // null = auto
+      fbpMonthly:         salaryInput.fbpMonthly,          // null = auto
       mediclaim:          salaryInput.mediclaim,
       tdsMonthly:         0,
     })

@@ -194,7 +194,7 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
 
   const {
     employeeCode,
-    annualCtc, hasIncentive, incentivePercent, transportMonthly, fbpMonthly,
+    annualCtc, basicPercent, hraPercent, hasIncentive, incentivePercent, transportMonthly, fbpMonthly,
     mediclaim, tdsMonthly, resignationDate, lastWorkingDay,
     state, joiningDate, panNumber, aadhaarNumber, pfNumber, esiNumber, uanNumber,
     jobTitle, department, mobilePhone, status
@@ -222,8 +222,11 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
 
   if (hasIncentive !== undefined) updateData.hasIncentive = hasIncentive;
   if (incentivePercent !== undefined) updateData.incentivePercent = incentivePercent;
-  if (transportMonthly !== undefined) updateData.transportMonthly = transportMonthly;
-  if (fbpMonthly !== undefined) updateData.fbpMonthly = fbpMonthly;
+  if (basicPercent !== undefined) updateData.basicPercent = basicPercent;
+  if (hraPercent !== undefined) updateData.hraPercent = hraPercent;
+  // Allow null to reset transport/fbp back to auto
+  if (transportMonthly !== undefined) updateData.transportMonthly = transportMonthly ?? null;
+  if (fbpMonthly !== undefined) updateData.fbpMonthly = fbpMonthly ?? null;
   if (mediclaim !== undefined) updateData.mediclaim = mediclaim;
   if (tdsMonthly !== undefined) updateData.tdsMonthly = tdsMonthly;
   if (resignationDate) updateData.resignationDate = new Date(resignationDate);
