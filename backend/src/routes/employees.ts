@@ -371,7 +371,7 @@ employeeRouter.post('/salary-preview', requireSuperAdmin, async (req, res) => {
   if (!annualCtc) return res.status(400).json({ success: false, error: 'annualCtc is required' })
 
   const { previewSalaryBreakdown } = await import('../services/payrollEngine')
-  const preview = previewSalaryBreakdown({
+  const preview = await previewSalaryBreakdown({
     annualCtc: Number(annualCtc),
     basicPercent: Number(basicPercent),
     hraPercent: Number(hraPercent),

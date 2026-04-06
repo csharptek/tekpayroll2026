@@ -16,20 +16,28 @@ export interface SalaryInput {
 export interface SalaryStructure {
   // Annual
   annualCtc:        number
-  annualBonus:      number  // = CTC × incentivePercent (paid March)
+  annualBonus:      number
   // Monthly components
   basicMonthly:     number
   hraMonthly:       number
   transportMonthly: number
   fbpMonthly:       number
-  hyiMonthly:       number  // balancing figure
-  grandTotalMonthly: number // gross payable monthly
+  hyiMonthly:       number
+  grandTotalMonthly: number
   // Computed annual equivalents
   basicAnnual:      number
   hraAnnual:        number
-  employerPfAnnual: number
-  // Deductions
-  employeePfMonthly: number
+  // Employer contributions (outside CTC — informational)
+  employerPfMonthly:  number
+  employerPfAnnual:   number
+  employerEsiMonthly: number  // 0 if ESI not applicable
+  employerEsiAnnual:  number
+  // ESI info
+  esiBase:    number   // Gross - HYI
+  esiApplies: boolean  // true if esiBase <= threshold
+  // Employee deductions
+  employeePfMonthly:  number
+  employeeEsiMonthly: number  // 0 if ESI not applicable
 }
 
 export interface ProrationResult {
@@ -61,58 +69,70 @@ export interface PayrollCalculation {
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const EMPLOYEE_PF_CAP = 1800       // Max employee/employer PF = ₹1,800/month = ₹21,600/year
-const ESI_THRESHOLD = 21000        // ESI only if gross ≤ this
-const ESI_RATE = 0.0075            // 0.75%
 const TRANSPORT_DEFAULT_PCT = 0.04 // 4% of Basic monthly
-const FBP_DEFAULT_PCT = 0.04       // 4% of Basic monthly
-const BONUS_MONTH = 3              // March (0-indexed = 2, but we store 1-indexed = 3)
+const FBP_DEFAULT_PCT       = 0.04 // 4% of Basic monthly
+const BONUS_MONTH           = 3    // March
+
+// ESI/PF defaults — overridden by SystemConfig at runtime
+const DEFAULT_ESI_EMPLOYEE_RATE = 0.0075  // 0.75%
+const DEFAULT_ESI_EMPLOYER_RATE = 0.0325  // 3.25%
+const DEFAULT_ESI_THRESHOLD     = 21000   // ₹21,000 gross - HYI
+
+// ─── LOAD ESI CONFIG FROM DB ─────────────────────────────────────────────────
+
+async function getEsiConfig() {
+  const rows = await prisma.systemConfig.findMany({
+    where: { key: { in: ['ESI_EMPLOYEE_RATE', 'ESI_EMPLOYER_RATE', 'ESI_THRESHOLD'] } },
+  })
+  const map = Object.fromEntries(rows.map(r => [r.key, Number(r.value)]))
+  return {
+    employeeRate: map['ESI_EMPLOYEE_RATE'] ?? DEFAULT_ESI_EMPLOYEE_RATE,
+    employerRate: map['ESI_EMPLOYER_RATE'] ?? DEFAULT_ESI_EMPLOYER_RATE,
+    threshold:    map['ESI_THRESHOLD']     ?? DEFAULT_ESI_THRESHOLD,
+  }
+}
 
 // ─── CORE SALARY CALCULATOR ──────────────────────────────────────────────────
 
-export function computeSalaryStructure(input: SalaryInput): SalaryStructure {
-  const {
-    annualCtc,
-    basicPercent,
-    hraPercent,
-    mediclaim,
-    hasIncentive,
-    incentivePercent,
-  } = input
+export function computeSalaryStructure(
+  input: SalaryInput,
+  esiConfig = { employeeRate: DEFAULT_ESI_EMPLOYEE_RATE, employerRate: DEFAULT_ESI_EMPLOYER_RATE, threshold: DEFAULT_ESI_THRESHOLD }
+): SalaryStructure {
+  const { annualCtc, basicPercent, hraPercent, mediclaim, hasIncentive, incentivePercent } = input
 
-  // Annual bonus = CTC × incentive% (if applicable)
-  const annualBonus = hasIncentive ? r2(annualCtc * incentivePercent / 100) : 0
+  const annualBonus      = hasIncentive ? r2(annualCtc * incentivePercent / 100) : 0
+  const basicAnnual      = r2(annualCtc * basicPercent / 100)
+  const basicMonthly     = r2(basicAnnual / 12)
 
-  // Basic = CTC × basicPercent%
-  const basicAnnual   = r2(annualCtc * basicPercent / 100)
-  const basicMonthly  = r2(basicAnnual / 12)
-
-  // Employer PF = min(Basic × 12%, 1800) per month — same rule as employee PF
-  const employerPfMonthly = Math.min(r2(basicMonthly * 0.12), EMPLOYEE_PF_CAP)
+  // Employer PF — 12% of Basic, no cap (outside CTC, informational)
+  const employerPfMonthly = r2(basicMonthly * 0.12)
   const employerPfAnnual  = r2(employerPfMonthly * 12)
 
-  // Grand Total Annual = CTC - Annual Bonus - Employer PF - Mediclaim
-  const grandTotalAnnual = annualCtc - annualBonus - employerPfAnnual - mediclaim
-  const grandTotalMonthly = r2(grandTotalAnnual / 12)
+  // Grand Total = CTC - Employer PF - Bonus - Mediclaim
+  const grandTotalMonthly = r2((annualCtc - annualBonus - employerPfAnnual - mediclaim) / 12)
 
-  // HRA = CTC × hraPercent%
-  const hraAnnual    = r2(annualCtc * hraPercent / 100)
-  const hraMonthly   = r2(hraAnnual / 12)
+  const hraAnnual        = r2(annualCtc * hraPercent / 100)
+  const hraMonthly       = r2(hraAnnual / 12)
 
-  // Transport & FBP — use input if provided, else formula
-  const transportMonthly = input.transportMonthly !== null && input.transportMonthly !== undefined
+  const transportMonthly = input.transportMonthly != null
     ? r2(input.transportMonthly)
     : r2(basicMonthly * TRANSPORT_DEFAULT_PCT)
 
-  const fbpMonthly = input.fbpMonthly !== null && input.fbpMonthly !== undefined
+  const fbpMonthly = input.fbpMonthly != null
     ? r2(input.fbpMonthly)
     : r2(basicMonthly * FBP_DEFAULT_PCT)
 
-  // HYI = Grand Total - Basic - HRA - Transport - FBP (balancing figure)
   const hyiMonthly = r2(grandTotalMonthly - basicMonthly - hraMonthly - transportMonthly - fbpMonthly)
 
-  // Employee PF = min(Basic × 12%, 1800) — mirrors employer PF rule
-  const employeePfMonthly = Math.min(r2(basicMonthly * 0.12), EMPLOYEE_PF_CAP)
+  // Employee PF — 12% of Basic, no cap
+  const employeePfMonthly = r2(basicMonthly * 0.12)
+
+  // ESI — base = Gross - HYI (HYI excluded per govt rules)
+  const esiBase   = r2(grandTotalMonthly - hyiMonthly)
+  const esiApplies = esiBase <= esiConfig.threshold
+  const employeeEsiMonthly = esiApplies ? r2(esiBase * esiConfig.employeeRate) : 0
+  const employerEsiMonthly = esiApplies ? r2(esiBase * esiConfig.employerRate) : 0
+  const employerEsiAnnual  = r2(employerEsiMonthly * 12)
 
   return {
     annualCtc,
@@ -125,8 +145,14 @@ export function computeSalaryStructure(input: SalaryInput): SalaryStructure {
     grandTotalMonthly,
     basicAnnual,
     hraAnnual,
+    employerPfMonthly,
     employerPfAnnual,
+    employerEsiMonthly,
+    employerEsiAnnual,
+    esiBase,
+    esiApplies,
     employeePfMonthly,
+    employeeEsiMonthly,
   }
 }
 
@@ -165,10 +191,11 @@ export function computeLop(grandTotalMonthly: number, totalDays: number, lopDays
 }
 
 // ─── ESI ─────────────────────────────────────────────────────────────────────
-
-export function computeEsi(grandTotalMonthly: number): number {
-  if (grandTotalMonthly > ESI_THRESHOLD) return 0
-  return r2(grandTotalMonthly * ESI_RATE)
+// ESI is now computed inside computeSalaryStructure using esiBase = Gross - HYI
+// This function kept for backward compat but delegates to salary structure
+export function computeEsi(esiBase: number, employeeRate = DEFAULT_ESI_EMPLOYEE_RATE, threshold = DEFAULT_ESI_THRESHOLD): number {
+  if (esiBase > threshold) return 0
+  return r2(esiBase * employeeRate)
 }
 
 // ─── PROFESSIONAL TAX ────────────────────────────────────────────────────────
@@ -222,7 +249,8 @@ export async function calculatePayrollForEmployee(params: {
   reimbursements:  number
 }): Promise<PayrollCalculation> {
 
-  const salary     = computeSalaryStructure(params.salaryInput)
+  const esiConfig  = await getEsiConfig()
+  const salary     = computeSalaryStructure(params.salaryInput, esiConfig)
   const proration  = computeProration(
     salary.grandTotalMonthly,
     params.cycleStart,
@@ -232,15 +260,15 @@ export async function calculatePayrollForEmployee(params: {
   )
 
   const lopAmount       = computeLop(salary.grandTotalMonthly, proration.totalDays, params.lopDays)
-  const esi             = computeEsi(salary.grandTotalMonthly)
+  const esi             = salary.employeeEsiMonthly
   const pt              = await computePt(salary.grandTotalMonthly, params.state)
   const loanDeduction   = await computeLoanDeduction(params.employeeId)
   const bonusMonth      = isBonusMonth(params.payrollMonth)
   const annualBonus     = bonusMonth ? salary.annualBonus : 0
 
   const deductions: DeductionResult = {
-    pf:                salary.employeePfMonthly,
-    esi,
+    pf:                salary.employeePfMonthly,  // 12% of Basic, uncapped
+    esi,  // 0.75% of (Gross - HYI) if applicable
     pt,
     tds:               params.tdsMonthly,
     lop:               lopAmount,
@@ -269,16 +297,9 @@ export async function calculatePayrollForEmployee(params: {
 
 // ─── PREVIEW BREAKDOWN (for UI — shows all components before saving) ──────────
 
-export function previewSalaryBreakdown(input: SalaryInput): {
-  components: { label: string; monthly: number; annual: number; editable: boolean }[]
-  grossMonthly: number
-  annualBonus: number
-  employerPf: number
-  totalCtc: number
-  employeePf: number
-  netEstimate: number
-} {
-  const s = computeSalaryStructure(input)
+export async function previewSalaryBreakdown(input: SalaryInput) {
+  const esiConfig = await getEsiConfig()
+  const s = computeSalaryStructure(input, esiConfig)
 
   const components = [
     { label: 'Basic',          monthly: s.basicMonthly,     annual: s.basicAnnual,           editable: false },
@@ -290,12 +311,22 @@ export function previewSalaryBreakdown(input: SalaryInput): {
 
   return {
     components,
-    grossMonthly:  s.grandTotalMonthly,
-    annualBonus:   s.annualBonus,
-    employerPf:    s.employerPfAnnual,
-    totalCtc:      s.annualCtc,
-    employeePf:    s.employeePfMonthly,
-    netEstimate:   r2(s.grandTotalMonthly - s.employeePfMonthly),
+    grossMonthly:        s.grandTotalMonthly,
+    annualBonus:         s.annualBonus,
+    // Employer contributions (outside CTC — informational)
+    employerPf:          s.employerPfAnnual,
+    employerPfMonthly:   s.employerPfMonthly,
+    employerEsiMonthly:  s.employerEsiMonthly,
+    employerEsiAnnual:   s.employerEsiAnnual,
+    // ESI info
+    esiBase:             s.esiBase,
+    esiApplies:          s.esiApplies,
+    esiThreshold:        esiConfig.threshold,
+    // Employee deductions
+    employeePf:          s.employeePfMonthly,
+    employeeEsi:         s.employeeEsiMonthly,
+    totalCtc:            s.annualCtc,
+    netEstimate:         r2(s.grandTotalMonthly - s.employeePfMonthly - s.employeeEsiMonthly),
   }
 }
 

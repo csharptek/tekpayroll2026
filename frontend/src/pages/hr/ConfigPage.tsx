@@ -61,12 +61,16 @@ export default function ConfigPage() {
   })
 
   const defaultConfigs = [
-    { key: 'PF_CAP',          label: 'PF Cap (₹)',          default: '1800',  hint: 'Maximum PF deduction per month' },
-    { key: 'ESI_THRESHOLD',   label: 'ESI Threshold (₹)',   default: '21000', hint: 'ESI applies if gross ≤ this amount' },
     { key: 'CYCLE_START_DAY', label: 'Cycle Start Day',      default: '26',    hint: 'Day of previous month cycle starts' },
     { key: 'CYCLE_END_DAY',   label: 'Cycle End Day',        default: '25',    hint: 'Day of current month cycle ends' },
     { key: 'PAYROLL_RUN_DAY', label: 'Payroll Calc Day',     default: '27',    hint: 'Day payroll engine runs each month' },
     { key: 'PAYSLIP_GEN_DAY', label: 'Payslip Release Day',  default: '5',     hint: 'Day payslips are generated & sent' },
+  ]
+
+  const esiConfigs = [
+    { key: 'ESI_EMPLOYEE_RATE', label: 'Employee ESI Rate', default: '0.0075', hint: 'e.g. 0.0075 = 0.75%' },
+    { key: 'ESI_EMPLOYER_RATE', label: 'Employer ESI Rate', default: '0.0325', hint: 'e.g. 0.0325 = 3.25%' },
+    { key: 'ESI_THRESHOLD',     label: 'ESI Threshold (₹)', default: '21000',  hint: 'ESI applies if (Gross - HYI) ≤ this' },
   ]
 
   function getValue(key: string, dflt: string) {
@@ -81,12 +85,13 @@ export default function ConfigPage() {
 
       {saved && <Alert type="success" message="Configuration saved successfully." />}
 
-      <Section icon={DollarSign} title="Deduction Rules">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {defaultConfigs.slice(0, 2).map(({ key, label, default: dflt, hint }) => (
+      <Section icon={DollarSign} title="ESI Configuration">
+        <p className="text-xs text-slate-400 mb-4">ESI applies automatically when (Gross - HYI) ≤ threshold. Rates set by government — update here if changed.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {esiConfigs.map(({ key, label, default: dflt, hint }) => (
             <div key={key} className="flex flex-col gap-1">
               <label className="label">{label}</label>
-              <input type="number" className="input" value={getValue(key, dflt)}
+              <input type="number" step="0.0001" className="input" value={getValue(key, dflt)}
                 onChange={e => setConfigValues((p: any) => ({ ...p, [key]: e.target.value }))} />
               <p className="text-xs text-slate-400">{hint}</p>
             </div>
@@ -96,7 +101,7 @@ export default function ConfigPage() {
 
       <Section icon={Calendar} title="Payroll Cycle Dates">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {defaultConfigs.slice(2).map(({ key, label, default: dflt, hint }) => (
+          {defaultConfigs.map(({ key, label, default: dflt, hint }) => (
             <div key={key} className="flex flex-col gap-1">
               <label className="label">{label}</label>
               <input type="number" className="input" min="1" max="31" value={getValue(key, dflt)}

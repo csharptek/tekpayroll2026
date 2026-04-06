@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import api from '../services/api'
 import { RotateCcw, AlertTriangle, Info } from 'lucide-react'
 import { Rupee } from './ui'
 
 const r2 = (n: number) => Math.round(n * 100) / 100
-const EMPLOYEE_PF_CAP   = 1800
 const TRANSPORT_DEFAULT = 0.04
 const FBP_DEFAULT       = 0.04
 
@@ -72,14 +73,27 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   })
   const [initialized, setInitialized] = useState((initialValues?.annualCtc ?? 0) > 0)
 
-  const employerPf    = Math.min(r2(components.basic * 0.12), EMPLOYEE_PF_CAP)
-  const employeePf    = employerPf
+  // Fetch ESI config from backend
+  const { data: sysConfig } = useQuery({
+    queryKey: ['system-config'],
+    queryFn: () => api.get('/api/config').then(r => r.data.data),
+  })
+  const esiEmployeeRate = Number(sysConfig?.ESI_EMPLOYEE_RATE ?? 0.0075)
+  const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? 0.0325)
+  const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? 21000)
+
+  const employerPf    = r2(components.basic * 0.12)  // uncapped 12%
+  const employeePf    = r2(components.basic * 0.12)  // uncapped 12%
   const annualBonus   = hasIncentive ? r2(ctc * incentivePct / 100) : 0
   const allocated     = r2(components.basic + components.hra + components.transport + components.fbp + components.hyi)
   const remainder     = r2(grandTotal - allocated)
   const isOver        = remainder < -1
+  const esiBase       = r2(grandTotal - components.hyi)  // Gross - HYI per govt rules
+  const esiApplies    = initialized && esiBase > 0 && esiBase <= esiThreshold
+  const employeeEsi   = esiApplies ? r2(esiBase * esiEmployeeRate) : 0
+  const employerEsi   = esiApplies ? r2(esiBase * esiEmployerRate) : 0
   const totalCtcCheck = r2(grandTotal * 12 + employerPf * 12 + annualBonus + mediclaim)
-  const netEstimate   = r2(grandTotal - employeePf)
+  const netEstimate   = r2(grandTotal - employerPf - employeeEsi)
 
   function emitChange(comps: Components, ov: Overrides, gt: number) {
     const basicPctFinal = comps.basic > 0 ? r2((comps.basic * 12 / ctc) * 100) : basicPct
@@ -315,6 +329,18 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
                     <td/>
                   </tr>
                 )}
+                {/* Employer ESI — outside CTC, informational */}
+                {esiApplies && (
+                  <tr className="text-slate-500 text-xs">
+                    <td className="py-1.5">
+                      Employer ESI ({(esiEmployerRate * 100).toFixed(2)}%)
+                      <span className="ml-1 text-[10px] text-amber-500 font-medium">outside CTC</span>
+                    </td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={employerEsi}/></td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={r2(employerEsi * 12)}/></td>
+                    <td/>
+                  </tr>
+                )}
                 {hasIncentive && (
                   <tr className="text-amber-600 text-xs">
                     <td className="py-1.5">Annual Bonus ({incentivePct}%) — paid March</td>
@@ -333,14 +359,36 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
               </div>
             )}
 
+            {/* Deductions */}
+            <div className="bg-red-50/50 border border-red-100 rounded-xl p-3">
+              <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-2">Employee Deductions</p>
+              <div className="space-y-1 text-xs text-slate-600">
+                <div className="flex justify-between">
+                  <span>Employee PF (12% of Basic)</span>
+                  <span className="font-mono font-semibold"><Rupee amount={employeePf}/>/mo</span>
+                </div>
+                {esiApplies ? (
+                  <div className="flex justify-between">
+                    <span>Employee ESI ({(esiEmployeeRate * 100).toFixed(2)}% of Gross - HYI = <Rupee amount={esiBase}/>)</span>
+                    <span className="font-mono font-semibold"><Rupee amount={employeeEsi}/>/mo</span>
+                  </div>
+                ) : initialized && (
+                  <div className="flex justify-between text-slate-400">
+                    <span>Employee ESI — not applicable (ESI base &gt; ₹{esiThreshold.toLocaleString('en-IN')})</span>
+                    <span>₹0</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-3 pt-1">
               <div className="bg-brand-50 rounded-xl p-3 text-center">
                 <p className="text-xs text-brand-500 mb-0.5">Total CTC</p>
                 <Rupee amount={totalCtcCheck} className="font-bold text-brand-800 text-sm"/>
               </div>
               <div className="bg-red-50 rounded-xl p-3 text-center">
-                <p className="text-xs text-red-500 mb-0.5">Employee PF</p>
-                <Rupee amount={employeePf} className="font-bold text-red-700 text-sm"/>
+                <p className="text-xs text-red-500 mb-0.5">Total Deductions</p>
+                <Rupee amount={r2(employeePf + employeeEsi)} className="font-bold text-red-700 text-sm"/>
               </div>
               <div className="bg-emerald-50 rounded-xl p-3 text-center">
                 <p className="text-xs text-emerald-500 mb-0.5">Est. Net Take Home</p>
