@@ -20,6 +20,12 @@ enum EmployeeStatus {
   SEPARATED
 }
 
+enum ExitType {
+  RESIGNED
+  TERMINATED
+  ABSCONDED
+}
+
 enum UserRole {
   SUPER_ADMIN
   HR
@@ -128,6 +134,18 @@ model Employee {
   status         EmployeeStatus @default(ACTIVE)
   role           UserRole       @default(EMPLOYEE)
 
+  // Exit / Resignation
+  exitType                ExitType?
+  resignationSubmittedAt  DateTime?
+  resignationReason       String?   @db.Text
+  resignationRequests     String?   @db.Text
+  resignationInitiatedBy  String?
+  resignationInitiatorId  String?
+  withdrawalEnabled       Boolean   @default(false)
+  withdrawnAt             DateTime?
+  noticePeriodDays        Int?
+  expectedLwd             DateTime?
+
   // ─── NEW SALARY STRUCTURE (v2) ───────────────────────────────────────────
   annualCtc           Decimal  @db.Decimal(12, 2)
 
@@ -188,6 +206,9 @@ model Employee {
   leaveEntitlements   LeaveEntitlement[]     @relation("EmployeeLeaveEntitlements")
   leaveApplications   LvApplication[]        @relation("EmployeeLeaveApplications")
   leaveSnapshots      LeaveBalanceSnapshot[] @relation("EmployeeLeaveSnapshots")
+  exitClearance       ExitClearance?
+  exitInterview       ExitInterview?
+  resignationHistory  ResignationHistory[]
 
   @@index([status])
   @@index([department])
@@ -1172,4 +1193,75 @@ model CompanyPolicy {
   updatedAt   DateTime @updatedAt
 
   @@index([sortOrder])
+}
+
+// ─── EXIT CLEARANCE ──────────────────────────────────────────────────────────
+
+model ExitClearance {
+  id                String   @id @default(cuid())
+  employeeId        String   @unique
+  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  itClearance       Boolean  @default(false)
+  itClearedAt       DateTime?
+  itClearedBy       String?
+  itClearedByName   String?
+
+  assetReturned     Boolean  @default(false)
+  assetReturnedAt   DateTime?
+  assetReturnedBy   String?
+  assetReturnedByName String?
+
+  financeClearance  Boolean  @default(false)
+  financeClearedAt  DateTime?
+  financeClearedBy  String?
+  financeClearedByName String?
+
+  managerClearance  Boolean  @default(false)
+  managerClearedAt  DateTime?
+  managerClearedBy  String?
+  managerClearedByName String?
+
+  ffUnlocked        Boolean  @default(false)
+  ffUnlockedAt      DateTime?
+  ffUnlockedBy      String?
+  ffUnlockedByName  String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ─── EXIT INTERVIEW ──────────────────────────────────────────────────────────
+
+model ExitInterview {
+  id              String   @id @default(cuid())
+  employeeId      String   @unique
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  isDone          Boolean  @default(false)
+  interviewDate   DateTime?
+  conductedBy     String?
+  conductedByName String?
+  notes           String?  @db.Text
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ─── RESIGNATION HISTORY ─────────────────────────────────────────────────────
+
+model ResignationHistory {
+  id              String   @id @default(cuid())
+  employeeId      String
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  action          String
+  performedById   String
+  performedByName String
+  performedByRole String
+  notes           String?  @db.Text
+
+  createdAt       DateTime @default(now())
+
+  @@index([employeeId])
 }

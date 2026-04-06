@@ -40,6 +40,7 @@ import MyPayslipsPage from './pages/employee/MyPayslipsPage'
 import MyProfilePage from './pages/employee/MyProfilePage'
 import MyLoansPage from './pages/employee/MyLoansPage'
 import MyLeavesPage from './pages/employee/MyLeavesPage'
+import MyResignationPage from './pages/employee/MyResignationPage'
 
 // Shared Pages
 import PoliciesPage from './pages/shared/PoliciesPage'
@@ -115,6 +116,7 @@ export default function App() {
           <Route path="profile" element={<MyProfilePage />} />
           <Route path="loans" element={<MyLoansPage />} />
           <Route path="leaves" element={<MyLeavesPage />} />
+          <Route path="resignation" element={<MyResignationPage />} />
         </Route>
 
         {/* Management */}

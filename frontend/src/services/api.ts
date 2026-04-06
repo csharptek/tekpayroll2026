@@ -213,3 +213,19 @@ export const policiesApi = {
 export const calendarApi = {
   birthdays: (month: number) => api.get('/api/employees/birthdays/month', { params: { month } }),
 }
+
+export const exitApi = {
+  get:              (id: string)                   => api.get(`/api/exit/${id}`),
+  resign:           (id: string, data: any)        => api.post(`/api/exit/${id}/resign`, data),
+  initiate:         (id: string, data: any)        => api.post(`/api/exit/${id}/initiate`, data),
+  updateDetails:    (id: string, data: any)        => api.patch(`/api/exit/${id}/details`, data),
+  updateClearance:  (id: string, data: any)        => api.patch(`/api/exit/${id}/clearance`, data),
+  updateInterview:  (id: string, data: any)        => api.patch(`/api/exit/${id}/interview`, data),
+  unlockFf:         (id: string)                   => api.patch(`/api/exit/${id}/ff-unlock`, {}),
+  enableWithdrawal: (id: string, enabled: boolean) => api.patch(`/api/exit/${id}/enable-withdrawal`, { enabled }),
+  withdraw:         (id: string)                   => api.post(`/api/exit/${id}/withdraw`, {}),
+  convertLop:       (id: string, applicationId: string) => api.post(`/api/exit/${id}/convert-lop`, { applicationId }),
+  separate:         (id: string)                   => api.post(`/api/exit/${id}/separate`, {}),
+  lopLeaves:        (id: string)                   => api.get(`/api/exit/${id}/lop-leaves`),
+  testEmail:        (toEmail: string)              => api.post('/api/config/test-email', { toEmail }),
+}

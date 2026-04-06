@@ -324,3 +324,41 @@ export async function cronLeaveRolloverReminder() {
   }
   console.log(`[CRON] Rollover reminder sent to ${hrUsers.length} HR/admin users`)
 }
+
+// ─── CRON: LWD REMINDER (Daily) ───────────────────────────────────────────────
+// Sends reminder to HR when employee LWD is 7 days away
+
+export async function cronLwdReminder() {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const in7   = new Date(today); in7.setDate(in7.getDate() + 7)
+  const in8   = new Date(today); in8.setDate(in8.getDate() + 8)
+
+  const employees = await prisma.employee.findMany({
+    where: {
+      status: 'ON_NOTICE',
+      OR: [
+        { lastWorkingDay: { gte: in7, lt: in8 } },
+        { expectedLwd:    { gte: in7, lt: in8 } },
+      ],
+    },
+  })
+
+  if (!employees.length) return
+
+  const { sendLwdReminderToHR } = await import('./emailService')
+  const hrUsers = await prisma.employee.findMany({
+    where: { role: { in: ['HR', 'SUPER_ADMIN'] }, status: 'ACTIVE' },
+    select: { email: true },
+  })
+  const hrEmails = hrUsers.map(h => h.email)
+
+  for (const emp of employees) {
+    const lwd = emp.lastWorkingDay || emp.expectedLwd!
+    const lwdDate = new Date(lwd); lwdDate.setHours(0, 0, 0, 0)
+    const daysRemaining = Math.round((lwdDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    const lwdStr = lwd.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    await sendLwdReminderToHR(hrEmails, emp.name, emp.employeeCode, lwdStr, daysRemaining)
+  }
+
+  console.log(`[CRON] LWD reminders sent for ${employees.length} employees`)
+}

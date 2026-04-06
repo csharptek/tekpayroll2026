@@ -204,6 +204,10 @@ export async function applyLeave(params: {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const isBackdated = startDate < today
 
+  // Check if employee is ON_NOTICE — all leaves forced to LOP
+  const empStatus = await prisma.employee.findUnique({ where: { id: employeeId }, select: { status: true } })
+  const isOnNotice = empStatus?.status === 'ON_NOTICE'
+
   await validateLeaveApplication({ employeeId, leaveKind, startDate, endDate, isHalfDay, isBackdated })
 
   const totalDays = await countWorkingDays(startDate, endDate, isHalfDay)
@@ -230,8 +234,9 @@ export async function applyLeave(params: {
 
   const available = Number(entitlement.totalDays) + Number(entitlement.carryForward)
                   - Number(entitlement.usedDays) - Number(entitlement.pendingDays)
-  const isLop  = available < totalDays
-  const lopDays = isLop ? totalDays - Math.max(0, available) : 0
+  // ON_NOTICE: all leaves are LOP regardless of balance
+  const isLop  = isOnNotice ? true : available < totalDays
+  const lopDays = isOnNotice ? totalDays : (available < totalDays ? totalDays - Math.max(0, available) : 0)
 
   // Determine status
   // Sick: auto-approve (unless backdated — also auto-approve for sick)

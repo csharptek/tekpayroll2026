@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder } from '../services/cronJobs'
+import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from '../services/cronJobs'
 
 export const cronRouter = Router()
 
@@ -46,4 +46,11 @@ cronRouter.post('/rollover-reminder', verifyCronSecret, async (_req, res) => {
   console.log('[CRON ENDPOINT] rollover-reminder triggered')
   await cronLeaveRolloverReminder()
   res.json({ success: true, message: 'Rollover reminder processed' })
+})
+
+// POST /api/cron/lwd-reminder → runs daily
+cronRouter.post('/lwd-reminder', verifyCronSecret, async (_req, res) => {
+  console.log('[CRON ENDPOINT] lwd-reminder triggered')
+  await cronLwdReminder()
+  res.json({ success: true, message: 'LWD reminders processed' })
 })

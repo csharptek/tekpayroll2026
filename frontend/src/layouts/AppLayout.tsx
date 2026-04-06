@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import { signOut } from '../services/msal'
 import {
   LayoutDashboard, Users, CreditCard, FileText, Settings, Calculator,
-  LogOut, ChevronDown, Menu, X, Building2, Shield,
+  LogOut, ChevronDown, Menu, X, Building2, Shield, FileWarning,
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
@@ -65,6 +65,7 @@ const HR_NAV = [
     section: 'My Leave',
     items: [
       { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
+      { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
     ]
   },
 ]
@@ -132,6 +133,7 @@ const SUPER_ADMIN_NAV = [
     section: 'My Leave',
     items: [
       { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
+      { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
     ]
   },
 ]
@@ -156,6 +158,7 @@ const EMPLOYEE_NAV = [
     section: 'Leave',
     items: [
       { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
+      { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
     ]
   },
 ]
@@ -188,6 +191,7 @@ const MANAGEMENT_NAV = [
     section: 'My Leave',
     items: [
       { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
+      { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
     ]
   },
 ]
@@ -414,6 +418,7 @@ function usePageTitle() {
     '/my/profile': 'My Profile',
     '/my/loans': 'My Loans',
     '/my/leaves': 'My Leaves',
+    '/my/resignation': 'My Resignation',
     '/policies': 'Company Policies',
     '/management/dashboard': 'Management Dashboard',
     '/management/reports': 'Payroll Reports',

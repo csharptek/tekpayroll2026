@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, X, CheckCircle2, Clock, XCircle, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { leaveApi } from '../../services/api'
+import { useAuthStore } from '../../store/authStore'
 import { PageHeader, Button, Alert } from '../../components/ui'
 import clsx from 'clsx'
 
@@ -58,6 +59,7 @@ function BalanceCard({ kind, bal }: { kind: string; bal: any }) {
 
 export default function MyLeavesPage() {
   const qc = useQueryClient()
+  const { user } = useAuthStore()
   const [showApply, setShowApply]         = useState(false)
   const [filterYear, setFilterYear]       = useState(new Date().getFullYear())
   const [cancelId, setCancelId]           = useState<string | null>(null)
@@ -102,6 +104,13 @@ export default function MyLeavesPage() {
   })
 
   const balance = balData || {}
+
+  const { data: myExit } = useQuery({
+    queryKey: ['my-exit-status', user?.id],
+    queryFn:  () => import('../../services/api').then(m => m.exitApi.get(user!.id).then(r => r.data.data)),
+    enabled:  !!user?.id,
+  })
+  const isOnNotice = myExit?.status === 'ON_NOTICE'
   const today = new Date().toISOString().slice(0, 10)
 
   function isWeekend(dateStr: string): boolean {
@@ -172,6 +181,18 @@ export default function MyLeavesPage() {
 
       {error   && <Alert type="error"   message={error}   />}
       {success && <Alert type="success" message={success} />}
+
+      {isOnNotice && (
+        <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-100 rounded-xl">
+          <AlertTriangle size={15} className="text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-red-700">Notice Period — No Paid Leaves</p>
+            <p className="text-xs text-red-600 mt-0.5">
+              You are currently on notice period. Any leave you apply for will be automatically marked as <strong>Loss of Pay (LOP)</strong>. Paid leave conversion requires Super Admin approval.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Balance Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

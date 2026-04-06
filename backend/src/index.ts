@@ -25,6 +25,7 @@ import { leaveRouter } from './routes/leave'
 import { employeeProfileRouter } from './routes/employeeProfile'
 import { cronRouter } from './routes/cron';
 import { policiesRouter } from './routes/policies';
+import { exitRouter } from './routes/exit';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -68,6 +69,7 @@ app.use('/api/leave', leaveRouter)
 app.use('/api/employees', employeeProfileRouter)
 app.use('/api/cron', cronRouter);
 app.use('/api/policies', policiesRouter);
+app.use('/api/exit', exitRouter);
 
 // ─── ERROR HANDLER ───────────────────────────────────────────────────────────
 app.use(errorHandler);
