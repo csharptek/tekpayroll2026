@@ -25,7 +25,7 @@ interface Overrides   { basic: boolean; hra: boolean; transport: boolean; fbp: b
 function computeFromCtc(ctc: number, basicPct: number, hraPct: number, incentivePct: number, hasIncentive: boolean, mediclaim: number) {
   const annualBonus  = hasIncentive ? r2(ctc * incentivePct / 100) : 0
   const basicMonthly = r2(ctc * basicPct / 100 / 12)
-  const employerPf   = Math.min(r2(basicMonthly * 0.12), EMPLOYEE_PF_CAP)
+  const employerPf   = r2(basicMonthly * 0.12)
   const grandTotal   = r2((ctc - annualBonus - employerPf * 12 - mediclaim) / 12)
   const hraMonthly   = r2(ctc * hraPct / 100 / 12)
   const transport    = r2(basicMonthly * TRANSPORT_DEFAULT)
