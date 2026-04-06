@@ -5,6 +5,7 @@ import { RotateCcw, AlertTriangle, Info } from 'lucide-react'
 import { Rupee } from './ui'
 
 const r2 = (n: number) => Math.round(n * 100) / 100
+const ri = (n: number) => Math.round(n)  // round to whole rupee
 const TRANSPORT_DEFAULT = 0.04
 const FBP_DEFAULT       = 0.04
 
@@ -25,17 +26,16 @@ interface Overrides   { basic: boolean; hra: boolean; transport: boolean; fbp: b
 const EMPLOYER_PF_CTC_CAP = 1800  // Cap on Employer PF deducted FROM CTC (govt limit)
 
 function computeFromCtc(ctc: number, basicPct: number, hraPct: number, incentivePct: number, hasIncentive: boolean, mediclaim: number) {
-  const annualBonus       = hasIncentive ? r2(ctc * incentivePct / 100) : 0
-  const basicMonthly      = r2(ctc * basicPct / 100 / 12)
-  // Employer PF deducted from CTC is capped at ₹1,800/mo (₹21,600/yr)
-  const employerPfInCtc   = Math.min(r2(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
-  const grandTotal        = r2((ctc - annualBonus - employerPfInCtc * 12 - mediclaim) / 12)
-  const hraMonthly        = r2(ctc * hraPct / 100 / 12)
-  const transport         = r2(basicMonthly * TRANSPORT_DEFAULT)
-  const fbp               = r2(basicMonthly * FBP_DEFAULT)
-  const hyi               = r2(grandTotal - basicMonthly - hraMonthly - transport - fbp)
-  // Actual employer PF (uncapped) shown informally outside CTC
-  const employerPfActual  = r2(basicMonthly * 0.12)
+  const annualBonus       = ri(ctc * incentivePct / 100)
+  const basicMonthly      = ri(ctc * basicPct / 100 / 12)
+  const employerPfInCtc   = Math.min(ri(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
+  // Annual bonus paid in March — does NOT reduce monthly gross
+  const grandTotal        = ri((ctc - employerPfInCtc * 12 - mediclaim) / 12)
+  const hraMonthly        = ri(ctc * hraPct / 100 / 12)
+  const transport         = ri(basicMonthly * TRANSPORT_DEFAULT)
+  const fbp               = ri(basicMonthly * FBP_DEFAULT)
+  const hyi               = ri(grandTotal - basicMonthly - hraMonthly - transport - fbp)
+  const employerPfActual  = ri(basicMonthly * 0.12)
   return { basic: basicMonthly, hra: hraMonthly, transport, fbp, hyi, grandTotal, employerPfInCtc, employerPfActual, annualBonus }
 }
 
@@ -57,9 +57,9 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
     if ((initialValues?.annualCtc ?? 0) > 0) {
       const iv = initialValues!
       const c  = computeFromCtc(iv.annualCtc!, iv.basicPercent ?? 45, iv.hraPercent ?? 35, iv.incentivePercent ?? 12, iv.hasIncentive ?? false, iv.mediclaim ?? 0)
-      const t  = iv.transportMonthly != null ? iv.transportMonthly : c.transport
-      const f  = iv.fbpMonthly       != null ? iv.fbpMonthly       : c.fbp
-      return { basic: c.basic, hra: c.hra, transport: t, fbp: f, hyi: r2(c.grandTotal - c.basic - c.hra - t - f) }
+      const t  = iv.transportMonthly != null ? Math.round(iv.transportMonthly) : c.transport
+      const f  = iv.fbpMonthly       != null ? Math.round(iv.fbpMonthly)       : c.fbp
+      return { basic: c.basic, hra: c.hra, transport: t, fbp: f, hyi: ri(c.grandTotal - c.basic - c.hra - t - f) }
     }
     return { basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 }
   })
@@ -87,18 +87,18 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? 0.0325)
   const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? 21000)
 
-  const employerPfActual = r2(components.basic * 0.12)           // actual uncapped — shown informally
-  const employerPfInCtc  = Math.min(employerPfActual, 1800)      // capped — what was deducted from CTC
+  const employerPfActual = ri(components.basic * 0.12)           // actual uncapped — shown informally
+  const employerPfInCtc  = Math.min(employerPfActual, 1800)  // stays integer since employerPfActual is integer      // capped — what was deducted from CTC
   const employerPf       = employerPfActual                       // display alias
-  const employeePf       = Math.min(r2(components.basic * 0.12), 1800) // employee PF capped ₹1,800
+  const employeePf       = Math.min(ri(components.basic * 0.12), 1800) // employee PF capped ₹1,800
   const annualBonus   = hasIncentive ? r2(ctc * incentivePct / 100) : 0
   const allocated     = r2(components.basic + components.hra + components.transport + components.fbp + components.hyi)
   const remainder     = r2(grandTotal - allocated)
   const isOver        = remainder < -1
-  const esiBase       = r2(grandTotal - components.hyi)  // Gross - HYI per govt rules
+  const esiBase       = ri(grandTotal - components.hyi)  // Gross - HYI per govt rules
   const esiApplies    = initialized && esiBase > 0 && esiBase <= esiThreshold
-  const employeeEsi   = esiApplies ? r2(esiBase * esiEmployeeRate) : 0
-  const employerEsi   = esiApplies ? r2(esiBase * esiEmployerRate) : 0
+  const employeeEsi   = esiApplies ? ri(esiBase * esiEmployeeRate) : 0
+  const employerEsi   = esiApplies ? ri(esiBase * esiEmployerRate) : 0
   const totalCtcCheck = r2(grandTotal * 12 + employerPfInCtc * 12 + annualBonus + mediclaim)
   const netEstimate   = r2(grandTotal - employeePf - employeeEsi)
 
@@ -135,27 +135,27 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
     const newOv = { ...overrides, [key]: true }
 
     if (key === 'basic') {
-      if (!overrides.hra)       next.hra       = r2(ctc * hraPct / 100 / 12)
-      if (!overrides.transport) next.transport  = r2(val * TRANSPORT_DEFAULT)
-      if (!overrides.fbp)       next.fbp        = r2(val * FBP_DEFAULT)
-      next.hyi = r2(grandTotal - next.basic - next.hra - next.transport - next.fbp)
+      if (!overrides.hra)       next.hra       = ri(ctc * hraPct / 100 / 12)
+      if (!overrides.transport) next.transport  = ri(val * TRANSPORT_DEFAULT)
+      if (!overrides.fbp)       next.fbp        = ri(val * FBP_DEFAULT)
+      next.hyi = ri(grandTotal - next.basic - next.hra - next.transport - next.fbp)
     } else if (key === 'hra') {
-      next.hyi = r2(grandTotal - next.basic - next.hra - next.transport - next.fbp)
+      next.hyi = ri(grandTotal - next.basic - next.hra - next.transport - next.fbp)
     } else if (key === 'transport') {
       const diff = val - prev.transport
-      next.fbp = r2(prev.fbp - diff)
+      next.fbp = ri(prev.fbp - diff)
       next.hyi = components.hyi
     } else if (key === 'fbp') {
       const diff = val - prev.fbp
-      next.transport = r2(prev.transport - diff)
+      next.transport = ri(prev.transport - diff)
       next.hyi = components.hyi
     } else if (key === 'hyi') {
       const diff = val - prev.hyi
       const canT = !overrides.transport
       const canF = !overrides.fbp
-      if (canT && canF) { const half = r2(diff / 2); next.transport = r2(prev.transport - half); next.fbp = r2(prev.fbp - (diff - half)) }
-      else if (canT)    { next.transport = r2(prev.transport - diff) }
-      else if (canF)    { next.fbp = r2(prev.fbp - diff) }
+      if (canT && canF) { const half = r2(diff / 2); next.transport = ri(prev.transport - half); next.fbp = ri(prev.fbp - (diff - half)) }
+      else if (canT)    { next.transport = ri(prev.transport - diff) }
+      else if (canF)    { next.fbp = ri(prev.fbp - diff) }
     }
 
     setComponents(next)
@@ -167,7 +167,7 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
     const c = computeFromCtc(ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim)
     const newOv   = { ...overrides, [key]: false }
     const next    = { ...components, [key]: c[key as keyof typeof c] as number }
-    next.hyi      = r2(grandTotal - next.basic - next.hra - next.transport - next.fbp)
+    next.hyi      = ri(grandTotal - next.basic - next.hra - next.transport - next.fbp)
     setComponents(next)
     setOverrides(newOv)
     emitChange(next, newOv, grandTotal)
@@ -305,7 +305,7 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
                       </div>
                     </td>
                     <td className="py-1.5 text-right font-mono text-slate-500 text-sm">
-                      <Rupee amount={r2(components[key] * 12)}/>
+                      <Rupee amount={ri(components[key] * 12)}/>
                     </td>
                     <td className="py-1.5 text-right">
                       {overrides[key] && (

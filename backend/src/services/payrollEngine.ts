@@ -100,44 +100,46 @@ export function computeSalaryStructure(
 ): SalaryStructure {
   const { annualCtc, basicPercent, hraPercent, mediclaim, hasIncentive, incentivePercent } = input
 
-  const annualBonus      = hasIncentive ? r2(annualCtc * incentivePercent / 100) : 0
-  const basicAnnual      = r2(annualCtc * basicPercent / 100)
-  const basicMonthly     = r2(basicAnnual / 12)
+  const annualBonus      = hasIncentive ? ri(annualCtc * incentivePercent / 100) : 0
+  const basicAnnual      = ri(annualCtc * basicPercent / 100)
+  const basicMonthly     = ri(basicAnnual / 12)
 
   // Employer PF inside CTC is capped at ₹1,800/mo (₹21,600/yr) for CTC deduction purposes
-  const EMPLOYER_PF_CTC_CAP  = 1800
-  const employerPfInCtcMonthly = Math.min(r2(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
-  const employerPfInCtcAnnual  = r2(employerPfInCtcMonthly * 12)
+  const EMPLOYER_PF_CTC_CAP    = 1800
+  const employerPfInCtcMonthly = Math.min(ri(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
+  const employerPfInCtcAnnual  = employerPfInCtcMonthly * 12
 
   // Grand Total = CTC - capped Employer PF - Bonus - Mediclaim
-  const grandTotalMonthly = r2((annualCtc - annualBonus - employerPfInCtcAnnual - mediclaim) / 12)
+  // Grand Total = CTC - Employer PF (capped) - Mediclaim
+  // Annual bonus is paid separately in March and does NOT reduce monthly gross
+  const grandTotalMonthly = ri((annualCtc - employerPfInCtcAnnual - mediclaim) / 12)
 
   // Actual Employer PF (uncapped) — shown informally outside CTC
-  const employerPfMonthly = r2(basicMonthly * 0.12)
-  const employerPfAnnual  = r2(employerPfMonthly * 12)
+  const employerPfMonthly = ri(basicMonthly * 0.12)
+  const employerPfAnnual  = employerPfMonthly * 12
 
-  const hraAnnual        = r2(annualCtc * hraPercent / 100)
-  const hraMonthly       = r2(hraAnnual / 12)
+  const hraAnnual        = ri(annualCtc * hraPercent / 100)
+  const hraMonthly       = ri(hraAnnual / 12)
 
   const transportMonthly = input.transportMonthly != null
-    ? r2(input.transportMonthly)
-    : r2(basicMonthly * TRANSPORT_DEFAULT_PCT)
+    ? Math.round(input.transportMonthly)
+    : ri(basicMonthly * TRANSPORT_DEFAULT_PCT)
 
   const fbpMonthly = input.fbpMonthly != null
-    ? r2(input.fbpMonthly)
-    : r2(basicMonthly * FBP_DEFAULT_PCT)
+    ? Math.round(input.fbpMonthly)
+    : ri(basicMonthly * FBP_DEFAULT_PCT)
 
-  const hyiMonthly = r2(grandTotalMonthly - basicMonthly - hraMonthly - transportMonthly - fbpMonthly)
+  const hyiMonthly = ri(grandTotalMonthly - basicMonthly - hraMonthly - transportMonthly - fbpMonthly)
 
   // Employee PF deduction — capped at ₹1,800/mo per EPFO rules
-  const employeePfMonthly = Math.min(r2(basicMonthly * 0.12), 1800)
+  const employeePfMonthly = Math.min(ri(basicMonthly * 0.12), 1800)
 
   // ESI — base = Gross - HYI (HYI excluded per govt rules)
-  const esiBase   = r2(grandTotalMonthly - hyiMonthly)
+  const esiBase   = ri(grandTotalMonthly - hyiMonthly)
   const esiApplies = esiBase <= esiConfig.threshold
-  const employeeEsiMonthly = esiApplies ? r2(esiBase * esiConfig.employeeRate) : 0
-  const employerEsiMonthly = esiApplies ? r2(esiBase * esiConfig.employerRate) : 0
-  const employerEsiAnnual  = r2(employerEsiMonthly * 12)
+  const employeeEsiMonthly = esiApplies ? ri(esiBase * esiConfig.employeeRate) : 0
+  const employerEsiMonthly = esiApplies ? ri(esiBase * esiConfig.employerRate) : 0
+  const employerEsiAnnual  = employerEsiMonthly * 12
 
   return {
     annualCtc,
@@ -343,6 +345,10 @@ function daysBetween(start: Date, end: Date): number {
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100
+}
+
+function ri(n: number): number {
+  return Math.round(n)  // round to whole rupee
 }
 
 export { r2 }
