@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import tekOneLogo from '../assets/tekone-logo.png'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { signOut } from '../services/msal'
@@ -228,7 +229,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-brand-800">
           <div className="flex-1 min-w-0">
-            <img src="/src/assets/tekone-logo.png" alt="TEKONE" className="h-7 w-auto" />
+            <img src={tekOneLogo} alt="TEKONE" className="h-7 w-auto" />
           </div>
           <button onClick={onClose} className="lg:hidden text-brand-400 hover:text-white">
             <X size={16} />

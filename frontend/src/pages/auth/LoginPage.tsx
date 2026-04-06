@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore, UserRole } from '../../store/authStore'
 import { signInWithMicrosoft, getTokenAfterRedirect, initializeMsal } from '../../services/msal'
 import api from '../../services/api'
+import tekOneLogo from '../../assets/tekone-logo.png'
 
 const DEV_ROLES: { role: UserRole; label: string; description: string; color: string }[] = [
   { role: 'SUPER_ADMIN', label: 'Super Admin',  description: 'Full system access + unlock payroll', color: 'bg-purple-600' },
@@ -124,7 +125,7 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md animate-slide-up">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4">
-            <img src="/src/assets/tekone-logo.png" alt="TEKONE" className="h-10 w-auto" />
+            <img src={tekOneLogo} alt="TEKONE" className="h-10 w-auto" />
           </div>
           <h1 className="text-2xl font-display font-bold text-white">TEKONE</h1>
           <p className="text-brand-200 text-sm mt-1">Internal Payroll Management System</p>
