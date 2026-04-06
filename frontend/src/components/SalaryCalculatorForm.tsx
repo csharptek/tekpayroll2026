@@ -99,7 +99,7 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   const esiApplies    = initialized && esiBase > 0 && esiBase <= esiThreshold
   const employeeEsi   = esiApplies ? ri(esiBase * esiEmployeeRate) : 0
   const employerEsi   = esiApplies ? ri(esiBase * esiEmployerRate) : 0
-  const totalCtcCheck = r2(grandTotal * 12 + employerPfInCtc * 12 + annualBonus + mediclaim)
+  const totalCtcCheck = ctc  // CTC is the input — no need to recompute
   const netEstimate   = r2(grandTotal - employeePf - employeeEsi)
 
   function emitChange(comps: Components, ov: Overrides, gt: number) {
