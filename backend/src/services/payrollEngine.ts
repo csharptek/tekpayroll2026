@@ -110,9 +110,8 @@ export function computeSalaryStructure(
   const employerPfInCtcAnnual  = employerPfInCtcMonthly * 12
 
   // Grand Total = CTC - capped Employer PF - Bonus - Mediclaim
-  // Grand Total = CTC - Employer PF (capped) - Mediclaim
-  // Annual bonus is paid separately in March and does NOT reduce monthly gross
-  const grandTotalMonthly = ri((annualCtc - employerPfInCtcAnnual - mediclaim) / 12)
+  // Grand Total = CTC - Annual Bonus - Employer PF (capped) - Mediclaim
+  const grandTotalMonthly = ri((annualCtc - annualBonus - employerPfInCtcAnnual - mediclaim) / 12)
 
   // Actual Employer PF (uncapped) — shown informally outside CTC
   const employerPfMonthly = ri(basicMonthly * 0.12)

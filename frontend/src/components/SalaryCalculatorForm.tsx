@@ -29,8 +29,8 @@ function computeFromCtc(ctc: number, basicPct: number, hraPct: number, incentive
   const annualBonus       = ri(ctc * incentivePct / 100)
   const basicMonthly      = ri(ctc * basicPct / 100 / 12)
   const employerPfInCtc   = Math.min(ri(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
-  // Annual bonus paid in March — does NOT reduce monthly gross
-  const grandTotal        = ri((ctc - employerPfInCtc * 12 - mediclaim) / 12)
+  // Annual bonus IS deducted from CTC when computing monthly gross
+  const grandTotal        = ri((ctc - (hasIncentive ? annualBonus : 0) - employerPfInCtc * 12 - mediclaim) / 12)
   const hraMonthly        = ri(ctc * hraPct / 100 / 12)
   const transport         = ri(basicMonthly * TRANSPORT_DEFAULT)
   const fbp               = ri(basicMonthly * FBP_DEFAULT)
