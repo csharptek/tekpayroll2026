@@ -104,12 +104,17 @@ export function computeSalaryStructure(
   const basicAnnual      = r2(annualCtc * basicPercent / 100)
   const basicMonthly     = r2(basicAnnual / 12)
 
-  // Employer PF — 12% of Basic, no cap (outside CTC, informational)
+  // Employer PF inside CTC is capped at ₹1,800/mo (₹21,600/yr) for CTC deduction purposes
+  const EMPLOYER_PF_CTC_CAP  = 1800
+  const employerPfInCtcMonthly = Math.min(r2(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
+  const employerPfInCtcAnnual  = r2(employerPfInCtcMonthly * 12)
+
+  // Grand Total = CTC - capped Employer PF - Bonus - Mediclaim
+  const grandTotalMonthly = r2((annualCtc - annualBonus - employerPfInCtcAnnual - mediclaim) / 12)
+
+  // Actual Employer PF (uncapped) — shown informally outside CTC
   const employerPfMonthly = r2(basicMonthly * 0.12)
   const employerPfAnnual  = r2(employerPfMonthly * 12)
-
-  // Grand Total = CTC - Employer PF - Bonus - Mediclaim
-  const grandTotalMonthly = r2((annualCtc - annualBonus - employerPfAnnual - mediclaim) / 12)
 
   const hraAnnual        = r2(annualCtc * hraPercent / 100)
   const hraMonthly       = r2(hraAnnual / 12)
@@ -124,8 +129,8 @@ export function computeSalaryStructure(
 
   const hyiMonthly = r2(grandTotalMonthly - basicMonthly - hraMonthly - transportMonthly - fbpMonthly)
 
-  // Employee PF — 12% of Basic, no cap
-  const employeePfMonthly = r2(basicMonthly * 0.12)
+  // Employee PF deduction — capped at ₹1,800/mo per EPFO rules
+  const employeePfMonthly = Math.min(r2(basicMonthly * 0.12), 1800)
 
   // ESI — base = Gross - HYI (HYI excluded per govt rules)
   const esiBase   = r2(grandTotalMonthly - hyiMonthly)

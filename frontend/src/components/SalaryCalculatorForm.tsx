@@ -22,16 +22,21 @@ export interface SalaryOutput {
 interface Components { basic: number; hra: number; transport: number; fbp: number; hyi: number }
 interface Overrides   { basic: boolean; hra: boolean; transport: boolean; fbp: boolean; hyi: boolean }
 
+const EMPLOYER_PF_CTC_CAP = 1800  // Cap on Employer PF deducted FROM CTC (govt limit)
+
 function computeFromCtc(ctc: number, basicPct: number, hraPct: number, incentivePct: number, hasIncentive: boolean, mediclaim: number) {
-  const annualBonus  = hasIncentive ? r2(ctc * incentivePct / 100) : 0
-  const basicMonthly = r2(ctc * basicPct / 100 / 12)
-  const employerPf   = r2(basicMonthly * 0.12)
-  const grandTotal   = r2((ctc - annualBonus - employerPf * 12 - mediclaim) / 12)
-  const hraMonthly   = r2(ctc * hraPct / 100 / 12)
-  const transport    = r2(basicMonthly * TRANSPORT_DEFAULT)
-  const fbp          = r2(basicMonthly * FBP_DEFAULT)
-  const hyi          = r2(grandTotal - basicMonthly - hraMonthly - transport - fbp)
-  return { basic: basicMonthly, hra: hraMonthly, transport, fbp, hyi, grandTotal, employerPf, annualBonus }
+  const annualBonus       = hasIncentive ? r2(ctc * incentivePct / 100) : 0
+  const basicMonthly      = r2(ctc * basicPct / 100 / 12)
+  // Employer PF deducted from CTC is capped at ₹1,800/mo (₹21,600/yr)
+  const employerPfInCtc   = Math.min(r2(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
+  const grandTotal        = r2((ctc - annualBonus - employerPfInCtc * 12 - mediclaim) / 12)
+  const hraMonthly        = r2(ctc * hraPct / 100 / 12)
+  const transport         = r2(basicMonthly * TRANSPORT_DEFAULT)
+  const fbp               = r2(basicMonthly * FBP_DEFAULT)
+  const hyi               = r2(grandTotal - basicMonthly - hraMonthly - transport - fbp)
+  // Actual employer PF (uncapped) shown informally outside CTC
+  const employerPfActual  = r2(basicMonthly * 0.12)
+  return { basic: basicMonthly, hra: hraMonthly, transport, fbp, hyi, grandTotal, employerPfInCtc, employerPfActual, annualBonus }
 }
 
 interface Props {
@@ -82,8 +87,10 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? 0.0325)
   const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? 21000)
 
-  const employerPf    = r2(components.basic * 0.12)  // uncapped 12%
-  const employeePf    = r2(components.basic * 0.12)  // uncapped 12%
+  const employerPfActual = r2(components.basic * 0.12)           // actual uncapped — shown informally
+  const employerPfInCtc  = Math.min(employerPfActual, 1800)      // capped — what was deducted from CTC
+  const employerPf       = employerPfActual                       // display alias
+  const employeePf       = Math.min(r2(components.basic * 0.12), 1800) // employee PF capped ₹1,800
   const annualBonus   = hasIncentive ? r2(ctc * incentivePct / 100) : 0
   const allocated     = r2(components.basic + components.hra + components.transport + components.fbp + components.hyi)
   const remainder     = r2(grandTotal - allocated)
@@ -92,8 +99,8 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   const esiApplies    = initialized && esiBase > 0 && esiBase <= esiThreshold
   const employeeEsi   = esiApplies ? r2(esiBase * esiEmployeeRate) : 0
   const employerEsi   = esiApplies ? r2(esiBase * esiEmployerRate) : 0
-  const totalCtcCheck = r2(grandTotal * 12 + employerPf * 12 + annualBonus + mediclaim)
-  const netEstimate   = r2(grandTotal - employerPf - employeeEsi)
+  const totalCtcCheck = r2(grandTotal * 12 + employerPfInCtc * 12 + annualBonus + mediclaim)
+  const netEstimate   = r2(grandTotal - employeePf - employeeEsi)
 
   function emitChange(comps: Components, ov: Overrides, gt: number) {
     const basicPctFinal = comps.basic > 0 ? r2((comps.basic * 12 / ctc) * 100) : basicPct
