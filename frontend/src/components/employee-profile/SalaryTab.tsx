@@ -3,10 +3,10 @@ import { useMutation } from '@tanstack/react-query'
 import { Save, AlertTriangle } from 'lucide-react'
 import { employeeApi } from '../../services/api'
 import { Button, Alert, Rupee } from '../ui'
-import SalaryBreakdownForm from '../SalaryBreakdownForm'
+import SalaryCalculatorForm, { SalaryOutput } from '../SalaryCalculatorForm'
 
 export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: boolean; onSaved: () => void }) {
-  const [salaryInput, setSalaryInput] = useState({
+  const [salaryInput, setSalaryInput] = useState<SalaryOutput>({
     annualCtc:        Number(emp.annualCtc) || 0,
     basicPercent:     Number(emp.basicPercent) || 45,
     hraPercent:       Number(emp.hraPercent) || 35,
@@ -18,7 +18,7 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
   })
 
   const [revisionReason, setRevisionReason] = useState('')
-  const [error, setError]     = useState('')
+  const [error,   setError]   = useState('')
   const [success, setSuccess] = useState('')
 
   const ctcChanged = salaryInput.annualCtc !== Number(emp.annualCtc)
@@ -26,10 +26,12 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
   const mut = useMutation({
     mutationFn: () => employeeApi.update(emp.id, {
       annualCtc:        salaryInput.annualCtc,
+      basicPercent:     salaryInput.basicPercent,
+      hraPercent:       salaryInput.hraPercent,
       hasIncentive:     salaryInput.hasIncentive,
       incentivePercent: salaryInput.incentivePercent,
-      transportMonthly: salaryInput.transportMonthly,
-      fbpMonthly:       salaryInput.fbpMonthly,
+      transportMonthly: salaryInput.transportMonthly ?? undefined,
+      fbpMonthly:       salaryInput.fbpMonthly ?? undefined,
       mediclaim:        salaryInput.mediclaim,
       revisionReason,
     }),
@@ -49,9 +51,10 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
       )}
 
       {isHR && (
-        <SalaryBreakdownForm
+        <SalaryCalculatorForm
           initialValues={salaryInput}
           onChange={setSalaryInput}
+          showInstructions={true}
         />
       )}
 
@@ -83,7 +86,6 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
         </div>
       )}
 
-      {/* Salary revision history */}
       {emp.salaryRevisions?.length > 0 && (
         <div>
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Revision History</p>

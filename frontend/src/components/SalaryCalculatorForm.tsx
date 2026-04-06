@@ -47,10 +47,30 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   const [incentivePct, setIncentivePct] = useState(initialValues?.incentivePercent  ?? 12)
   const [mediclaim,    setMediclaim]    = useState(initialValues?.mediclaim          ?? 0)
 
-  const [components,  setComponents]  = useState<Components>({ basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 })
-  const [overrides,   setOverrides]   = useState<Overrides>({ basic: false, hra: false, transport: false, fbp: false, hyi: false })
-  const [grandTotal,  setGrandTotal]  = useState(0)
-  const [initialized, setInitialized] = useState(false)
+  const [components,  setComponents]  = useState<Components>(() => {
+    if ((initialValues?.annualCtc ?? 0) > 0) {
+      const iv = initialValues!
+      const c  = computeFromCtc(iv.annualCtc!, iv.basicPercent ?? 45, iv.hraPercent ?? 35, iv.incentivePercent ?? 12, iv.hasIncentive ?? false, iv.mediclaim ?? 0)
+      const t  = iv.transportMonthly != null ? iv.transportMonthly : c.transport
+      const f  = iv.fbpMonthly       != null ? iv.fbpMonthly       : c.fbp
+      return { basic: c.basic, hra: c.hra, transport: t, fbp: f, hyi: r2(c.grandTotal - c.basic - c.hra - t - f) }
+    }
+    return { basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 }
+  })
+  const [overrides,   setOverrides]   = useState<Overrides>(() => ({
+    basic: false, hra: false,
+    transport: (initialValues?.transportMonthly ?? null) != null,
+    fbp:       (initialValues?.fbpMonthly       ?? null) != null,
+    hyi: false,
+  }))
+  const [grandTotal,  setGrandTotal]  = useState(() => {
+    if ((initialValues?.annualCtc ?? 0) > 0) {
+      const iv = initialValues!
+      return computeFromCtc(iv.annualCtc!, iv.basicPercent ?? 45, iv.hraPercent ?? 35, iv.incentivePercent ?? 12, iv.hasIncentive ?? false, iv.mediclaim ?? 0).grandTotal
+    }
+    return 0
+  })
+  const [initialized, setInitialized] = useState((initialValues?.annualCtc ?? 0) > 0)
 
   const employerPf    = Math.min(r2(components.basic * 0.12), EMPLOYEE_PF_CAP)
   const employeePf    = employerPf
