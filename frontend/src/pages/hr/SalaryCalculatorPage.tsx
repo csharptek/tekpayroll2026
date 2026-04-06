@@ -1,27 +1,18 @@
 import { useState } from 'react'
-import { Calculator, RotateCcw, AlertTriangle } from 'lucide-react'
+import { Calculator, RotateCcw, AlertTriangle, Info } from 'lucide-react'
 import { Rupee } from '../../components/ui'
 
 const r2 = (n: number) => Math.round(n * 100) / 100
+const EMPLOYEE_PF_CAP   = 1800
+const TRANSPORT_DEFAULT = 0.04
+const FBP_DEFAULT       = 0.04
 
-const EMPLOYEE_PF_CAP    = 1800
-const TRANSPORT_DEFAULT  = 0.04
-const FBP_DEFAULT        = 0.04
+interface Components { basic: number; hra: number; transport: number; fbp: number; hyi: number }
+interface Overrides   { basic: boolean; hra: boolean; transport: boolean; fbp: boolean; hyi: boolean }
 
-interface Components {
-  basic: number; hra: number; transport: number; fbp: number; hyi: number
-}
-interface Overrides {
-  basic: boolean; hra: boolean; transport: boolean; fbp: boolean; hyi: boolean
-}
-
-function computeFromCtc(
-  ctc: number, basicPct: number, hraPct: number,
-  incentivePct: number, hasIncentive: boolean, mediclaim: number
-) {
+function computeFromCtc(ctc: number, basicPct: number, hraPct: number, incentivePct: number, hasIncentive: boolean, mediclaim: number) {
   const annualBonus  = hasIncentive ? r2(ctc * incentivePct / 100) : 0
-  const basicAnnual  = r2(ctc * basicPct / 100)
-  const basicMonthly = r2(basicAnnual / 12)
+  const basicMonthly = r2(ctc * basicPct / 100 / 12)
   const employerPf   = Math.min(r2(basicMonthly * 0.12), EMPLOYEE_PF_CAP)
   const grandTotal   = r2((ctc - annualBonus - employerPf * 12 - mediclaim) / 12)
   const hraMonthly   = r2(ctc * hraPct / 100 / 12)
@@ -39,20 +30,19 @@ export default function SalaryCalculatorPage() {
   const [incentivePct, setIncentivePct] = useState(12)
   const [mediclaim,    setMediclaim]    = useState(0)
 
-  const [components,   setComponents]   = useState<Components>({ basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 })
-  const [overrides,    setOverrides]    = useState<Overrides>({ basic: false, hra: false, transport: false, fbp: false, hyi: false })
-  const [grandTotal,   setGrandTotal]   = useState(0)   // stored from last compute — source of truth
-  const [initialized,  setInitialized]  = useState(false)
+  const [components,  setComponents]  = useState<Components>({ basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 })
+  const [overrides,   setOverrides]   = useState<Overrides>({ basic: false, hra: false, transport: false, fbp: false, hyi: false })
+  const [grandTotal,  setGrandTotal]  = useState(0)
+  const [initialized, setInitialized] = useState(false)
 
-  // Derived display values (always from stored grandTotal)
-  const employerPf  = Math.min(r2(components.basic * 0.12), EMPLOYEE_PF_CAP)
-  const employeePf  = employerPf
-  const annualBonus = hasIncentive ? r2(ctc * incentivePct / 100) : 0
-  const allocated   = r2(components.basic + components.hra + components.transport + components.fbp + components.hyi)
-  const remainder   = r2(grandTotal - allocated)
-  const isOver      = remainder < -1
+  const employerPf    = Math.min(r2(components.basic * 0.12), EMPLOYEE_PF_CAP)
+  const employeePf    = employerPf
+  const annualBonus   = hasIncentive ? r2(ctc * incentivePct / 100) : 0
+  const allocated     = r2(components.basic + components.hra + components.transport + components.fbp + components.hyi)
+  const remainder     = r2(grandTotal - allocated)
+  const isOver        = remainder < -1
   const totalCtcCheck = r2(grandTotal * 12 + employerPf * 12 + annualBonus + mediclaim)
-  const netEstimate = r2(grandTotal - employeePf)
+  const netEstimate   = r2(grandTotal - employeePf)
 
   function applyCtc() {
     if (ctc <= 0) return
@@ -64,55 +54,71 @@ export default function SalaryCalculatorPage() {
   }
 
   function updateComponent(key: keyof Components, val: number) {
-    const newOverrides   = { ...overrides, [key]: true }
-    const newComponents  = { ...components, [key]: val }
+    const prev = { ...components }
+    const next = { ...components, [key]: val }
+    const newOverrides = { ...overrides, [key]: true }
 
-    const used = newComponents.basic + newComponents.hra + newComponents.transport + newComponents.fbp + newComponents.hyi
-    const rem  = r2(grandTotal - used)
+    if (key === 'basic') {
+      // Recalc HRA via its % if not overridden
+      if (!overrides.hra) {
+        next.hra = r2(ctc * hraPct / 100 / 12)
+      }
+      // Recalc Transport/FBP via 4% of new basic if not overridden
+      if (!overrides.transport) next.transport = r2(val * TRANSPORT_DEFAULT)
+      if (!overrides.fbp)       next.fbp       = r2(val * FBP_DEFAULT)
+      // HYI absorbs remainder
+      next.hyi = r2(grandTotal - next.basic - next.hra - next.transport - next.fbp)
 
-    const canT = !newOverrides.transport && key !== 'transport'
-    const canF = !newOverrides.fbp       && key !== 'fbp'
+    } else if (key === 'hra') {
+      // Transport/FBP stay, HYI absorbs
+      next.hyi = r2(grandTotal - next.basic - next.hra - next.transport - next.fbp)
 
-    if (Math.abs(rem) >= 1) {
+    } else if (key === 'transport') {
+      // Difference goes to FBP; HYI unchanged
+      const diff = val - prev.transport
+      next.fbp = r2(prev.fbp - diff)
+      next.hyi = components.hyi // HYI untouched
+
+    } else if (key === 'fbp') {
+      // Difference goes to Transport; HYI unchanged
+      const diff = val - prev.fbp
+      next.transport = r2(prev.transport - diff)
+      next.hyi = components.hyi // HYI untouched
+
+    } else if (key === 'hyi') {
+      // Difference splits between Transport & FBP
+      const diff = val - prev.hyi
+      const canT = !overrides.transport
+      const canF = !overrides.fbp
       if (canT && canF) {
-        const half = r2(rem / 2)
-        newComponents.transport = r2(newComponents.transport + half)
-        newComponents.fbp       = r2(newComponents.fbp + (rem - half))
+        const half = r2(diff / 2)
+        next.transport = r2(prev.transport - half)
+        next.fbp       = r2(prev.fbp - (diff - half))
       } else if (canT) {
-        newComponents.transport = r2(newComponents.transport + rem)
+        next.transport = r2(prev.transport - diff)
       } else if (canF) {
-        newComponents.fbp = r2(newComponents.fbp + rem)
+        next.fbp = r2(prev.fbp - diff)
       }
     }
 
-    setComponents(newComponents)
+    setComponents(next)
     setOverrides(newOverrides)
   }
 
   function resetComponent(key: keyof Components) {
     const c = computeFromCtc(ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim)
     const newOverrides  = { ...overrides, [key]: false }
-    const newComponents = { ...components, [key]: c[key as keyof typeof c] as number }
-    // re-balance after reset
-    const used = newComponents.basic + newComponents.hra + newComponents.transport + newComponents.fbp + newComponents.hyi
-    const rem  = r2(grandTotal - used)
-    const canT = !newOverrides.transport && key !== 'transport'
-    const canF = !newOverrides.fbp       && key !== 'fbp'
-    if (Math.abs(rem) >= 1) {
-      if (canT && canF) { const h = r2(rem/2); newComponents.transport = r2(newComponents.transport + h); newComponents.fbp = r2(newComponents.fbp + (rem - h)) }
-      else if (canT) { newComponents.transport = r2(newComponents.transport + rem) }
-      else if (canF) { newComponents.fbp = r2(newComponents.fbp + rem) }
-    }
-    setComponents(newComponents)
+    const next = { ...components, [key]: c[key as keyof typeof c] as number }
+    // re-balance HYI after reset
+    next.hyi = r2(grandTotal - next.basic - next.hra - next.transport - next.fbp)
+    setComponents(next)
     setOverrides(newOverrides)
   }
 
   function reset() {
     setComponents({ basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 })
     setOverrides({ basic: false, hra: false, transport: false, fbp: false, hyi: false })
-    setGrandTotal(0)
-    setCtc(0)
-    setInitialized(false)
+    setGrandTotal(0); setCtc(0); setInitialized(false)
   }
 
   const rows: { label: string; key: keyof Components }[] = [
@@ -125,6 +131,8 @@ export default function SalaryCalculatorPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+
+      {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center">
           <Calculator size={20} className="text-brand-600"/>
@@ -133,6 +141,22 @@ export default function SalaryCalculatorPage() {
           <h1 className="text-xl font-bold text-slate-800">Salary Calculator</h1>
           <p className="text-sm text-slate-500">Enter CTC to generate breakup, then manually override any component</p>
         </div>
+      </div>
+
+      {/* Rules */}
+      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Info size={14} className="text-blue-500 flex-shrink-0"/>
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">How component editing works</p>
+        </div>
+        <ul className="space-y-1 text-xs text-blue-700 leading-relaxed">
+          <li>• <strong>Change Basic</strong> — HRA recalculates via its %, Transport &amp; FBP recalculate via 4% of new Basic, HYI absorbs the remainder.</li>
+          <li>• <strong>Change HRA</strong> — Transport &amp; FBP stay unchanged, HYI absorbs the difference.</li>
+          <li>• <strong>Change Transport</strong> — the difference is added/removed from FBP. HYI is not affected.</li>
+          <li>• <strong>Change FBP</strong> — the difference is added/removed from Transport. HYI is not affected.</li>
+          <li>• <strong>Change HYI</strong> — the difference is split equally between Transport &amp; FBP.</li>
+          <li>• Use the <strong>↺ reset icon</strong> on any row to revert that component back to its auto-calculated value.</li>
+        </ul>
       </div>
 
       {/* Config */}
@@ -164,10 +188,8 @@ export default function SalaryCalculatorPage() {
           <div className="flex items-end gap-3">
             <div>
               <label className="label text-xs">Annual Incentive</label>
-              <div
-                onClick={() => setHasIncentive(p => !p)}
-                className={`w-10 h-5 rounded-full transition-colors cursor-pointer relative ${hasIncentive ? 'bg-brand-600' : 'bg-slate-200'}`}
-              >
+              <div onClick={() => setHasIncentive(p => !p)}
+                className={`w-10 h-5 rounded-full transition-colors cursor-pointer relative ${hasIncentive ? 'bg-brand-600' : 'bg-slate-200'}`}>
                 <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${hasIncentive ? 'translate-x-5' : 'translate-x-0.5'}`}/>
               </div>
             </div>
@@ -223,8 +245,11 @@ export default function SalaryCalculatorPage() {
                     <td className="py-2 text-slate-700 font-medium">
                       {label}
                       {overrides[key] && <span className="ml-2 text-[10px] text-brand-500 font-semibold uppercase tracking-wide">custom</span>}
-                      {(key === 'transport' || key === 'fbp') && !overrides[key] && (
+                      {!overrides[key] && (key === 'transport' || key === 'fbp') && (
                         <span className="ml-2 text-[10px] text-slate-400">auto</span>
+                      )}
+                      {key === 'hyi' && !overrides[key] && (
+                        <span className="ml-2 text-[10px] text-slate-400">balancer</span>
                       )}
                     </td>
                     <td className="py-2 text-right">
@@ -257,14 +282,12 @@ export default function SalaryCalculatorPage() {
                   <td className="py-2.5 text-right font-mono text-slate-600"><Rupee amount={r2(grandTotal * 12)}/></td>
                   <td/>
                 </tr>
-
                 <tr className="text-slate-500 text-xs">
                   <td className="py-1.5">Employer PF (in CTC)</td>
                   <td className="py-1.5 text-right font-mono"><Rupee amount={employerPf}/></td>
                   <td className="py-1.5 text-right font-mono"><Rupee amount={r2(employerPf * 12)}/></td>
                   <td/>
                 </tr>
-
                 {mediclaim > 0 && (
                   <tr className="text-slate-500 text-xs">
                     <td className="py-1.5">Mediclaim</td>
@@ -273,7 +296,6 @@ export default function SalaryCalculatorPage() {
                     <td/>
                   </tr>
                 )}
-
                 {hasIncentive && (
                   <tr className="text-amber-600 text-xs">
                     <td className="py-1.5">Annual Bonus ({incentivePct}%) — paid March</td>
@@ -306,7 +328,6 @@ export default function SalaryCalculatorPage() {
                 <Rupee amount={netEstimate} className="font-bold text-emerald-800 text-base"/>
               </div>
             </div>
-
             <p className="text-xs text-slate-400 text-center">PT, TDS, LOP deducted at time of payroll run</p>
           </div>
         </div>

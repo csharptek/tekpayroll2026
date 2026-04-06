@@ -133,7 +133,7 @@ export default function PersonalTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
               {MARITAL.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </Field>
-          <Field label="Blood Group">
+          <Field label="Blood Group (optional)">
             <select className={sel} value={profile.bloodGroup} disabled={ro} onChange={e => sp('bloodGroup', e.target.value)}>
               <option value="">Select...</option>
               {BLOOD.map(b => <option key={b} value={b}>{b.replace('_', '+').replace('POS', '+').replace('NEG', '-')}</option>)}
