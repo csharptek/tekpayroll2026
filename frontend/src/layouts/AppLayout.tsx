@@ -230,7 +230,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         <div className="flex items-center gap-3 px-5 py-5 border-b border-brand-800">
           <div className="flex-1 min-w-0">
             <img src={tekOneLogo} alt="TEKONE" className="h-7 w-auto" />
-            <p className="text-[10px] text-brand-400 tracking-widest uppercase mt-0.5">Payroll System</p>
+
           </div>
           <button onClick={onClose} className="lg:hidden text-brand-400 hover:text-white">
             <X size={16} />
