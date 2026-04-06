@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save, User, Briefcase, DollarSign, CreditCard } from 'lucide-react'
 import { employeeApi } from '../../services/api'
 import { PageHeader, Button, Card, Alert } from '../../components/ui'
-import SalaryBreakdownForm from '../../components/SalaryBreakdownForm'
+import SalaryCalculatorForm, { SalaryOutput } from '../../components/SalaryCalculatorForm'
 
 const STATES = [
   'Andhra Pradesh','Assam','Bihar','Chandigarh','Chhattisgarh','Delhi',
@@ -68,13 +68,13 @@ export default function AddEmployeePage() {
   // Fetch initial next code on mount
   useState(() => { handleTypeChange('EMPLOYEE') })
 
-  // Salary state — driven by SalaryBreakdownForm
-  const [salaryInput, setSalaryInput] = useState({
+  // Salary state — driven by SalaryCalculatorForm
+  const [salaryInput, setSalaryInput] = useState<SalaryOutput>({
     annualCtc:        0,
     basicPercent:     45,
     hraPercent:       35,
-    transportMonthly: null as number | null,
-    fbpMonthly:       null as number | null,
+    transportMonthly: null,
+    fbpMonthly:       null,
     mediclaim:        0,
     hasIncentive:     false,
     incentivePercent: 12,
@@ -114,10 +114,12 @@ export default function AddEmployeePage() {
       ...form,
       joiningDate: new Date(form.joiningDate).toISOString(),
       annualCtc:          salaryInput.annualCtc,
+      basicPercent:       salaryInput.basicPercent,
+      hraPercent:         salaryInput.hraPercent,
       hasIncentive:       salaryInput.hasIncentive,
       incentivePercent:   salaryInput.incentivePercent,
-      transportMonthly:   salaryInput.transportMonthly,
-      fbpMonthly:         salaryInput.fbpMonthly,
+      transportMonthly:   salaryInput.transportMonthly ?? undefined,
+      fbpMonthly:         salaryInput.fbpMonthly ?? undefined,
       mediclaim:          salaryInput.mediclaim,
       tdsMonthly:         0,
     })
@@ -237,9 +239,9 @@ export default function AddEmployeePage() {
         <Card>
           <div className="p-5">
             <SectionHeading icon={DollarSign} title="Salary Structure" />
-            <SalaryBreakdownForm
-              initialValues={salaryInput}
+            <SalaryCalculatorForm
               onChange={setSalaryInput}
+              showInstructions={true}
             />
           </div>
         </Card>

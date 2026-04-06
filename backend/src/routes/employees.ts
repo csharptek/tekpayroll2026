@@ -21,6 +21,8 @@ const createEmployeeSchema = z.object({
   state: z.string().optional(),
   joiningDate: z.string().datetime(),
   annualCtc: z.number().positive(),
+  basicPercent: z.number().min(1).max(100).default(45),
+  hraPercent: z.number().min(1).max(100).default(35),
   hasIncentive: z.boolean().default(false),
   incentivePercent: z.number().min(0).max(100).default(12),
   transportMonthly: z.number().optional(),
