@@ -4,7 +4,7 @@ import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
 import { AuditAction, PayrollStatus } from '@prisma/client'
-import { calculatePayrollForEmployee, isBonusMonth } from '../services/payrollEngine'
+import { calculatePayrollForEmployee, isBonusMonth, getEsiConfig } from '../services/payrollEngine'
 
 export const payrollRouter = Router()
 payrollRouter.use(authenticate)
@@ -235,30 +235,31 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
   const start = new Date(cycleStart)
   const end   = new Date(cycleEnd)
 
-  const employees = await prisma.employee.findMany({
-    where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
-    orderBy: { name: 'asc' },
-  })
+  // Fetch shared data once upfront
+  const [employees, esiConfig] = await Promise.all([
+    prisma.employee.findMany({
+      where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
+      orderBy: { name: 'asc' },
+    }),
+    getEsiConfig(),
+  ])
 
   const bonusMonth = isBonusMonth(payrollMonth)
-  const results    = []
-  let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0, totalTds = 0, totalLoan = 0
 
-  for (const emp of employees) {
-    try {
-      // Use overrides if provided, else fall back to real cycle data
+  // Process all employees in parallel
+  const settled = await Promise.allSettled(
+    employees.map(async (emp) => {
       const override = overrides[emp.id] || {}
-      let lopDays      = override.lopDays      !== undefined ? Number(override.lopDays)      : 0
-      let reimbAmount  = override.reimbursements !== undefined ? Number(override.reimbursements) : 0
+      let lopDays     = override.lopDays      !== undefined ? Number(override.lopDays)       : 0
+      let reimbAmount = override.reimbursements !== undefined ? Number(override.reimbursements) : 0
 
-      // If no override, try to find real cycle data
       if (override.lopDays === undefined || override.reimbursements === undefined) {
         const [lopEntry, reimbs] = await Promise.all([
           prisma.lopEntry.findFirst({ where: { employeeId: emp.id, cycle: { payrollMonth } } }),
           prisma.reimbursement.aggregate({ where: { employeeId: emp.id, cycle: { payrollMonth } }, _sum: { amount: true } }),
         ])
-        if (override.lopDays === undefined)       lopDays     = lopEntry?.lopDays || 0
-        if (override.reimbursements === undefined) reimbAmount = Number(reimbs._sum.amount || 0)
+        if (override.lopDays === undefined)        lopDays     = lopEntry?.lopDays || 0
+        if (override.reimbursements === undefined)  reimbAmount = Number(reimbs._sum.amount || 0)
       }
 
       const calc = await calculatePayrollForEmployee({
@@ -274,66 +275,70 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
         lopDays,
         tdsMonthly:      Number(emp.tdsMonthly ?? 0),
         reimbursements:  reimbAmount,
+        esiConfig,
       })
 
-      const s = calc.salary
+      return { emp, calc, lopDays, reimbAmount }
+    })
+  )
 
-      totalGross += calc.proration.proratedGross
-      totalNet   += calc.netSalary
-      totalPf    += calc.deductions.pf
-      totalEsi   += calc.deductions.esi
-      totalTds   += calc.deductions.tds
-      totalLoan  += calc.deductions.loanDeduction
+  const results: any[] = []
+  let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0, totalTds = 0, totalLoan = 0
 
+  settled.forEach((result, i) => {
+    const emp = employees[i]
+    if (result.status === 'rejected') {
       results.push({
-        employeeId:       emp.id,
-        employeeCode:     emp.employeeCode,
-        name:             emp.name,
-        department:       emp.department,
-        designation:      emp.jobTitle,
-        annualCtc:        s.annualCtc,
-        grossMonthly:     s.grandTotalMonthly,
-        basic:            s.basicMonthly,
-        hra:              s.hraMonthly,
-        transport:        s.transportMonthly,
-        fbp:              s.fbpMonthly,
-        hyi:              s.hyiMonthly,
-        annualBonus:      bonusMonth ? s.annualBonus : 0,
-        isBonusMonth:     bonusMonth,
-        totalDays:        calc.proration.totalDays,
-        payableDays:      calc.proration.payableDays,
-        isProrated:       calc.proration.isProrated,
-        proratedGross:    calc.proration.proratedGross,
-        reimbursements:   reimbAmount,
-        lopDays:          lopDays,
-        lopAmount:        calc.deductions.lop,
-        pfAmount:         calc.deductions.pf,
-        esiAmount:        calc.deductions.esi,
-        ptAmount:         calc.deductions.pt,
-        tdsAmount:        calc.deductions.tds,
-        loanDeduction:    calc.deductions.loanDeduction,
-        netSalary:        calc.netSalary,
-        status:           'ok',
+        employeeId: emp.id, employeeCode: emp.employeeCode,
+        name: emp.name, department: emp.department,
+        status: 'error', error: result.reason?.message || 'Unknown error', netSalary: 0,
       })
-    } catch (err: any) {
-      results.push({
-        employeeId:   emp.id,
-        employeeCode: emp.employeeCode,
-        name:         emp.name,
-        department:   emp.department,
-        status:       'error',
-        error:        err.message,
-        netSalary:    0,
-      })
+      return
     }
-  }
+    const { calc, lopDays, reimbAmount } = result.value
+    const s = calc.salary
+    totalGross += calc.proration.proratedGross
+    totalNet   += calc.netSalary
+    totalPf    += calc.deductions.pf
+    totalEsi   += calc.deductions.esi
+    totalTds   += calc.deductions.tds
+    totalLoan  += calc.deductions.loanDeduction
+    results.push({
+      employeeId:    emp.id,
+      employeeCode:  emp.employeeCode,
+      name:          emp.name,
+      department:    emp.department,
+      designation:   emp.jobTitle,
+      annualCtc:     s.annualCtc,
+      grossMonthly:  s.grandTotalMonthly,
+      basic:         s.basicMonthly,
+      hra:           s.hraMonthly,
+      transport:     s.transportMonthly,
+      fbp:           s.fbpMonthly,
+      hyi:           s.hyiMonthly,
+      annualBonus:   bonusMonth ? s.annualBonus : 0,
+      isBonusMonth:  bonusMonth,
+      totalDays:     calc.proration.totalDays,
+      payableDays:   calc.proration.payableDays,
+      isProrated:    calc.proration.isProrated,
+      proratedGross: calc.proration.proratedGross,
+      reimbursements:reimbAmount,
+      lopDays,
+      lopAmount:     calc.deductions.lop,
+      pfAmount:      calc.deductions.pf,
+      esiAmount:     calc.deductions.esi,
+      ptAmount:      calc.deductions.pt,
+      tdsAmount:     calc.deductions.tds,
+      loanDeduction: calc.deductions.loanDeduction,
+      netSalary:     calc.netSalary,
+      status:        'ok',
+    })
+  })
 
   res.json({
     success: true,
     data: {
-      payrollMonth,
-      cycleStart,
-      cycleEnd,
+      payrollMonth, cycleStart, cycleEnd,
       isBonusMonth: bonusMonth,
       employeeCount: employees.length,
       summary: {

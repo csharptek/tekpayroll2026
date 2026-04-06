@@ -1,14 +1,8 @@
-import { useState, useEffect } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import {
-  Play, AlertCircle, ChevronDown, ChevronUp,
-  Download, RefreshCw, Info, Edit3, Check
-} from 'lucide-react'
-import { payrollApi, employeeApi } from '../../services/api'
-import {
-  PageHeader, Button, Card,
-  Table, Th, Td, Tr, Alert, Skeleton, StatCard
-} from '../../components/ui'
+import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { Play, AlertCircle, ChevronDown, ChevronUp, Download, RefreshCw, Info } from 'lucide-react'
+import { payrollApi } from '../../services/api'
+import { PageHeader, Button, Card, Table, Th, Td, Tr, Alert, StatCard } from '../../components/ui'
 import clsx from 'clsx'
 
 function ru(n: number) {
@@ -116,36 +110,15 @@ function exportCsv(results: any[], month: string) {
   a.click()
 }
 
-interface Override { lopDays: number; reimbursements: number }
-
 export default function PayrollDryRunPage() {
-  const [month,        setMonth]        = useState(defaultMonth())
-  const [cycleStart,   setCycleStart]   = useState(monthToCycleDates(defaultMonth()).cycleStart)
-  const [cycleEnd,     setCycleEnd]     = useState(monthToCycleDates(defaultMonth()).cycleEnd)
-  const [overrides,    setOverrides]    = useState<Record<string, Override>>({})
-  const [expandedId,   setExpandedId]   = useState<string | null>(null)
-  const [filterDept,   setFilterDept]   = useState('All')
-  const [showOverrides,setShowOverrides]= useState(false)
-
-  const { data: empData } = useQuery({
-    queryKey: ['employees-active-dryrun'],
-    queryFn: () => employeeApi.list({ status: 'ACTIVE', limit: 200 }).then((r: any) => r.data.data),
-  })
-  const employees: any[] = empData || []
-
-  useEffect(() => {
-    if (!employees.length) return
-    setOverrides(prev => {
-      const next = { ...prev }
-      employees.forEach((e: any) => {
-        if (!next[e.id]) next[e.id] = { lopDays: 0, reimbursements: 0 }
-      })
-      return next
-    })
-  }, [employees.length])
+  const [month,      setMonth]      = useState(defaultMonth())
+  const [cycleStart, setCycleStart] = useState(monthToCycleDates(defaultMonth()).cycleStart)
+  const [cycleEnd,   setCycleEnd]   = useState(monthToCycleDates(defaultMonth()).cycleEnd)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [filterDept, setFilterDept] = useState('All')
 
   const dryRunMut = useMutation({
-    mutationFn: () => payrollApi.dryRun({ cycleStart, cycleEnd, payrollMonth: month, overrides }),
+    mutationFn: () => payrollApi.dryRun({ cycleStart, cycleEnd, payrollMonth: month, overrides: {} }),
   })
 
   const result = (dryRunMut.data as any)?.data
@@ -157,14 +130,6 @@ export default function PayrollDryRunPage() {
     setCycleEnd(ce)
   }
 
-  function setOverride(empId: string, field: keyof Override, val: string) {
-    setOverrides(prev => ({
-      ...prev,
-      [empId]: { ...prev[empId], [field]: parseFloat(val) || 0 },
-    }))
-  }
-
-  const editedCount  = Object.values(overrides).filter(o => o.lopDays > 0 || o.reimbursements > 0).length
   const departments: string[] = result
     ? ['All', ...Array.from(new Set<string>(result.results.map((r: any) => r.department as string).filter(Boolean)))]
     : ['All']
@@ -177,7 +142,6 @@ export default function PayrollDryRunPage() {
     <div className="space-y-5 max-w-7xl">
       <PageHeader title="Payroll Dry Run" subtitle="Simulate payroll without saving — test before the real run" />
 
-      {/* Config */}
       <Card className="p-5">
         <div className="flex flex-wrap items-end gap-4">
           <div>
@@ -197,7 +161,7 @@ export default function PayrollDryRunPage() {
             loading={dryRunMut.isPending}
             onClick={() => { setExpandedId(null); dryRunMut.mutate() }}
           >
-            {dryRunMut.isPending ? 'Calculating…' : result ? 'Recalculate' : 'Run Simulation'}
+            {dryRunMut.isPending ? 'Running Payroll…' : result ? 'Recalculate' : 'Run Simulation'}
           </Button>
           {result && (
             <Button variant="secondary" icon={<Download size={14} />} onClick={() => exportCsv(result.results, month)}>
@@ -211,106 +175,16 @@ export default function PayrollDryRunPage() {
         </p>
       </Card>
 
-      {/* Overrides panel */}
-      <Card>
-        <button
-          className="w-full flex items-center justify-between px-5 py-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors rounded-xl"
-          onClick={() => setShowOverrides(o => !o)}
-        >
-          <div className="flex items-center gap-2">
-            <Edit3 size={15} className="text-brand-600" />
-            LOP &amp; Reimbursement Overrides
-            {editedCount > 0 && (
-              <span className="text-[10px] bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-medium">
-                {editedCount} edited
-              </span>
-            )}
-          </div>
-          {showOverrides ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-        </button>
-
-        {showOverrides && (
-          <div className="border-t border-slate-100">
-            <p className="text-xs text-slate-500 px-5 py-2.5 bg-slate-50 border-b border-slate-100">
-              Enter LOP days and reimbursement amounts per employee. These override any real cycle data.
-            </p>
-            <div className="overflow-x-auto max-h-72 overflow-y-auto">
-              <table className="w-full">
-                <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
-                  <tr>
-                    <th className="table-header text-left pl-5">Employee</th>
-                    <th className="table-header">Department</th>
-                    <th className="table-header text-center w-40">LOP Days</th>
-                    <th className="table-header text-center w-48">Reimbursement (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.map((emp: any) => {
-                    const ov      = overrides[emp.id] || { lopDays: 0, reimbursements: 0 }
-                    const touched = ov.lopDays > 0 || ov.reimbursements > 0
-                    return (
-                      <tr key={emp.id} className={clsx('border-b border-slate-50 transition-colors', touched && 'bg-brand-50/50')}>
-                        <td className="table-cell pl-5">
-                          <div className="flex items-center gap-2">
-                            {touched && <Check size={12} className="text-brand-600 flex-shrink-0" />}
-                            <div>
-                              <p className="text-sm font-medium text-slate-800">{emp.name}</p>
-                              <p className="text-xs text-slate-400 font-mono">{emp.employeeCode}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="table-cell text-slate-500 text-sm">{emp.department || '—'}</td>
-                        <td className="table-cell py-1.5">
-                          <input
-                            type="number" min="0" max="31" step="0.5"
-                            className="input text-center w-full text-sm"
-                            value={ov.lopDays || ''}
-                            placeholder="0"
-                            onChange={e => setOverride(emp.id, 'lopDays', e.target.value)}
-                          />
-                        </td>
-                        <td className="table-cell py-1.5">
-                          <input
-                            type="number" min="0" step="1"
-                            className="input text-center w-full text-sm"
-                            value={ov.reimbursements || ''}
-                            placeholder="0"
-                            onChange={e => setOverride(emp.id, 'reimbursements', e.target.value)}
-                          />
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {editedCount > 0 && (
-              <div className="px-5 py-3 border-t border-slate-100 flex justify-between items-center bg-slate-50">
-                <p className="text-xs text-slate-500">Click <strong>Run Simulation</strong> or <strong>Recalculate</strong> to apply changes.</p>
-                <button
-                  className="text-xs text-red-500 hover:text-red-700 transition-colors font-medium"
-                  onClick={() => setOverrides(prev => {
-                    const reset: Record<string, Override> = {}
-                    Object.keys(prev).forEach(id => { reset[id] = { lopDays: 0, reimbursements: 0 } })
-                    return reset
-                  })}
-                >
-                  Clear all
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
-
       {dryRunMut.isError && (
         <Alert type="error" message={(dryRunMut.error as any)?.response?.data?.message || 'Dry run failed'} />
       )}
 
+      {/* Loading state */}
       {dryRunMut.isPending && (
-        <Card className="p-5 space-y-3">
-          <Skeleton className="h-20 rounded-xl" />
-          <Skeleton className="h-64 rounded-xl" />
+        <Card className="p-10 flex flex-col items-center justify-center gap-3">
+          <RefreshCw size={32} className="animate-spin text-brand-600" />
+          <p className="text-base font-semibold text-slate-700">Calculating payroll for all employees…</p>
+          <p className="text-sm text-slate-400">This may take a few seconds. Please wait.</p>
         </Card>
       )}
 

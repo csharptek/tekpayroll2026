@@ -145,6 +145,8 @@ model Employee {
   withdrawnAt             DateTime?
   noticePeriodDays        Int?
   expectedLwd             DateTime?
+  noticePeriodServed      Boolean   @default(false)
+  buyoutAmount            Decimal?  @db.Decimal(10, 2)
 
   // ─── NEW SALARY STRUCTURE (v2) ───────────────────────────────────────────
   annualCtc           Decimal  @db.Decimal(12, 2)

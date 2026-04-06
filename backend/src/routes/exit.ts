@@ -197,11 +197,11 @@ exitRouter.patch('/:id/details', requireHR, async (req, res) => {
   if (!emp) throw new AppError('Employee not found', 404)
 
   const data: any = {}
-  if (lastWorkingDay   !== undefined) data.lastWorkingDay   = new Date(lastWorkingDay)
-  if (exitType         !== undefined) data.exitType         = exitType
-  if (resignationDate  !== undefined) data.resignationDate  = new Date(resignationDate)
-  if (noticePeriodServed !== undefined) data.noticePeriodServed = noticePeriodServed
-  if (buyoutAmount     !== undefined) data.buyoutAmount     = buyoutAmount
+  if (lastWorkingDay      !== undefined) data.lastWorkingDay      = new Date(lastWorkingDay)
+  if (exitType            !== undefined) data.exitType            = exitType
+  if (resignationDate     !== undefined) data.resignationDate     = new Date(resignationDate)
+  if (noticePeriodServed  !== undefined) data.noticePeriodServed  = Boolean(noticePeriodServed)
+  if (buyoutAmount        !== undefined) data.buyoutAmount        = buyoutAmount != null ? Number(buyoutAmount) : null
 
   await prisma.employee.update({ where: { id: req.params.id }, data })
   await logHistory(emp.id, 'UPDATED', me.id, me.name, me.role, 'Exit details updated')

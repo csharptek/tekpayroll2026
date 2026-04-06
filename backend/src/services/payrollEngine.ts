@@ -80,7 +80,7 @@ const DEFAULT_ESI_THRESHOLD     = 21000   // ₹21,000 gross - HYI
 
 // ─── LOAD ESI CONFIG FROM DB ─────────────────────────────────────────────────
 
-async function getEsiConfig() {
+export async function getEsiConfig() {
   const rows = await prisma.systemConfig.findMany({
     where: { key: { in: ['ESI_EMPLOYEE_RATE', 'ESI_EMPLOYER_RATE', 'ESI_THRESHOLD'] } },
   })
@@ -253,9 +253,10 @@ export async function calculatePayrollForEmployee(params: {
   lopDays:         number
   tdsMonthly:      number
   reimbursements:  number
+  esiConfig?: Awaited<ReturnType<typeof getEsiConfig>>
 }): Promise<PayrollCalculation> {
 
-  const esiConfig  = await getEsiConfig()
+  const esiConfig  = params.esiConfig ?? await getEsiConfig()
   const salary     = computeSalaryStructure(params.salaryInput, esiConfig)
   const proration  = computeProration(
     salary.grandTotalMonthly,
