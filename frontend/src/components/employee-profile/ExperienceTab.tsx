@@ -6,6 +6,19 @@ import { Button, Alert, Rupee } from '../ui'
 
 const BLANK = { companyName: '', designation: '', startDate: '', endDate: '', lastDrawnSalary: '', reasonForLeaving: '' }
 
+function ExpForm({ form, onChange }: { form: typeof BLANK; onChange: (k: string, v: string) => void }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+      <Field label="Company Name" required><input className={inp} value={form.companyName} onChange={e => onChange('companyName', e.target.value)} placeholder="Company name"/></Field>
+      <Field label="Designation" required><input className={inp} value={form.designation} onChange={e => onChange('designation', e.target.value)} placeholder="Your role"/></Field>
+      <Field label="Start Date" required><input className={inp} type="date" value={form.startDate} onChange={e => onChange('startDate', e.target.value)}/></Field>
+      <Field label="End Date"><input className={inp} type="date" value={form.endDate} onChange={e => onChange('endDate', e.target.value)}/></Field>
+      <Field label="Last Drawn Salary (₹)"><input className={inp} type="number" value={form.lastDrawnSalary} onChange={e => onChange('lastDrawnSalary', e.target.value)} placeholder="Annual"/></Field>
+      <Field label="Reason for Leaving"><input className={inp} value={form.reasonForLeaving} onChange={e => onChange('reasonForLeaving', e.target.value)} placeholder="Optional"/></Field>
+    </div>
+  )
+}
+
 export default function ExperienceTab({ emp, isHR, onSaved }: { emp: any; isHR: boolean; onSaved: () => void }) {
   const qc = useQueryClient()
   const [adding, setAdding]   = useState(false)
@@ -46,24 +59,13 @@ export default function ExperienceTab({ emp, isHR, onSaved }: { emp: any; isHR: 
     return [y > 0 ? `${y}y` : '', m > 0 ? `${m}m` : ''].filter(Boolean).join(' ') || '< 1m'
   }
 
-  const FormFields = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-      <Field label="Company Name" required><input className={inp} value={form.companyName} onChange={e => s('companyName', e.target.value)} placeholder="Company name"/></Field>
-      <Field label="Designation" required><input className={inp} value={form.designation} onChange={e => s('designation', e.target.value)} placeholder="Your role"/></Field>
-      <Field label="Start Date" required><input className={inp} type="date" value={form.startDate} onChange={e => s('startDate', e.target.value)}/></Field>
-      <Field label="End Date"><input className={inp} type="date" value={form.endDate} onChange={e => s('endDate', e.target.value)}/></Field>
-      <Field label="Last Drawn Salary (₹)"><input className={inp} type="number" value={form.lastDrawnSalary} onChange={e => s('lastDrawnSalary', e.target.value)} placeholder="Annual"/></Field>
-      <Field label="Reason for Leaving"><input className={inp} value={form.reasonForLeaving} onChange={e => s('reasonForLeaving', e.target.value)} placeholder="Optional"/></Field>
-    </div>
-  )
-
   return (
     <div className="space-y-4">
       {error && <Alert type="error" message={error}/>}
       {adding && (
         <div className="border border-brand-200 rounded-2xl p-4 bg-brand-50/30">
           <p className="text-sm font-semibold text-slate-700">Add Work Experience</p>
-          <FormFields/>
+          <ExpForm form={form} onChange={s}/>
           <div className="flex gap-2 mt-3 justify-end">
             <Button variant="secondary" icon={<X size={14}/>} onClick={() => setAdding(false)}>Cancel</Button>
             <Button icon={<Save size={14}/>} loading={addMut.isPending} onClick={() => { setError(''); addMut.mutate() }}>Add</Button>
@@ -82,7 +84,7 @@ export default function ExperienceTab({ emp, isHR, onSaved }: { emp: any; isHR: 
             <div key={r.id} className="border border-slate-200 rounded-2xl overflow-hidden">
               {editing === r.id ? (
                 <div className="p-4">
-                  <FormFields/>
+                  <ExpForm form={form} onChange={s}/>
                   <div className="flex gap-2 mt-3 justify-end">
                     <Button variant="secondary" icon={<X size={14}/>} onClick={() => setEditing(null)}>Cancel</Button>
                     <Button icon={<Save size={14}/>} loading={updMut.isPending} onClick={() => { setError(''); updMut.mutate() }}>Save</Button>

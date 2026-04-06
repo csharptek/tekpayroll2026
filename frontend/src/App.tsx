@@ -25,6 +25,7 @@ import PayslipGenerationPage from './pages/hr/PayslipGenerationPage'
 import FnfPage from './pages/hr/FnfPage'
 import AuditLogPage from './pages/hr/AuditLogPage'
 import ConfigPage from './pages/hr/ConfigPage'
+import SalaryCalculatorPage from './pages/hr/SalaryCalculatorPage'
 import SyncPage from './pages/hr/SyncPage'
 import BulkImportPage from './pages/hr/BulkImportPage'
 import BulkEditEmployeesPage from './pages/hr/BulkEditEmployeesPage'
@@ -90,6 +91,7 @@ export default function App() {
           <Route path="sync" element={<SyncPage />} />
           <Route path="audit" element={<AuditLogPage />} />
           <Route path="config" element={<ConfigPage />} />
+          <Route path="salary-calculator" element={<SalaryCalculatorPage />} />
           <Route path="leaves" element={<HRLeavePage />} />
           <Route path="public-holidays" element={<PublicHolidaysPage />} />
           <Route path="leave-config" element={<LeaveConfigPage />} />

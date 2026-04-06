@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Upload, Trash2, CheckCircle2, Download, FileText, Eye } from 'lucide-react'
+import { Upload, Trash2, CheckCircle2, Download, FileText, Eye, Plus, X, FolderUp } from 'lucide-react'
 import { profileApi, Field, sel } from './shared'
 import { Button, Alert } from '../ui'
 
@@ -22,13 +22,30 @@ const DOC_ICONS: Record<string, string> = {
   ADDRESS_PROOF: '🏠', BANK_PROOF: '🏦', OTHER: '📎',
 }
 
+interface PendingFile {
+  id: string
+  file: File
+  docType: string
+  notes: string
+  uploading: boolean
+  done: boolean
+  error: string
+}
+
 export default function DocumentsTab({ emp, isHR, onSaved }: { emp: any; isHR: boolean; onSaved: () => void }) {
-  const qc        = useQueryClient()
-  const fileRef   = useRef<HTMLInputElement>(null)
+  const qc         = useQueryClient()
+  const fileRef    = useRef<HTMLInputElement>(null)
+  const multiRef   = useRef<HTMLInputElement>(null)
+
+  // Single upload state
   const [docType, setDocType] = useState('PAN_CARD')
   const [notes,   setNotes]   = useState('')
   const [error,   setError]   = useState('')
-  const [preview, setPreview] = useState<string | null>(null)
+
+  // Multi upload state
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
+  const [multiError,   setMultiError]   = useState('')
+  const [uploading,    setUploading]    = useState(false)
 
   const { data: documents } = useQuery({
     queryKey: ['documents', emp.id],
@@ -56,6 +73,52 @@ export default function DocumentsTab({ emp, isHR, onSaved }: { emp: any; isHR: b
     return bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : `${(bytes / 1024).toFixed(0)}KB`
   }
 
+  function onMultiFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    const newEntries: PendingFile[] = files.map(f => ({
+      id: `${f.name}-${Date.now()}-${Math.random()}`,
+      file: f,
+      docType: 'OTHER',
+      notes: '',
+      uploading: false,
+      done: false,
+      error: '',
+    }))
+    setPendingFiles(prev => [...prev, ...newEntries])
+    if (multiRef.current) multiRef.current.value = ''
+  }
+
+  function updatePending(id: string, key: 'docType' | 'notes', val: string) {
+    setPendingFiles(prev => prev.map(p => p.id === id ? { ...p, [key]: val } : p))
+  }
+
+  function removePending(id: string) {
+    setPendingFiles(prev => prev.filter(p => p.id !== id))
+  }
+
+  async function uploadAll() {
+    if (!pendingFiles.length) return
+    setUploading(true)
+    setMultiError('')
+
+    for (const pf of pendingFiles) {
+      setPendingFiles(prev => prev.map(p => p.id === pf.id ? { ...p, uploading: true } : p))
+      try {
+        await profileApi.uploadDocument(emp.id, pf.file, pf.docType, pf.notes)
+        setPendingFiles(prev => prev.map(p => p.id === pf.id ? { ...p, uploading: false, done: true } : p))
+      } catch (e: any) {
+        const msg = e?.response?.data?.error || 'Upload failed'
+        setPendingFiles(prev => prev.map(p => p.id === pf.id ? { ...p, uploading: false, error: msg } : p))
+      }
+    }
+
+    await qc.invalidateQueries({ queryKey: ['documents', emp.id] })
+    setUploading(false)
+    // Remove successfully uploaded
+    setPendingFiles(prev => prev.filter(p => !p.done))
+  }
+
   // Group by type
   const grouped: Record<string, any[]> = {}
   documents?.forEach((d: any) => {
@@ -63,36 +126,129 @@ export default function DocumentsTab({ emp, isHR, onSaved }: { emp: any; isHR: b
     grouped[d.documentType].push(d)
   })
 
+  const allDone = pendingFiles.length > 0 && pendingFiles.every(p => p.done)
+
   return (
     <div className="space-y-5">
       {error && <Alert type="error" message={error}/>}
 
-      {/* Upload section */}
       {isHR && (
-        <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Upload Document</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Document Type">
-              <select className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-brand-400 focus:outline-none bg-white"
-                value={docType} onChange={e => setDocType(e.target.value)}>
-                {DOC_TYPES.map(t => <option key={t} value={t}>{DOC_LABELS[t]}</option>)}
-              </select>
-            </Field>
-            <Field label="Notes (optional)">
-              <input className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-brand-400 focus:outline-none bg-white"
-                value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional note"/>
-            </Field>
-            <Field label="File (PDF or Image)">
-              <input ref={fileRef} type="file" accept=".pdf,image/*" className="hidden"
-                onChange={e => { if (e.target.files?.[0]) { setError(''); uploadMut.mutate(e.target.files[0]) } }}/>
-              <Button className="w-full" variant="secondary" icon={<Upload size={14}/>}
-                loading={uploadMut.isPending}
-                onClick={() => fileRef.current?.click()}>
-                Choose File
-              </Button>
-            </Field>
+        <>
+          {/* Single upload */}
+          <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
+            <p className="text-sm font-semibold text-slate-700 mb-3">Upload Document</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Document Type">
+                <select
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-brand-400 focus:outline-none bg-white"
+                  value={docType} onChange={e => setDocType(e.target.value)}>
+                  {DOC_TYPES.map(t => <option key={t} value={t}>{DOC_LABELS[t]}</option>)}
+                </select>
+              </Field>
+              <Field label="Notes (optional)">
+                <input
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-brand-400 focus:outline-none bg-white"
+                  value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional note"/>
+              </Field>
+              <Field label="File (PDF or Image)">
+                <input ref={fileRef} type="file" accept=".pdf,image/*" className="hidden"
+                  onChange={e => { if (e.target.files?.[0]) { setError(''); uploadMut.mutate(e.target.files[0]) } }}/>
+                <Button className="w-full" variant="secondary" icon={<Upload size={14}/>}
+                  loading={uploadMut.isPending}
+                  onClick={() => fileRef.current?.click()}>
+                  Choose File
+                </Button>
+              </Field>
+            </div>
           </div>
-        </div>
+
+          {/* Multi upload */}
+          <div className="border border-brand-200 rounded-2xl p-4 bg-brand-50/20">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-semibold text-slate-700">Bulk Document Upload</p>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">Select multiple files at once, then assign a document type to each before uploading.</p>
+
+            <input ref={multiRef} type="file" accept=".pdf,image/*" multiple className="hidden"
+              onChange={onMultiFilesSelected}/>
+
+            {pendingFiles.length === 0 ? (
+              <button
+                onClick={() => multiRef.current?.click()}
+                className="w-full border-2 border-dashed border-brand-200 rounded-xl py-6 flex flex-col items-center gap-2 text-brand-400 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 transition-all"
+              >
+                <FolderUp size={24}/>
+                <span className="text-sm font-medium">Click to select multiple files</span>
+              </button>
+            ) : (
+              <div className="space-y-3">
+                {pendingFiles.map(pf => (
+                  <div key={pf.id} className={`border rounded-xl p-3 bg-white transition-all ${
+                    pf.done ? 'border-emerald-200 bg-emerald-50/30' :
+                    pf.error ? 'border-red-200 bg-red-50/20' :
+                    'border-slate-200'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      <FileText size={16} className="text-slate-400 mt-1 flex-shrink-0"/>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700 truncate">{pf.file.name}</p>
+                        <p className="text-xs text-slate-400 mb-2">{formatSize(pf.file.size)}</p>
+                        {!pf.done && !pf.error && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <select
+                              className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:border-brand-400 focus:outline-none bg-white"
+                              value={pf.docType}
+                              onChange={e => updatePending(pf.id, 'docType', e.target.value)}>
+                              {DOC_TYPES.map(t => <option key={t} value={t}>{DOC_LABELS[t]}</option>)}
+                            </select>
+                            <input
+                              className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:border-brand-400 focus:outline-none"
+                              placeholder="Notes (optional)"
+                              value={pf.notes}
+                              onChange={e => updatePending(pf.id, 'notes', e.target.value)}/>
+                          </div>
+                        )}
+                        {pf.done && <p className="text-xs text-emerald-600 font-medium">✓ Uploaded successfully</p>}
+                        {pf.error && <p className="text-xs text-red-600">{pf.error}</p>}
+                        {pf.uploading && <p className="text-xs text-brand-500 animate-pulse">Uploading...</p>}
+                      </div>
+                      {!pf.uploading && !pf.done && (
+                        <button onClick={() => removePending(pf.id)} className="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
+                          <X size={14}/>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex items-center gap-3 pt-1">
+                  <Button
+                    icon={<Upload size={14}/>}
+                    loading={uploading}
+                    onClick={uploadAll}
+                    disabled={uploading || pendingFiles.every(p => p.done)}
+                  >
+                    Upload All ({pendingFiles.filter(p => !p.done).length} files)
+                  </Button>
+                  <button
+                    onClick={() => multiRef.current?.click()}
+                    className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600 transition-colors"
+                  >
+                    <Plus size={13}/> Add more
+                  </button>
+                  {pendingFiles.some(p => p.done) && (
+                    <button
+                      onClick={() => setPendingFiles(prev => prev.filter(p => !p.done))}
+                      className="text-xs text-slate-400 hover:text-slate-600 ml-auto"
+                    >
+                      Clear done
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Document list */}

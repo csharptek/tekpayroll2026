@@ -6,6 +6,18 @@ import { Button, Alert } from '../ui'
 
 const BLANK_EDU = { degree: '', institution: '', specialization: '', yearOfPassing: '', percentageGrade: '' }
 
+function EduForm({ form, onChange }: { form: typeof BLANK_EDU; onChange: (k: string, v: string) => void }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+      <Field label="Degree" required><input className={inp} value={form.degree} onChange={e => onChange('degree', e.target.value)} placeholder="e.g. B.Tech, MBA, BCA"/></Field>
+      <Field label="Institution" required><input className={inp} value={form.institution} onChange={e => onChange('institution', e.target.value)} placeholder="University / College name"/></Field>
+      <Field label="Specialization"><input className={inp} value={form.specialization} onChange={e => onChange('specialization', e.target.value)} placeholder="e.g. Computer Science"/></Field>
+      <Field label="Year of Passing"><input className={inp} type="number" value={form.yearOfPassing} onChange={e => onChange('yearOfPassing', e.target.value)} placeholder="e.g. 2019"/></Field>
+      <Field label="Percentage / Grade"><input className={inp} value={form.percentageGrade} onChange={e => onChange('percentageGrade', e.target.value)} placeholder="e.g. 78% or 7.8 CGPA"/></Field>
+    </div>
+  )
+}
+
 export default function EducationTab({ emp, isHR, onSaved }: { emp: any; isHR: boolean; onSaved: () => void }) {
   const qc = useQueryClient()
   const [adding, setAdding]   = useState(false)
@@ -39,23 +51,13 @@ export default function EducationTab({ emp, isHR, onSaved }: { emp: any; isHR: b
   }
   const s = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }))
 
-  const FormFields = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-      <Field label="Degree" required><input className={inp} value={form.degree} onChange={e => s('degree', e.target.value)} placeholder="e.g. B.Tech, MBA, BCA"/></Field>
-      <Field label="Institution" required><input className={inp} value={form.institution} onChange={e => s('institution', e.target.value)} placeholder="University / College name"/></Field>
-      <Field label="Specialization"><input className={inp} value={form.specialization} onChange={e => s('specialization', e.target.value)} placeholder="e.g. Computer Science"/></Field>
-      <Field label="Year of Passing"><input className={inp} type="number" value={form.yearOfPassing} onChange={e => s('yearOfPassing', e.target.value)} placeholder="e.g. 2019"/></Field>
-      <Field label="Percentage / Grade"><input className={inp} value={form.percentageGrade} onChange={e => s('percentageGrade', e.target.value)} placeholder="e.g. 78% or 7.8 CGPA"/></Field>
-    </div>
-  )
-
   return (
     <div className="space-y-4">
       {error && <Alert type="error" message={error}/>}
       {adding && (
         <div className="border border-brand-200 rounded-2xl p-4 bg-brand-50/30">
           <p className="text-sm font-semibold text-slate-700">Add Education</p>
-          <FormFields/>
+          <EduForm form={form} onChange={s}/>
           <div className="flex gap-2 mt-3 justify-end">
             <Button variant="secondary" icon={<X size={14}/>} onClick={() => setAdding(false)}>Cancel</Button>
             <Button icon={<Save size={14}/>} loading={addMut.isPending} onClick={() => { setError(''); addMut.mutate() }}>Add</Button>
@@ -74,7 +76,7 @@ export default function EducationTab({ emp, isHR, onSaved }: { emp: any; isHR: b
             <div key={r.id} className="border border-slate-200 rounded-2xl overflow-hidden">
               {editing === r.id ? (
                 <div className="p-4">
-                  <FormFields/>
+                  <EduForm form={form} onChange={s}/>
                   <div className="flex gap-2 mt-3 justify-end">
                     <Button variant="secondary" icon={<X size={14}/>} onClick={() => setEditing(null)}>Cancel</Button>
                     <Button icon={<Save size={14}/>} loading={updMut.isPending} onClick={() => { setError(''); updMut.mutate() }}>Save</Button>

@@ -4,7 +4,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { signOut } from '../services/msal'
 import {
-  LayoutDashboard, Users, CreditCard, FileText, Settings,
+  LayoutDashboard, Users, CreditCard, FileText, Settings, Calculator,
   LogOut, ChevronDown, Menu, X, Building2, Shield,
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
@@ -108,8 +108,9 @@ const SUPER_ADMIN_NAV = [
   {
     section: 'Admin',
     items: [
-      { label: 'Audit Log',     icon: ScrollText, to: '/hr/audit' },
-      { label: 'Configuration', icon: Settings,   to: '/hr/config' },
+      { label: 'Audit Log',        icon: ScrollText, to: '/hr/audit' },
+      { label: 'Configuration',    icon: Settings,   to: '/hr/config' },
+      { label: 'Salary Calculator', icon: Calculator, to: '/hr/salary-calculator' },
     ]
   },
   {
@@ -404,6 +405,7 @@ function usePageTitle() {
     '/hr/salaries-bulk-edit': 'Bulk Edit Salaries',
     '/hr/audit': 'Audit Log',
     '/hr/config': 'Configuration',
+    '/hr/salary-calculator': 'Salary Calculator',
     '/hr/leaves': 'Leave Management',
     '/hr/public-holidays': 'Public Holidays',
     '/hr/leave-config': 'Leave Configuration',

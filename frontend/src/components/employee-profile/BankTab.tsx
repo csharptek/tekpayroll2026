@@ -6,6 +6,28 @@ import { Button, Alert } from '../ui'
 
 const BLANK = { accountHolderName: '', accountNumber: '', ifscCode: '', bankName: '', branchName: '', accountType: 'SAVINGS', isPrimary: false }
 
+function BankForm({ form, onChange }: { form: any; onChange: (k: string, v: any) => void }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+      <Field label="Account Holder Name" required><input className={inp} value={form.accountHolderName} onChange={e => onChange('accountHolderName', e.target.value)} placeholder="As per bank records"/></Field>
+      <Field label="Account Number" required><input className={inp} value={form.accountNumber} onChange={e => onChange('accountNumber', e.target.value)} placeholder="Account number"/></Field>
+      <Field label="IFSC Code" required><input className={inp} value={form.ifscCode} onChange={e => onChange('ifscCode', e.target.value.toUpperCase())} placeholder="e.g. HDFC0001234"/></Field>
+      <Field label="Bank Name" required><input className={inp} value={form.bankName} onChange={e => onChange('bankName', e.target.value)} placeholder="e.g. HDFC Bank"/></Field>
+      <Field label="Branch Name"><input className={inp} value={form.branchName} onChange={e => onChange('branchName', e.target.value)} placeholder="Branch name"/></Field>
+      <Field label="Account Type">
+        <select className={sel} value={form.accountType} onChange={e => onChange('accountType', e.target.value)}>
+          <option value="SAVINGS">Savings</option>
+          <option value="CURRENT">Current</option>
+        </select>
+      </Field>
+      <div className="flex items-center gap-2 mt-1">
+        <input type="checkbox" id="isPrimary" checked={form.isPrimary} onChange={e => onChange('isPrimary', e.target.checked)} className="w-4 h-4 rounded"/>
+        <label htmlFor="isPrimary" className="text-sm text-slate-600 cursor-pointer">Mark as primary account (used for salary transfer)</label>
+      </div>
+    </div>
+  )
+}
+
 export default function BankTab({ emp, isHR, onSaved }: { emp: any; isHR: boolean; onSaved: () => void }) {
   const qc = useQueryClient()
   const [adding, setAdding]   = useState(false)
@@ -39,28 +61,7 @@ export default function BankTab({ emp, isHR, onSaved }: { emp: any; isHR: boolea
   }
   const s = (k: string, v: any) => setForm((prev: any) => ({ ...prev, [k]: v }))
 
-  // Mask account number
   function maskAcc(n: string) { return n.length > 4 ? '****' + n.slice(-4) : n }
-
-  const FormFields = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-      <Field label="Account Holder Name" required><input className={inp} value={form.accountHolderName} onChange={e => s('accountHolderName', e.target.value)} placeholder="As per bank records"/></Field>
-      <Field label="Account Number" required><input className={inp} value={form.accountNumber} onChange={e => s('accountNumber', e.target.value)} placeholder="Account number"/></Field>
-      <Field label="IFSC Code" required><input className={inp} value={form.ifscCode} onChange={e => s('ifscCode', e.target.value.toUpperCase())} placeholder="e.g. HDFC0001234"/></Field>
-      <Field label="Bank Name" required><input className={inp} value={form.bankName} onChange={e => s('bankName', e.target.value)} placeholder="e.g. HDFC Bank"/></Field>
-      <Field label="Branch Name"><input className={inp} value={form.branchName} onChange={e => s('branchName', e.target.value)} placeholder="Branch name"/></Field>
-      <Field label="Account Type">
-        <select className={sel} value={form.accountType} onChange={e => s('accountType', e.target.value)}>
-          <option value="SAVINGS">Savings</option>
-          <option value="CURRENT">Current</option>
-        </select>
-      </Field>
-      <div className="flex items-center gap-2 mt-1">
-        <input type="checkbox" id="isPrimary" checked={form.isPrimary} onChange={e => s('isPrimary', e.target.checked)} className="w-4 h-4 rounded"/>
-        <label htmlFor="isPrimary" className="text-sm text-slate-600 cursor-pointer">Mark as primary account (used for salary transfer)</label>
-      </div>
-    </div>
-  )
 
   return (
     <div className="space-y-4">
@@ -69,7 +70,7 @@ export default function BankTab({ emp, isHR, onSaved }: { emp: any; isHR: boolea
       {adding && (
         <div className="border border-brand-200 rounded-2xl p-4 bg-brand-50/30">
           <p className="text-sm font-semibold text-slate-700">Add Bank Account</p>
-          <FormFields/>
+          <BankForm form={form} onChange={s}/>
           <div className="flex gap-2 mt-3 justify-end">
             <Button variant="secondary" icon={<X size={14}/>} onClick={() => setAdding(false)}>Cancel</Button>
             <Button icon={<Save size={14}/>} loading={addMut.isPending} onClick={() => { setError(''); addMut.mutate() }}>Add Account</Button>
@@ -89,7 +90,7 @@ export default function BankTab({ emp, isHR, onSaved }: { emp: any; isHR: boolea
             <div key={a.id} className={`border rounded-2xl overflow-hidden ${a.isPrimary ? 'border-brand-300 bg-brand-50/20' : 'border-slate-200'}`}>
               {editing === a.id ? (
                 <div className="p-4">
-                  <FormFields/>
+                  <BankForm form={form} onChange={s}/>
                   <div className="flex gap-2 mt-3 justify-end">
                     <Button variant="secondary" icon={<X size={14}/>} onClick={() => setEditing(null)}>Cancel</Button>
                     <Button icon={<Save size={14}/>} loading={updMut.isPending} onClick={() => { setError(''); updMut.mutate() }}>Save</Button>

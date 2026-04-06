@@ -4,8 +4,26 @@ import { Plus, Trash2, Edit2, Save, X, Phone } from 'lucide-react'
 import { profileApi, Field, inp, sel } from './shared'
 import { Button, Alert } from '../ui'
 
-const CONTACT_TYPES   = ['EMERGENCY', 'PARENT', 'SPOUSE', 'GUARDIAN', 'OTHER']
+const CONTACT_TYPES = ['EMERGENCY', 'PARENT', 'SPOUSE', 'GUARDIAN', 'OTHER']
 const BLANK = { name: '', relationship: '', contactType: 'EMERGENCY', phone: '', alternatePhone: '', email: '', address: '' }
+
+function ContactForm({ form, onChange }: { form: typeof BLANK; onChange: (k: string, v: string) => void }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+      <Field label="Name" required><input className={inp} value={form.name} onChange={e => onChange('name', e.target.value)} placeholder="Full name"/></Field>
+      <Field label="Relationship"><input className={inp} value={form.relationship} onChange={e => onChange('relationship', e.target.value)} placeholder="e.g. Father, Wife"/></Field>
+      <Field label="Contact Type">
+        <select className={sel} value={form.contactType} onChange={e => onChange('contactType', e.target.value)}>
+          {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </Field>
+      <Field label="Phone" required><input className={inp} value={form.phone} onChange={e => onChange('phone', e.target.value)} placeholder="+91 98765 43210"/></Field>
+      <Field label="Alternate Phone"><input className={inp} value={form.alternatePhone} onChange={e => onChange('alternatePhone', e.target.value)}/></Field>
+      <Field label="Email"><input className={inp} type="email" value={form.email} onChange={e => onChange('email', e.target.value)}/></Field>
+      <div className="sm:col-span-2"><Field label="Address"><input className={inp} value={form.address} onChange={e => onChange('address', e.target.value)} placeholder="Optional address"/></Field></div>
+    </div>
+  )
+}
 
 export default function ContactsTab({ emp, isHR, onSaved }: { emp: any; isHR: boolean; onSaved: () => void }) {
   const qc = useQueryClient()
@@ -43,31 +61,14 @@ export default function ContactsTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
 
   const s = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }))
 
-  const FormFields = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-      <Field label="Name" required><input className={inp} value={form.name} onChange={e => s('name', e.target.value)} placeholder="Full name"/></Field>
-      <Field label="Relationship"><input className={inp} value={form.relationship} onChange={e => s('relationship', e.target.value)} placeholder="e.g. Father, Wife"/></Field>
-      <Field label="Contact Type">
-        <select className={sel} value={form.contactType} onChange={e => s('contactType', e.target.value)}>
-          {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-      </Field>
-      <Field label="Phone" required><input className={inp} value={form.phone} onChange={e => s('phone', e.target.value)} placeholder="+91 98765 43210"/></Field>
-      <Field label="Alternate Phone"><input className={inp} value={form.alternatePhone} onChange={e => s('alternatePhone', e.target.value)}/></Field>
-      <Field label="Email"><input className={inp} type="email" value={form.email} onChange={e => s('email', e.target.value)}/></Field>
-      <div className="sm:col-span-2"><Field label="Address"><input className={inp} value={form.address} onChange={e => s('address', e.target.value)} placeholder="Optional address"/></Field></div>
-    </div>
-  )
-
   return (
     <div className="space-y-4">
       {error && <Alert type="error" message={error}/>}
 
-      {/* Add form */}
       {adding && (
         <div className="border border-brand-200 rounded-2xl p-4 bg-brand-50/30">
           <p className="text-sm font-semibold text-slate-700 mb-2">Add New Contact</p>
-          <FormFields/>
+          <ContactForm form={form} onChange={s}/>
           <div className="flex gap-2 mt-3 justify-end">
             <Button variant="secondary" icon={<X size={14}/>} onClick={() => setAdding(false)}>Cancel</Button>
             <Button icon={<Save size={14}/>} loading={addMut.isPending} onClick={() => { setError(''); addMut.mutate() }}>Add Contact</Button>
@@ -75,7 +76,6 @@ export default function ContactsTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
         </div>
       )}
 
-      {/* Contact list */}
       {isLoading ? (
         <p className="text-sm text-slate-400">Loading...</p>
       ) : !contacts?.length && !adding ? (
@@ -90,7 +90,7 @@ export default function ContactsTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
             <div key={c.id} className="border border-slate-200 rounded-2xl overflow-hidden">
               {editing === c.id ? (
                 <div className="p-4">
-                  <FormFields/>
+                  <ContactForm form={form} onChange={s}/>
                   <div className="flex gap-2 mt-3 justify-end">
                     <Button variant="secondary" icon={<X size={14}/>} onClick={() => setEditing(null)}>Cancel</Button>
                     <Button icon={<Save size={14}/>} loading={updMut.isPending} onClick={() => { setError(''); updMut.mutate() }}>Save</Button>
