@@ -3,7 +3,7 @@ import { PrismaClient, EmployeeStatus, UserRole } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('\n🌱 Seeding CSharpTek Payroll database...\n')
+  console.log('\n🌱 Seeding TEKONE database...\n')
 
   // ── COMPANY ────────────────────────────────────────────────────────────────
   const company = await prisma.company.upsert({
@@ -167,7 +167,7 @@ async function main() {
   }
   console.log(`✅ Leave types: ${leaveTypes.length} created`)
 
-  console.log('\n🎉 Seed complete! CSharpTek Payroll is ready.\n')
+  console.log('\n🎉 Seed complete! TEKONE is ready.\n')
   console.log('Dev login roles:')
   console.log('  SUPER_ADMIN → bhanu@csharptek.com')
   console.log('  HR          → priya@csharptek.com')

@@ -227,12 +227,8 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-brand-800">
-          <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center flex-shrink-0">
-            <span className="text-sm font-display font-bold text-white">C#</span>
-          </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">CSharpTek</p>
-            <p className="text-xs text-brand-400 truncate">Payroll System</p>
+            <img src="/src/assets/tekone-logo.png" alt="TEKONE" className="h-7 w-auto" />
           </div>
           <button onClick={onClose} className="lg:hidden text-brand-400 hover:text-white">
             <X size={16} />
@@ -370,7 +366,7 @@ function usePageTitle() {
     '/management/reports': 'Payroll Reports',
     '/management/cost-report': 'Cost Analysis',
   }
-  return map[location.pathname] || 'CSharpTek Payroll'
+  return map[location.pathname] || 'TEKONE'
 }
 
 // ─── APP LAYOUT ──────────────────────────────────────────────────────────────

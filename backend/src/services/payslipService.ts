@@ -85,7 +85,7 @@ async function sendPayslipEmail(
     html: `
       <div style="font-family:Arial,sans-serif;max-width:540px;margin:0 auto;padding:24px;">
         <div style="border-bottom:2px solid #1f4e79;padding-bottom:16px;margin-bottom:24px;">
-          <h2 style="color:#1f4e79;margin:0;">CSharpTek Payroll</h2>
+          <h2 style="color:#1f4e79;margin:0;">TEKONE</h2>
         </div>
         <p style="color:#374151;">Hi <strong>${employeeName}</strong>,</p>
         <p style="color:#374151;">Your salary slip for <strong>${payrollMonth}</strong> is ready.</p>
@@ -98,12 +98,12 @@ async function sendPayslipEmail(
         <p style="color:#374151;">
           You can also view all payslips on the
           <a href="${process.env.FRONTEND_URL}/my/payslips" style="color:#2e75b6;">
-            CSharpTek Payroll portal
+            TEKONE portal
           </a>.
         </p>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
         <p style="color:#9ca3af;font-size:12px;margin:0;">
-          Automated email — please do not reply. CSharpTek Payroll System.
+          Automated email — please do not reply. TEKONE System.
         </p>
       </div>
     `,

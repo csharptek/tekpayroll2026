@@ -43,7 +43,7 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
-    service: 'CSharpTek Payroll API',
+    service: 'TEKONE API',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
@@ -73,7 +73,7 @@ app.use('/api/policies', policiesRouter);
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 CSharpTek Payroll API running on port ${PORT}`);
+  console.log(`\n🚀 TEKONE API running on port ${PORT}`);
   console.log(`   Environment: ${process.env.NODE_ENV}`);
   console.log(`   Dev auth bypass: ${process.env.DEV_AUTH_BYPASS === 'true' ? 'ENABLED' : 'disabled'}`);
   console.log(`   Health: http://localhost:${PORT}/health\n`);

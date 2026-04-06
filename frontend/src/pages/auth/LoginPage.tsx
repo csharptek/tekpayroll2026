@@ -123,10 +123,10 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-md animate-slide-up">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 mb-4">
-            <span className="text-2xl font-display font-bold text-white">C#</span>
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src="/src/assets/tekone-logo.png" alt="TEKONE" className="h-10 w-auto" />
           </div>
-          <h1 className="text-2xl font-display font-bold text-white">CSharpTek Payroll</h1>
+          <h1 className="text-2xl font-display font-bold text-white">TEKONE</h1>
           <p className="text-brand-200 text-sm mt-1">Internal Payroll Management System</p>
         </div>
 

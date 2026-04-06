@@ -277,7 +277,7 @@ export async function cronSendHolidayGreetings() {
   for (const emp of employees) {
     try {
       await resend.emails.send({
-        from:    'TekPayroll <noreply@csharptek.com>',
+        from:    'TEKONE <noreply@csharptek.com>',
         to:      emp.email,
         subject: `🎉 ${holiday.name} — Holiday Greetings`,
         html:    `<p>Dear ${emp.name},</p><p>${message}</p><p>Enjoy your holiday!</p><p>— CSharpTek HR Team</p>`,
@@ -310,13 +310,13 @@ export async function cronLeaveRolloverReminder() {
   for (const hr of hrUsers) {
     try {
       await resend.emails.send({
-        from:    'TekPayroll <noreply@csharptek.com>',
+        from:    'TEKONE <noreply@csharptek.com>',
         to:      hr.email,
         subject: `⚠️ Leave Rollover Reminder — Window opens Dec 28`,
         html:    `<p>Dear ${hr.name},</p>
           <p>This is a reminder that the <strong>Leave Year-End Rollover</strong> window for ${year} opens on <strong>December 28</strong> and closes on <strong>January 5, ${year + 1}</strong>.</p>
-          <p>Please log in to TekPayroll and trigger the rollover before the window closes.</p>
-          <p>— TekPayroll System</p>`,
+          <p>Please log in to TEKONE and trigger the rollover before the window closes.</p>
+          <p>— TEKONE System</p>`,
       })
     } catch (err) {
       console.error(`[CRON] Rollover reminder failed for ${hr.email}:`, err)
