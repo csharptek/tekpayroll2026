@@ -238,6 +238,75 @@ export function isBonusMonth(payrollMonth: string): boolean {
   return month === BONUS_MONTH
 }
 
+// ─── SALARY REVISION LOOKUP ──────────────────────────────────────────────────
+// Returns the salary input effective as of a given date.
+// Queries SalaryRevision table first; falls back to employee fields.
+
+export async function getSalaryInputForDate(employeeId: string, asOf: Date): Promise<SalaryInput & { tdsMonthly: number }> {
+  const revision = await prisma.salaryRevision.findFirst({
+    where: {
+      employeeId,
+      effectiveFrom: { lte: asOf },
+    },
+    orderBy: { effectiveFrom: 'desc' },
+  })
+
+  if (revision) {
+    return {
+      annualCtc:        Number(revision.newCtc),
+      basicPercent:     Number(revision.newBasicPct),
+      hraPercent:       Number(revision.newHraPct),
+      transportMonthly: revision.newTransport != null ? Number(revision.newTransport) : null,
+      fbpMonthly:       revision.newFbp       != null ? Number(revision.newFbp)       : null,
+      mediclaim:        Number(revision.newMediclaim),
+      hasIncentive:     revision.newHasIncentive,
+      incentivePercent: Number(revision.newIncentivePct),
+      tdsMonthly:       Number(revision.newTds),
+    }
+  }
+
+  // Fallback: read from employee record
+  const emp = await prisma.employee.findUnique({ where: { id: employeeId } })
+  if (!emp) throw new Error(`Employee ${employeeId} not found`)
+
+  return {
+    annualCtc:        Number(emp.annualCtc),
+    basicPercent:     Number((emp as any).basicPercent    ?? 45),
+    hraPercent:       Number((emp as any).hraPercent      ?? 35),
+    transportMonthly: (emp as any).transportMonthly != null ? Number((emp as any).transportMonthly) : null,
+    fbpMonthly:       (emp as any).fbpMonthly       != null ? Number((emp as any).fbpMonthly)       : null,
+    mediclaim:        Number((emp as any).mediclaim        ?? 0),
+    hasIncentive:     Boolean((emp as any).hasIncentive),
+    incentivePercent: Number((emp as any).incentivePercent ?? 12),
+    tdsMonthly:       Number((emp as any).tdsMonthly       ?? 0),
+  }
+}
+
+// ─── HYI HALF-YEAR SLAB HELPERS ──────────────────────────────────────────────
+// Slabs: Jan–Jun (0) and Jul–Dec (1)
+
+export function getHyiSlab(month: number): 0 | 1 {
+  return month <= 5 ? 0 : 1  // month is 0-indexed (Date.getMonth())
+}
+
+// Returns true if HYI should be suppressed for this payroll month.
+// Suppressed when: employee is ON_NOTICE and LWD falls within the same half-year slab.
+export function shouldSuppressHyi(
+  employeeStatus: string,
+  lastWorkingDay: Date | null | undefined,
+  cycleStart: Date
+): boolean {
+  if (employeeStatus !== 'ON_NOTICE') return false
+  if (!lastWorkingDay) return false
+
+  const cycleSlab = getHyiSlab(cycleStart.getMonth())
+  const lwdSlab   = getHyiSlab(lastWorkingDay.getMonth())
+  const sameYear  = lastWorkingDay.getFullYear() === cycleStart.getFullYear()
+
+  // Suppress if LWD is in the same half-year slab as current cycle
+  return sameYear && cycleSlab === lwdSlab
+}
+
 // ─── FULL CALCULATION ────────────────────────────────────────────────────────
 
 export async function calculatePayrollForEmployee(params: {
@@ -253,11 +322,31 @@ export async function calculatePayrollForEmployee(params: {
   lopDays:         number
   tdsMonthly:      number
   reimbursements:  number
+  employeeStatus?: string
   esiConfig?: Awaited<ReturnType<typeof getEsiConfig>>
 }): Promise<PayrollCalculation> {
 
   const esiConfig  = params.esiConfig ?? await getEsiConfig()
-  const salary     = computeSalaryStructure(params.salaryInput, esiConfig)
+
+  // Resolve salary input from revision history if not explicitly provided
+  // Callers may pass salaryInput directly (legacy) or we derive it from revisions
+  let salaryInput = params.salaryInput
+
+  // HYI suppression: zero out hyiMonthly for ON_NOTICE employees in LWD slab
+  const suppressHyi = shouldSuppressHyi(
+    params.employeeStatus || 'ACTIVE',
+    params.lastWorkingDay,
+    params.cycleStart
+  )
+
+  // Build modified input with HYI zeroed if suppressed
+  // We achieve this by temporarily setting hasIncentive=false during structure compute,
+  // then restoring the hyiMonthly to 0 in the result via a wrapper
+  const salaryInputForCalc: SalaryInput = suppressHyi
+    ? { ...salaryInput, hasIncentive: false, incentivePercent: 0 }
+    : salaryInput
+
+  const salary     = computeSalaryStructure(salaryInputForCalc, esiConfig)
   const proration  = computeProration(
     salary.grandTotalMonthly,
     params.cycleStart,

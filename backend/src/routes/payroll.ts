@@ -4,7 +4,7 @@ import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
 import { AuditAction, PayrollStatus } from '@prisma/client'
-import { calculatePayrollForEmployee, isBonusMonth, getEsiConfig } from '../services/payrollEngine'
+import { calculatePayrollForEmployee, isBonusMonth, getEsiConfig, getSalaryInputForDate } from '../services/payrollEngine'
 
 export const payrollRouter = Router()
 payrollRouter.use(authenticate)
@@ -101,9 +101,11 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         _sum: { amount: true },
       })
 
+      const revisionInput = await getSalaryInputForDate(emp.id, cycle.cycleStart)
+
       const calc = await calculatePayrollForEmployee({
         employeeId:      emp.id,
-        salaryInput:     buildSalaryInput(emp),
+        salaryInput:     revisionInput,
         state:           emp.state || '',
         joiningDate:     emp.joiningDate,
         lastWorkingDay:  emp.lastWorkingDay,
@@ -112,7 +114,9 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         cycleEnd:        cycle.cycleEnd,
         payrollMonth:    cycle.payrollMonth,
         lopDays:         lopEntry?.lopDays || 0,
-        tdsMonthly:      Number(emp.tdsMonthly ?? 0),
+        tdsMonthly:      revisionInput.tdsMonthly,
+        reimbursements:  Number(reimbs._sum.amount || 0),
+        employeeStatus:  emp.status,
         reimbursements:  Number(reimbs._sum.amount || 0),
       })
 
@@ -262,9 +266,11 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
         if (override.reimbursements === undefined)  reimbAmount = Number(reimbs._sum.amount || 0)
       }
 
+      const revisionInput = await getSalaryInputForDate(emp.id, start)
+
       const calc = await calculatePayrollForEmployee({
         employeeId:      emp.id,
-        salaryInput:     buildSalaryInput(emp),
+        salaryInput:     revisionInput,
         state:           emp.state || '',
         joiningDate:     emp.joiningDate,
         lastWorkingDay:  emp.lastWorkingDay,
@@ -273,8 +279,9 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
         cycleEnd:        end,
         payrollMonth,
         lopDays,
-        tdsMonthly:      Number(emp.tdsMonthly ?? 0),
+        tdsMonthly:      revisionInput.tdsMonthly,
         reimbursements:  reimbAmount,
+        employeeStatus:  emp.status,
         esiConfig,
       })
 

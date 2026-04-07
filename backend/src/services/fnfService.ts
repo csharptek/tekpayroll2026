@@ -1,6 +1,6 @@
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
-import { computeSalaryStructure, computeEsi, computePt, computeLoanDeduction } from './payrollEngine'
+import { computeSalaryStructure, computeEsi, computePt, computeLoanDeduction, getSalaryInputForDate, getHyiSlab } from './payrollEngine'
 
 export interface FnfCalculation {
   employeeId:        string
@@ -19,6 +19,7 @@ export interface FnfCalculation {
   tdsAmount:         number
   loanOutstanding:   number
   otherDeductions:   number
+  hyiRecovery:       number
   totalAdditions:    number
   totalDeductions:   number
   netPayable:        number
@@ -51,31 +52,18 @@ export async function calculateFnf(employeeId: string): Promise<FnfCalculation> 
   const totalCycleDays = daysBetween(cycleStart, cycleEnd)
   const salaryDays     = daysBetween(cycleStart, lwd)
 
-  // Build salary input from employee fields
-  const salaryInput = {
-    annualCtc:        Number(employee.annualCtc),
-    basicPercent:     Number((employee as any).basicPercent    ?? 45),
-    hraPercent:       Number((employee as any).hraPercent      ?? 35),
-    transportMonthly: (employee as any).transportMonthly != null ? Number((employee as any).transportMonthly) : null,
-    fbpMonthly:       (employee as any).fbpMonthly       != null ? Number((employee as any).fbpMonthly)       : null,
-    mediclaim:        Number((employee as any).mediclaim        ?? 0),
-    hasIncentive:     Boolean((employee as any).hasIncentive),
-    incentivePercent: Number((employee as any).incentivePercent ?? 12),
-  }
+  // Use salary revision effective as of LWD
+  const salaryInput = await getSalaryInputForDate(employeeId, lwd)
 
   const salary = computeSalaryStructure(salaryInput)
 
   const proratedSalary = r2((salary.grandTotalMonthly / totalCycleDays) * salaryDays)
   const pfAmount       = salary.employeePfMonthly
-  const esiAmount      = computeEsi(salary.grandTotalMonthly)
+  const esiAmount      = computeEsi(salary.esiBase)
   const ptAmount       = await computePt(salary.grandTotalMonthly, employee.state || '')
 
-  // TDS from last entry
-  const lastEntry = await prisma.payrollEntry.findFirst({
-    where: { employeeId },
-    orderBy: { createdAt: 'desc' },
-  })
-  const tdsAmount = lastEntry ? Number(lastEntry.tdsAmount) : 0
+  // TDS from revision
+  const tdsAmount = salaryInput.tdsMonthly
 
   // Loan outstanding
   const loanOutstanding = r2(
@@ -96,18 +84,34 @@ export async function calculateFnf(employeeId: string): Promise<FnfCalculation> 
     pendingReimbursements = Number(reimbs._sum.amount || 0)
   }
 
+  // ─── HYI RECOVERY ──────────────────────────────────────────────────────────
+  // Months paid in current slab before resignation month must be recovered
+  let hyiRecovery = 0
+  if (salary.hyiMonthly > 0 && employee.resignationDate) {
+    const resignMonth = employee.resignationDate.getMonth()
+    const resignYear  = employee.resignationDate.getFullYear()
+    const lwdSlab     = getHyiSlab(lwdMonth)
+    const resignSlab  = getHyiSlab(resignMonth)
+    const slabStart   = lwdSlab === 0 ? 0 : 6
+    if (resignYear === lwdYear && resignSlab === lwdSlab) {
+      const paidMonths = Math.max(0, resignMonth - slabStart)
+      hyiRecovery = r2(salary.hyiMonthly * paidMonths)
+    }
+  }
+
   const totalAdditions  = r2(proratedSalary + pendingReimbursements)
-  const totalDeductions = r2(pfAmount + esiAmount + ptAmount + tdsAmount + loanOutstanding)
+  const totalDeductions = r2(pfAmount + esiAmount + ptAmount + tdsAmount + loanOutstanding + hyiRecovery)
   const netPayable      = r2(Math.max(0, totalAdditions - totalDeductions))
 
   const breakdown = [
-    { label: `Salary (${salaryDays} days)`,    amount: proratedSalary,       type: 'addition'  as const },
+    { label: `Salary (${salaryDays} days)`,    amount: proratedSalary,        type: 'addition'  as const },
     ...(pendingReimbursements > 0 ? [{ label: 'Pending Reimbursements', amount: pendingReimbursements, type: 'addition'  as const }] : []),
-    { label: 'Employee PF',                    amount: pfAmount,             type: 'deduction' as const },
-    ...(esiAmount > 0     ? [{ label: 'ESI',                  amount: esiAmount,     type: 'deduction' as const }] : []),
-    ...(ptAmount > 0      ? [{ label: 'Professional Tax',      amount: ptAmount,      type: 'deduction' as const }] : []),
-    ...(tdsAmount > 0     ? [{ label: 'TDS',                   amount: tdsAmount,     type: 'deduction' as const }] : []),
-    ...(loanOutstanding > 0 ? [{ label: 'Loan Outstanding',   amount: loanOutstanding, type: 'deduction' as const }] : []),
+    { label: 'Employee PF',                     amount: pfAmount,              type: 'deduction' as const },
+    ...(esiAmount > 0       ? [{ label: 'ESI',               amount: esiAmount,       type: 'deduction' as const }] : []),
+    ...(ptAmount > 0        ? [{ label: 'Professional Tax',  amount: ptAmount,        type: 'deduction' as const }] : []),
+    ...(tdsAmount > 0       ? [{ label: 'TDS',               amount: tdsAmount,       type: 'deduction' as const }] : []),
+    ...(loanOutstanding > 0 ? [{ label: 'Loan Outstanding',  amount: loanOutstanding, type: 'deduction' as const }] : []),
+    ...(hyiRecovery > 0     ? [{ label: 'HYI Recovery',      amount: hyiRecovery,     type: 'deduction' as const }] : []),
   ]
 
   return {
@@ -127,6 +131,7 @@ export async function calculateFnf(employeeId: string): Promise<FnfCalculation> 
     tdsAmount,
     loanOutstanding,
     otherDeductions:       0,
+    hyiRecovery,
     totalAdditions,
     totalDeductions,
     netPayable,

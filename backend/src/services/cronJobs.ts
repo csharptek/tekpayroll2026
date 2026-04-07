@@ -1,6 +1,7 @@
 import { prisma } from '../utils/prisma'
 import { generateAndDeliverPayslips } from '../services/payslipService'
 import { startCronLog, completeCronLog } from './cronLogger'
+import { getSalaryInputForDate } from './payrollEngine'
 
 // ─── HELPER ──────────────────────────────────────────────────────────────────
 
@@ -80,16 +81,9 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
           _sum: { amount: true },
         })
 
-        const salaryInput = {
-          annualCtc:        Number(emp.annualCtc),
-          basicPercent:     Number((emp as any).basicPercent ?? 45),
-          hraPercent:       Number((emp as any).hraPercent ?? 35),
-          transportMonthly: (emp as any).transportMonthly != null ? Number((emp as any).transportMonthly) : null,
-          fbpMonthly:       (emp as any).fbpMonthly != null ? Number((emp as any).fbpMonthly) : null,
-          mediclaim:        Number((emp as any).mediclaim ?? 0),
-          hasIncentive:     Boolean((emp as any).hasIncentive),
-          incentivePercent: Number((emp as any).incentivePercent ?? 12),
-        }
+        const revisionInput = await getSalaryInputForDate(emp.id, cycle.cycleStart)
+
+        const salaryInput = revisionInput
         const calc = await calculatePayrollForEmployee({
           employeeId:      emp.id,
           salaryInput,
@@ -101,7 +95,8 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
           cycleEnd:        cycle.cycleEnd,
           payrollMonth:    cycle.payrollMonth,
           lopDays:         lopEntry?.lopDays || 0,
-          tdsMonthly:      Number((emp as any).tdsMonthly ?? 0),
+          tdsMonthly:      revisionInput.tdsMonthly,
+          employeeStatus:  emp.status,
           reimbursements:  Number(reimbs._sum.amount || 0),
         })
 
