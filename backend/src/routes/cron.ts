@@ -1,9 +1,13 @@
 import { Router } from 'express'
-import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from '../services/cronJobs'
+import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings } from '../services/cronJobs'
 import { prisma } from '../utils/prisma'
-import { requireSuperAdmin } from '../middleware/auth'
+import { authenticate, requireSuperAdmin } from '../middleware/auth'
 
 export const cronRouter = Router()
+
+// All /manual/* and /logs routes require authentication
+cronRouter.use('/manual', authenticate)
+cronRouter.use('/logs', authenticate)
 
 function verifyCronSecret(req: any, res: any, next: any) {
   const secret = req.headers['x-cron-secret']
@@ -15,7 +19,7 @@ function verifyCronSecret(req: any, res: any, next: any) {
   next()
 }
 
-// ─── CRON TRIGGER ENDPOINTS (external scheduler) ─────────────────────────────
+// ─── EXTERNAL SCHEDULER ENDPOINTS ────────────────────────────────────────────
 
 cronRouter.post('/run-payroll', verifyCronSecret, async (_req, res) => {
   await cronRunPayroll('cron')
@@ -34,16 +38,6 @@ cronRouter.post('/sync-entra', verifyCronSecret, async (_req, res) => {
 
 cronRouter.post('/holiday-greetings', verifyCronSecret, async (_req, res) => {
   await cronSendHolidayGreetings('cron')
-  res.json({ success: true })
-})
-
-cronRouter.post('/rollover-reminder', verifyCronSecret, async (_req, res) => {
-  await cronLeaveRolloverReminder('cron')
-  res.json({ success: true })
-})
-
-cronRouter.post('/lwd-reminder', verifyCronSecret, async (_req, res) => {
-  await cronLwdReminder('cron')
   res.json({ success: true })
 })
 
@@ -69,17 +63,7 @@ cronRouter.post('/manual/holiday-greetings', requireSuperAdmin, async (_req, res
   res.json({ success: true })
 })
 
-cronRouter.post('/manual/rollover-reminder', requireSuperAdmin, async (_req, res) => {
-  await cronLeaveRolloverReminder('manual')
-  res.json({ success: true })
-})
-
-cronRouter.post('/manual/lwd-reminder', requireSuperAdmin, async (_req, res) => {
-  await cronLwdReminder('manual')
-  res.json({ success: true })
-})
-
-// ─── CRON LOGS (Super Admin UI) ──────────────────────────────────────────────
+// ─── CRON LOGS ────────────────────────────────────────────────────────────────
 
 cronRouter.get('/logs', requireSuperAdmin, async (req, res) => {
   const { jobName, status, page = '1', limit = '50' } = req.query as any
