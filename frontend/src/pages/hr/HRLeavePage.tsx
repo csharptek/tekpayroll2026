@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, Clock, AlertTriangle, RefreshCw, Scissors } from 'lucide-react'
 import { leaveApi } from '../../services/api'
 import { PageHeader, Button, Alert } from '../../components/ui'
+import { DatePicker } from '../../components/DatePicker'
 import clsx from 'clsx'
 
 const KIND_LABEL: Record<string, string> = { SICK: 'Sick', CASUAL: 'Casual', PLANNED: 'Planned' }
@@ -257,11 +258,7 @@ export default function HRLeavePage() {
                             {cancelType === 'PARTIAL' && (
                               <div>
                                 <label className="text-xs text-slate-500 block mb-1">New end date</label>
-                                <input type="date" className="input text-xs w-full"
-                                  value={newEndDate}
-                                  max={new Date(app.endDate).toISOString().slice(0, 10)}
-                                  onChange={e => setNewEndDate(e.target.value)}
-                                />
+                                <DatePicker value={newEndDate} onChange={v => setNewEndDate(v)} />
                               </div>
                             )}
                             <div className="flex gap-2">
@@ -352,11 +349,7 @@ export default function HRLeavePage() {
                         <div className="p-2 bg-emerald-50 rounded-lg space-y-2">
                           <div>
                             <label className="text-xs text-slate-500 block mb-1">New end date (optional for partial)</label>
-                            <input type="date" className="input text-xs w-full"
-                              value={cancelReqNewEnd}
-                              max={new Date(app.endDate).toISOString().slice(0, 10)}
-                              onChange={e => setCancelReqNewEnd(e.target.value)}
-                            />
+                            <DatePicker value={cancelReqNewEnd} onChange={v => setCancelReqNewEnd(v)} />
                           </div>
                           <div className="flex gap-2">
                             <button onClick={() => setCancelReqId(null)} className="text-xs text-slate-500 underline">Close</button>

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, RefreshCw, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { employeeApi } from '../../services/api'
 import { PageHeader, Button, Alert, Skeleton, Rupee } from '../../components/ui'
+import { DatePicker } from '../../components/DatePicker'
 import clsx from 'clsx'
 
 const STATES = [
@@ -412,8 +413,8 @@ export default function BulkEditEmployeesPage() {
 
                   {/* Joining Date */}
                   <td className="px-2 py-1">
-                    <input type="date" className="input text-xs w-full" value={row.joiningDate}
-                      onChange={e => updateRow(row.id, 'joiningDate', e.target.value)} />
+                    <DatePicker value={row.joiningDate}
+                      onChange={v => updateRow(row.id, 'joiningDate', v)} />
                   </td>
 
                   {/* Annual CTC */}

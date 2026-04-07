@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, Trash2, Calendar } from 'lucide-react'
 import { leaveApi } from '../../services/api'
 import { PageHeader, Button, Alert } from '../../components/ui'
+import { DatePicker } from '../../components/DatePicker'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -101,10 +102,7 @@ export default function PublicHolidaysPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-medium text-slate-600 block mb-1">Date <span className="text-red-400">*</span></label>
-              <input type="date" className="input w-full"
-                value={form.date}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-              />
+              <DatePicker value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 block mb-1">Holiday Name <span className="text-red-400">*</span></label>

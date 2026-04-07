@@ -4,6 +4,7 @@ import { Plus, X, CheckCircle2, Clock, XCircle, AlertTriangle, ChevronDown, Chev
 import { leaveApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { PageHeader, Button, Alert } from '../../components/ui'
+import { DatePicker } from '../../components/DatePicker'
 import clsx from 'clsx'
 
 const KIND_LABEL: Record<string, string> = { SICK: 'Sick Leave', CASUAL: 'Casual Leave', PLANNED: 'Planned Leave' }
@@ -271,19 +272,17 @@ export default function MyLeavesPage() {
               <label className="text-xs font-medium text-slate-600 block mb-1">
                 {form.isHalfDay ? 'Date' : 'Start Date'} <span className="text-red-400">*</span>
               </label>
-              <input type="date" className="input w-full text-sm"
+              <DatePicker
                 value={form.startDate}
-                min={form.leaveKind === 'SICK' ? '' : minDate}
-                onChange={e => setForm(f => ({ ...f, startDate: e.target.value, endDate: e.target.value }))}
+                onChange={v => setForm(f => ({ ...f, startDate: v, endDate: v }))}
               />
             </div>
             {!form.isHalfDay && (
               <div>
                 <label className="text-xs font-medium text-slate-600 block mb-1">End Date <span className="text-red-400">*</span></label>
-                <input type="date" className="input w-full text-sm"
+                <DatePicker
                   value={form.endDate}
-                  min={form.startDate || (form.leaveKind === 'SICK' ? '' : minDate)}
-                  onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                  onChange={v => setForm(f => ({ ...f, endDate: v }))}
                 />
               </div>
             )}

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Save, User, Briefcase, DollarSign, CreditCard, AlertTriangle } from 'lucide-react'
 import { employeeApi } from '../../services/api'
 import { PageHeader, Button, Card, Alert, Skeleton, Rupee } from '../../components/ui'
+import { DatePicker } from '../../components/DatePicker'
 import SalaryBreakdownForm from '../../components/SalaryBreakdownForm'
 
 const STATES = [
@@ -210,8 +211,7 @@ export default function EditEmployeePage() {
               </div>
               <div>
                 <label className="label">Joining Date *</label>
-                <input className="input" type="date" value={form.joiningDate}
-                  onChange={e => setField('joiningDate', e.target.value)} />
+                <DatePicker value={form.joiningDate} onChange={v => setField('joiningDate', v)} />
               </div>
               <div>
                 <label className="label">State (for PT)</label>
@@ -236,13 +236,11 @@ export default function EditEmployeePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="label">Resignation Date</label>
-                <input className="input" type="date" value={form.resignationDate}
-                  onChange={e => setField('resignationDate', e.target.value)} />
+                <DatePicker value={form.resignationDate} onChange={v => setField('resignationDate', v)} />
               </div>
               <div>
                 <label className="label">Last Working Day</label>
-                <input className="input" type="date" value={form.lastWorkingDay}
-                  onChange={e => setField('lastWorkingDay', e.target.value)} />
+                <DatePicker value={form.lastWorkingDay} onChange={v => setField('lastWorkingDay', v)} />
               </div>
             </div>
             {form.resignationDate && (

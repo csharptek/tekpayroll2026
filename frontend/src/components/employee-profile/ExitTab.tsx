@@ -7,6 +7,7 @@ import {
 import { exitApi } from '../../services/api'
 import { Field, inp, sel } from './shared'
 import { Button, Alert } from '../ui'
+import { DatePicker } from '../DatePicker'
 
 const EXIT_TYPES = ['RESIGNED', 'TERMINATED', 'ABSCONDED']
 
@@ -206,12 +207,12 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
             </select>
           </Field>
           <Field label="Resignation Date">
-            <input className={inp} type="date" value={details.resignationDate} disabled={!isHR}
-              onChange={e => setDetails(p => ({ ...p, resignationDate: e.target.value }))} />
+            <DatePicker value={details.resignationDate} disabled={!isHR}
+              onChange={v => setDetails(p => ({ ...p, resignationDate: v }))} />
           </Field>
           <Field label="Last Working Day">
-            <input className={inp} type="date" value={details.lastWorkingDay} disabled={!isHR}
-              onChange={e => setDetails(p => ({ ...p, lastWorkingDay: e.target.value }))} />
+            <DatePicker value={details.lastWorkingDay} disabled={!isHR}
+              onChange={v => setDetails(p => ({ ...p, lastWorkingDay: v }))} />
           </Field>
           <Field label="Notice Period Buyout (₹)">
             <input className={inp} type="number" placeholder="0" value={details.buyoutAmount} disabled={!isHR}
@@ -241,9 +242,8 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Interview Date">
-            <input className={inp} type="date" disabled={!isHR}
-              value={interview.interviewDate}
-              onChange={e => setInterview(p => ({ ...p, interviewDate: e.target.value }))} />
+            <DatePicker value={interview.interviewDate} disabled={!isHR}
+              onChange={v => setInterview(p => ({ ...p, interviewDate: v }))} />
           </Field>
           <Field label="Status">
             <div className="flex items-center gap-2 pt-2">

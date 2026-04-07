@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save, User, Briefcase, DollarSign, CreditCard } from 'lucide-react'
 import { employeeApi } from '../../services/api'
 import { PageHeader, Button, Card, Alert } from '../../components/ui'
+import { DatePicker } from '../../components/DatePicker'
 import SalaryCalculatorForm, { SalaryOutput } from '../../components/SalaryCalculatorForm'
 
 const STATES = [
@@ -206,8 +207,7 @@ export default function AddEmployeePage() {
               </div>
               <div>
                 <label className="label">Joining Date *</label>
-                <input className="input" type="date"
-                  value={form.joiningDate} onChange={e => setField('joiningDate', e.target.value)} />
+                <DatePicker value={form.joiningDate} onChange={v => setField('joiningDate', v)} />
               </div>
               <div>
                 <label className="label">Designation</label>

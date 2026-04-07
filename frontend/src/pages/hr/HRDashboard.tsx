@@ -276,8 +276,8 @@ function SuperAdminDashboard({
   const latestCycle = cycles?.[0]
   return (
     <div className="space-y-6">
-      {/* Stat row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Row 1 — headcount + gross + net */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Active Employees"
           value={loadingSummary ? '—' : summary?.totalEmployees ?? '—'}
@@ -288,25 +288,53 @@ function SuperAdminDashboard({
         <StatCard
           label="Tentative Gross / Month"
           value={loadingSalarySummary ? '—' : salarySummary?.totalGross != null ? `₹${Number(salarySummary.totalGross).toLocaleString('en-IN')}` : '—'}
-          sub={salarySummary ? `${salarySummary.employeeCount} employees` : undefined}
+          sub={salarySummary ? `${salarySummary.employeeCount} employees on payroll` : undefined}
           icon={<CreditCard size={18} />}
           color="green"
           loading={loadingSalarySummary}
         />
         <StatCard
-          label="Total Employee PF / Month"
+          label="Tentative Net / Month"
+          value={loadingSalarySummary ? '—' : salarySummary?.totalNet != null ? `₹${Number(salarySummary.totalNet).toLocaleString('en-IN')}` : '—'}
+          sub="After employee PF & ESI"
+          icon={<CheckCircle2 size={18} />}
+          color="amber"
+          loading={loadingSalarySummary}
+        />
+      </div>
+
+      {/* Row 2 — PF & ESI breakdown */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Employee PF / Month"
           value={loadingSalarySummary ? '—' : salarySummary?.totalEmployeePf != null ? `₹${Number(salarySummary.totalEmployeePf).toLocaleString('en-IN')}` : '—'}
-          sub="PF + ESI combined"
+          sub="Deducted from salary"
           icon={<TrendingUp size={18} />}
           color="purple"
           loading={loadingSalarySummary}
         />
         <StatCard
-          label="Tentative Net / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalNet != null ? `₹${Number(salarySummary.totalNet).toLocaleString('en-IN')}` : '—'}
-          sub="After PF & ESI"
-          icon={<CheckCircle2 size={18} />}
-          color="amber"
+          label="Employer PF / Month"
+          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployerPf != null ? `₹${Number(salarySummary.totalEmployerPf).toLocaleString('en-IN')}` : '—'}
+          sub="Company contribution"
+          icon={<TrendingUp size={18} />}
+          color="blue"
+          loading={loadingSalarySummary}
+        />
+        <StatCard
+          label="Employee ESI / Month"
+          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployeeEsi != null ? `₹${Number(salarySummary.totalEmployeeEsi).toLocaleString('en-IN')}` : '—'}
+          sub="Deducted from salary"
+          icon={<TrendingUp size={18} />}
+          color="purple"
+          loading={loadingSalarySummary}
+        />
+        <StatCard
+          label="Employer ESI / Month"
+          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployerEsi != null ? `₹${Number(salarySummary.totalEmployerEsi).toLocaleString('en-IN')}` : '—'}
+          sub="Company contribution"
+          icon={<TrendingUp size={18} />}
+          color="blue"
           loading={loadingSalarySummary}
         />
       </div>

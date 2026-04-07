@@ -10,6 +10,7 @@ import {
   PageHeader, Button, Card, Alert, Table, Th, Td, Tr,
   EmptyState, Skeleton
 } from '../../components/ui'
+import { DatePicker } from '../../components/DatePicker'
 import clsx from 'clsx'
 
 const INDIAN_STATES = [
@@ -310,11 +311,9 @@ function PreviewTable({
                       </select>
                     </td>
                     <td className="p-2">
-                      <input
-                        type="date"
+                      <DatePicker
                         value={r.joiningDate || ''}
-                        onChange={e => updateRow(i, 'joiningDate', e.target.value)}
-                        className="input text-xs w-36"
+                        onChange={v => updateRow(i, 'joiningDate', v)}
                       />
                     </td>
                     <td className="p-2">

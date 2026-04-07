@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Edit2, Save, X, Building2 } from 'lucide-react'
 import { profileApi, Field, inp } from './shared'
 import { Button, Alert, Rupee } from '../ui'
+import { DatePicker } from '../DatePicker'
 
 const BLANK = { companyName: '', designation: '', startDate: '', endDate: '', lastDrawnSalary: '', reasonForLeaving: '' }
 
@@ -11,8 +12,8 @@ function ExpForm({ form, onChange }: { form: typeof BLANK; onChange: (k: string,
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
       <Field label="Company Name" required><input className={inp} value={form.companyName} onChange={e => onChange('companyName', e.target.value)} placeholder="Company name"/></Field>
       <Field label="Designation" required><input className={inp} value={form.designation} onChange={e => onChange('designation', e.target.value)} placeholder="Your role"/></Field>
-      <Field label="Start Date" required><input className={inp} type="date" value={form.startDate} onChange={e => onChange('startDate', e.target.value)}/></Field>
-      <Field label="End Date"><input className={inp} type="date" value={form.endDate} onChange={e => onChange('endDate', e.target.value)}/></Field>
+      <Field label="Start Date" required><DatePicker value={form.startDate} onChange={v => onChange('startDate', v)}/></Field>
+      <Field label="End Date"><DatePicker value={form.endDate} onChange={v => onChange('endDate', v)}/></Field>
       <Field label="Last Drawn Salary (₹)"><input className={inp} type="number" value={form.lastDrawnSalary} onChange={e => onChange('lastDrawnSalary', e.target.value)} placeholder="Annual"/></Field>
       <Field label="Reason for Leaving"><input className={inp} value={form.reasonForLeaving} onChange={e => onChange('reasonForLeaving', e.target.value)} placeholder="Optional"/></Field>
     </div>

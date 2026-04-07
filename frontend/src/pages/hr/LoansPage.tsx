@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Eye } from 'lucide-react'
 import { loanApi, employeeApi } from '../../services/api'
 import { PageHeader, Button, Card, Modal, Alert, Skeleton, Table, Th, Td, Tr, EmptyState, Rupee, StatusBadge, Input } from '../../components/ui'
+import { DatePicker } from '../../components/DatePicker'
 import { format } from 'date-fns'
 
 export default function LoansPage() {
@@ -112,7 +113,10 @@ export default function LoansPage() {
             <Input label="Principal Amount (₹) *" type="number" placeholder="100000" value={form.principalAmount} onChange={e => setForm(f => ({ ...f, principalAmount: e.target.value }))} />
             <Input label="Tenure (months) *" type="number" placeholder="12" value={form.tenureMonths} onChange={e => setForm(f => ({ ...f, tenureMonths: e.target.value }))} />
             <Input label="EMI per month (₹) *" type="number" placeholder="9000" value={form.emiAmount} onChange={e => setForm(f => ({ ...f, emiAmount: e.target.value }))} />
-            <Input label="Disbursed On *" type="date" value={form.disbursedOn} onChange={e => setForm(f => ({ ...f, disbursedOn: e.target.value }))} />
+            <div>
+              <label className="label">Disbursed On *</label>
+              <DatePicker value={form.disbursedOn} onChange={v => setForm(f => ({ ...f, disbursedOn: v }))} />
+            </div>
           </div>
           <Input label="Purpose" placeholder="e.g. Medical emergency" value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} />
           {createMut.isError && <Alert type="error" message="Failed to create loan" />}

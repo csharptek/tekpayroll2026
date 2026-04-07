@@ -17,6 +17,7 @@ import ExperienceTab  from '../../components/employee-profile/ExperienceTab'
 import BankTab        from '../../components/employee-profile/BankTab'
 import DocumentsTab   from '../../components/employee-profile/DocumentsTab'
 import ExitTab        from '../../components/employee-profile/ExitTab'
+import { DatePicker } from '../../components/DatePicker'
 
 const TABS = [
   { key: 'personal',   label: 'Personal',   icon: User },
@@ -73,8 +74,7 @@ function InitiateExitModal({ empId, empName, onClose, onDone }: {
 
           <div>
             <label className="label">Resignation / Exit Date <span className="text-red-500">*</span></label>
-            <input className="input" type="date" value={resDate}
-              onChange={e => setResDate(e.target.value)} />
+            <DatePicker value={resDate} onChange={v => setResDate(v)} />
           </div>
 
           <div>

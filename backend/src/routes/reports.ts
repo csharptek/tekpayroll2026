@@ -45,7 +45,9 @@ reportRouter.get('/salary-summary', requireSuperAdmin, async (_req, res) => {
 
   let totalGross = 0;
   let totalEmployeePf = 0;
+  let totalEmployerPf = 0;
   let totalEmployeeEsi = 0;
+  let totalEmployerEsi = 0;
 
   for (const emp of employees) {
     const s = computeSalaryStructure({
@@ -61,7 +63,9 @@ reportRouter.get('/salary-summary', requireSuperAdmin, async (_req, res) => {
 
     totalGross += s.grandTotalMonthly;
     totalEmployeePf += s.employeePfMonthly;
+    totalEmployerPf += s.employerPfMonthly;
     totalEmployeeEsi += s.employeeEsiMonthly;
+    totalEmployerEsi += s.employerEsiMonthly;
   }
 
   const totalNet = totalGross - totalEmployeePf - totalEmployeeEsi;
@@ -72,7 +76,9 @@ reportRouter.get('/salary-summary', requireSuperAdmin, async (_req, res) => {
       employeeCount: employees.length,
       totalGross: Math.round(totalGross),
       totalEmployeePf: Math.round(totalEmployeePf),
+      totalEmployerPf: Math.round(totalEmployerPf),
       totalEmployeeEsi: Math.round(totalEmployeeEsi),
+      totalEmployerEsi: Math.round(totalEmployerEsi),
       totalNet: Math.round(totalNet),
     },
   });

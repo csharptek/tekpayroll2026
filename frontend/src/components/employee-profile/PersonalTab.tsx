@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { Camera, Save } from 'lucide-react'
 import { profileApi, Field, inp, sel } from './shared'
 import { Button, Alert } from '../ui'
+import { DatePicker } from '../DatePicker'
 
 const GENDERS     = ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']
 const MARITAL     = ['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED']
@@ -120,7 +121,7 @@ export default function PersonalTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
           <Field label="Last Name"><input className={inp} value={profile.lastName} disabled={ro} onChange={e => sp('lastName', e.target.value)}/></Field>
           <Field label="Official Email"><input className={inp} value={emp.email} disabled/></Field>
           <Field label="Personal Email"><input className={inp} type="email" value={profile.personalEmail} disabled={ro} onChange={e => sp('personalEmail', e.target.value)}/></Field>
-          <Field label="Date of Birth"><input className={inp} type="date" value={profile.dateOfBirth} disabled={ro} onChange={e => sp('dateOfBirth', e.target.value)}/></Field>
+          <Field label="Date of Birth"><DatePicker value={profile.dateOfBirth} disabled={ro} onChange={v => sp('dateOfBirth', v)}/></Field>
           <Field label="Gender">
             <select className={sel} value={profile.gender} disabled={ro} onChange={e => sp('gender', e.target.value)}>
               <option value="">Select...</option>
@@ -202,7 +203,7 @@ export default function PersonalTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
           <Field label="UAN (PF)"><input className={inp} value={govId.uanNumber} disabled={ro} onChange={e => sg('uanNumber', e.target.value)}/></Field>
           <Field label="ESIC Number"><input className={inp} value={govId.esicNumber} disabled={ro} onChange={e => sg('esicNumber', e.target.value)}/></Field>
           <Field label="Passport Number"><input className={inp} value={govId.passportNumber} disabled={ro} onChange={e => sg('passportNumber', e.target.value.toUpperCase())}/></Field>
-          <Field label="Passport Expiry"><input className={inp} type="date" value={govId.passportExpiry} disabled={ro} onChange={e => sg('passportExpiry', e.target.value)}/></Field>
+          <Field label="Passport Expiry"><DatePicker value={govId.passportExpiry} disabled={ro} onChange={v => sg('passportExpiry', v)}/></Field>
         </div>
         {isHR && <div className="mt-4 flex justify-end"><Button icon={<Save size={14}/>} loading={govIdMut.isPending} onClick={() => { setError(''); setSuccess(''); govIdMut.mutate() }}>Save IDs</Button></div>}
       </div>

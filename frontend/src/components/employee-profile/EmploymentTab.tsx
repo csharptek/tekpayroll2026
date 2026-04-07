@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Save } from 'lucide-react'
 import { profileApi, Field, inp, sel } from './shared'
 import { employeeApi } from '../../services/api'
+import { DatePicker } from '../DatePicker'
 import { Button, Alert } from '../ui'
 
 const EMP_TYPES = ['FULL_TIME', 'CONTRACT', 'INTERN', 'PART_TIME']
@@ -92,8 +93,7 @@ export default function EmploymentTab({ emp, isHR, onSaved }: { emp: any; isHR: 
           </Field>
 
           <Field label="Date of Joining">
-            <input className={inp} type="date" value={core.joiningDate} disabled={ro}
-              onChange={e => sc('joiningDate', e.target.value)} />
+            <DatePicker value={core.joiningDate} disabled={ro} onChange={v => sc('joiningDate', v)} />
           </Field>
 
           <Field label="Office Location">
