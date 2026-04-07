@@ -26,8 +26,6 @@ import { employeeProfileRouter } from './routes/employeeProfile'
 import { cronRouter } from './routes/cron';
 import cron from 'node-cron';
 import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from './services/cronJobs';
-import cron from 'node-cron';
-import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from './services/cronJobs';
 import { policiesRouter } from './routes/policies';
 import { exitRouter } from './routes/exit';
 

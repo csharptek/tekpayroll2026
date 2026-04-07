@@ -24,6 +24,7 @@ import PayslipGenerationPage from './pages/hr/PayslipGenerationPage'
 import FnfPage from './pages/hr/FnfPage'
 import AuditLogPage from './pages/hr/AuditLogPage'
 import CronLogsPage from './pages/hr/CronLogsPage'
+import CronLogsPage from './pages/hr/CronLogsPage'
 import ConfigPage from './pages/hr/ConfigPage'
 import SalaryCalculatorPage from './pages/hr/SalaryCalculatorPage'
 import SyncPage from './pages/hr/SyncPage'
@@ -91,6 +92,7 @@ export default function App() {
           <Route path="import" element={<BulkImportPage />} />
           <Route path="sync" element={<SyncPage />} />
           <Route path="audit" element={<AuditLogPage />} />
+          <Route path="cron-logs" element={<RequireAuth roles={['SUPER_ADMIN']}><CronLogsPage /></RequireAuth>} />
           <Route path="cron-logs" element={<RequireAuth roles={['SUPER_ADMIN']}><CronLogsPage /></RequireAuth>} />
           <Route path="config" element={<ConfigPage />} />
           <Route path="salary-calculator" element={<SalaryCalculatorPage />} />
