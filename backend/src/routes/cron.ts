@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from '../services/cronJobs'
+import { prisma } from '../utils/prisma'
+import { requireSuperAdmin } from '../middleware/auth'
 
 export const cronRouter = Router()
 
@@ -13,44 +15,90 @@ function verifyCronSecret(req: any, res: any, next: any) {
   next()
 }
 
-// POST /api/cron/run-payroll  → runs on 27th
+// ─── CRON TRIGGER ENDPOINTS (external scheduler) ─────────────────────────────
+
 cronRouter.post('/run-payroll', verifyCronSecret, async (_req, res) => {
-  console.log('[CRON ENDPOINT] run-payroll triggered')
-  await cronRunPayroll()
-  res.json({ success: true, message: 'Payroll run complete' })
+  await cronRunPayroll('cron')
+  res.json({ success: true })
 })
 
-// POST /api/cron/generate-payslips → runs on 5th
 cronRouter.post('/generate-payslips', verifyCronSecret, async (_req, res) => {
-  console.log('[CRON ENDPOINT] generate-payslips triggered')
-  await cronGeneratePayslips()
-  res.json({ success: true, message: 'Payslip generation complete' })
+  await cronGeneratePayslips('cron')
+  res.json({ success: true })
 })
 
-// POST /api/cron/sync-entra → runs daily at 02:00
 cronRouter.post('/sync-entra', verifyCronSecret, async (_req, res) => {
-  console.log('[CRON ENDPOINT] sync-entra triggered')
-  await cronSyncEntraId()
-  res.json({ success: true, message: 'Entra sync complete' })
+  await cronSyncEntraId('cron')
+  res.json({ success: true })
 })
 
-// POST /api/cron/holiday-greetings → runs daily at 08:00
 cronRouter.post('/holiday-greetings', verifyCronSecret, async (_req, res) => {
-  console.log('[CRON ENDPOINT] holiday-greetings triggered')
-  await cronSendHolidayGreetings()
-  res.json({ success: true, message: 'Holiday greetings processed' })
+  await cronSendHolidayGreetings('cron')
+  res.json({ success: true })
 })
 
-// POST /api/cron/rollover-reminder → runs daily at 09:00 (fires only on Dec 25)
 cronRouter.post('/rollover-reminder', verifyCronSecret, async (_req, res) => {
-  console.log('[CRON ENDPOINT] rollover-reminder triggered')
-  await cronLeaveRolloverReminder()
-  res.json({ success: true, message: 'Rollover reminder processed' })
+  await cronLeaveRolloverReminder('cron')
+  res.json({ success: true })
 })
 
-// POST /api/cron/lwd-reminder → runs daily
 cronRouter.post('/lwd-reminder', verifyCronSecret, async (_req, res) => {
-  console.log('[CRON ENDPOINT] lwd-reminder triggered')
-  await cronLwdReminder()
-  res.json({ success: true, message: 'LWD reminders processed' })
+  await cronLwdReminder('cron')
+  res.json({ success: true })
+})
+
+// ─── MANUAL TRIGGER ENDPOINTS (Super Admin UI) ───────────────────────────────
+
+cronRouter.post('/manual/run-payroll', requireSuperAdmin, async (_req, res) => {
+  await cronRunPayroll('manual')
+  res.json({ success: true })
+})
+
+cronRouter.post('/manual/generate-payslips', requireSuperAdmin, async (_req, res) => {
+  await cronGeneratePayslips('manual')
+  res.json({ success: true })
+})
+
+cronRouter.post('/manual/sync-entra', requireSuperAdmin, async (_req, res) => {
+  await cronSyncEntraId('manual')
+  res.json({ success: true })
+})
+
+cronRouter.post('/manual/holiday-greetings', requireSuperAdmin, async (_req, res) => {
+  await cronSendHolidayGreetings('manual')
+  res.json({ success: true })
+})
+
+cronRouter.post('/manual/rollover-reminder', requireSuperAdmin, async (_req, res) => {
+  await cronLeaveRolloverReminder('manual')
+  res.json({ success: true })
+})
+
+cronRouter.post('/manual/lwd-reminder', requireSuperAdmin, async (_req, res) => {
+  await cronLwdReminder('manual')
+  res.json({ success: true })
+})
+
+// ─── CRON LOGS (Super Admin UI) ──────────────────────────────────────────────
+
+cronRouter.get('/logs', requireSuperAdmin, async (req, res) => {
+  const { jobName, status, page = '1', limit = '50' } = req.query as any
+
+  const where: any = {}
+  if (jobName) where.jobName = jobName
+  if (status)  where.status  = status
+
+  const skip = (parseInt(page) - 1) * parseInt(limit)
+
+  const [logs, total] = await Promise.all([
+    prisma.cronLog.findMany({
+      where,
+      orderBy: { startedAt: 'desc' },
+      skip,
+      take: parseInt(limit),
+    }),
+    prisma.cronLog.count({ where }),
+  ])
+
+  res.json({ logs, total, page: parseInt(page), limit: parseInt(limit) })
 })

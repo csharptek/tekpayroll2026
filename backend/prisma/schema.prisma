@@ -1267,3 +1267,21 @@ model ResignationHistory {
 
   @@index([employeeId])
 }
+
+// ─── CRON LOG ─────────────────────────────────────────────────────────────────
+
+model CronLog {
+  id          String   @id @default(cuid())
+  jobName     String
+  triggeredBy String   @default("cron") // "cron" | "manual"
+  status      String   // "running" | "success" | "failed" | "partial"
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+  message     String?  @db.Text
+  errorMessage String? @db.Text
+  meta        Json?    // job-specific counts (e.g. { employees: 25, errors: 0 })
+
+  @@index([jobName])
+  @@index([startedAt])
+}

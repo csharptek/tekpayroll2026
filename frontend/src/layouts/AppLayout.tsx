@@ -9,7 +9,7 @@ import {
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
-  CalendarCheck, CalendarClock, Palmtree, BookOpen
+  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -109,6 +109,7 @@ const SUPER_ADMIN_NAV = [
     section: 'Admin',
     items: [
       { label: 'Audit Log',        icon: ScrollText, to: '/hr/audit' },
+      { label: 'Cron Jobs',         icon: Timer,      to: '/hr/cron-logs' },
       { label: 'Configuration',    icon: Settings,   to: '/hr/config' },
       { label: 'Salary Calculator', icon: Calculator, to: '/hr/salary-calculator' },
     ]

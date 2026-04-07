@@ -24,6 +24,10 @@ import { syncRouter } from './routes/sync'
 import { leaveRouter } from './routes/leave'
 import { employeeProfileRouter } from './routes/employeeProfile'
 import { cronRouter } from './routes/cron';
+import cron from 'node-cron';
+import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from './services/cronJobs';
+import cron from 'node-cron';
+import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from './services/cronJobs';
 import { policiesRouter } from './routes/policies';
 import { exitRouter } from './routes/exit';
 
@@ -73,6 +77,24 @@ app.use('/api/exit', exitRouter);
 
 // ─── ERROR HANDLER ───────────────────────────────────────────────────────────
 app.use(errorHandler);
+
+// ─── SCHEDULED CRON JOBS ─────────────────────────────────────────────────────
+// All times IST (UTC+5:30). Railway runs in UTC, so subtract 5:30.
+// IST 09:00 on 27th = UTC 03:30 on 27th  → 30 3 27 * *
+// IST 08:00 on 5th  = UTC 02:30 on 5th   → 30 2 5 * *
+// IST 02:00 daily   = UTC 20:30 prev day  → 30 20 * * *
+// IST 08:00 daily   = UTC 02:30 daily     → 30 2 * * *
+// IST 09:00 daily   = UTC 03:30 daily     → 30 3 * * *
+// IST 07:00 daily   = UTC 01:30 daily     → 30 1 * * *
+
+cron.schedule('30 3 27 * *', () => cronRunPayroll('cron').catch(console.error))
+cron.schedule('30 2 5 * *',  () => cronGeneratePayslips('cron').catch(console.error))
+cron.schedule('30 20 * * *', () => cronSyncEntraId('cron').catch(console.error))
+cron.schedule('30 2 * * *',  () => cronSendHolidayGreetings('cron').catch(console.error))
+cron.schedule('30 3 * * *',  () => cronLeaveRolloverReminder('cron').catch(console.error))
+cron.schedule('30 1 * * *',  () => cronLwdReminder('cron').catch(console.error))
+
+console.log('⏰ Cron jobs scheduled (6 jobs)')
 
 app.listen(PORT, () => {
   console.log(`\n🚀 TEKONE API running on port ${PORT}`);

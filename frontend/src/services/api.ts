@@ -230,3 +230,8 @@ export const exitApi = {
   lopLeaves:        (id: string)                   => api.get(`/api/exit/${id}/lop-leaves`),
   testEmail:        (toEmail: string)              => api.post('/api/config/test-email', { toEmail }),
 }
+
+export const cronApi = {
+  logs:            (params?: any) => api.get('/api/cron/logs', { params }),
+  triggerManual:   (job: string)  => api.post(`/api/cron/manual/${job}`),
+}
