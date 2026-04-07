@@ -109,7 +109,7 @@ const SUPER_ADMIN_NAV = [
     section: 'Admin',
     items: [
       { label: 'Audit Log',        icon: ScrollText, to: '/hr/audit' },
-      { label: 'Cron Jobs',         icon: Timer,      to: '/hr/cron-logs' },
+      { label: 'Run Tasks',          icon: Timer,      to: '/hr/run-tasks' },
       { label: 'Configuration',    icon: Settings,   to: '/hr/config' },
       { label: 'Salary Calculator', icon: Calculator, to: '/hr/salary-calculator' },
     ]
