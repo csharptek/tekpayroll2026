@@ -73,7 +73,7 @@ export default function MyResignationPage() {
                   <p className="text-sm font-semibold text-slate-700">Initiate Resignation</p>
                   <p className="text-xs text-slate-400 mt-1">Once submitted, your resignation cannot be withdrawn unless HR enables it.</p>
                 </div>
-                <Button variant="destructive" onClick={() => { setShowForm(true); setError('') }}>
+                <Button variant="danger" onClick={() => { setShowForm(true); setError('') }}>
                   Initiate Resignation
                 </Button>
               </div>
@@ -120,7 +120,7 @@ export default function MyResignationPage() {
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" onClick={() => { setShowForm(false); setError('') }}>Cancel</Button>
                   <Button
-                    variant="destructive"
+                    variant="danger"
                     loading={resignMut.isPending}
                     disabled={!confirm || reason.length < 10}
                     onClick={() => { setError(''); resignMut.mutate() }}

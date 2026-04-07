@@ -266,11 +266,12 @@ function HROnlyDashboard({ summary, loadingSummary }: { summary: any; loadingSum
 // ─── SUPER ADMIN DASHBOARD (full financial view) ──────────────────────────────
 
 function SuperAdminDashboard({
-  summary, loadingSummary, cycles, loadingCycles, trendData
+  summary, loadingSummary, cycles, loadingCycles, trendData, salarySummary, loadingSalarySummary
 }: {
   summary: any; loadingSummary: boolean
   cycles: any[]; loadingCycles: boolean
   trendData: any[]
+  salarySummary: any; loadingSalarySummary: boolean
 }) {
   const latestCycle = cycles?.[0]
   return (
@@ -285,28 +286,28 @@ function SuperAdminDashboard({
           loading={loadingSummary}
         />
         <StatCard
-          label="Net Payout"
-          value={latestCycle?.totalNet ? `₹${Number(latestCycle.totalNet).toLocaleString('en-IN')}` : '—'}
-          sub={latestCycle?.payrollMonth}
+          label="Tentative Gross / Month"
+          value={loadingSalarySummary ? '—' : salarySummary?.totalGross != null ? `₹${Number(salarySummary.totalGross).toLocaleString('en-IN')}` : '—'}
+          sub={salarySummary ? `${salarySummary.employeeCount} employees` : undefined}
           icon={<CreditCard size={18} />}
           color="green"
-          loading={loadingCycles}
+          loading={loadingSalarySummary}
         />
         <StatCard
-          label="Total PF"
-          value={latestCycle?.totalPf ? `₹${Number(latestCycle.totalPf).toLocaleString('en-IN')}` : '—'}
-          sub="This cycle"
+          label="Total Employee PF / Month"
+          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployeePf != null ? `₹${Number(salarySummary.totalEmployeePf).toLocaleString('en-IN')}` : '—'}
+          sub="PF + ESI combined"
           icon={<TrendingUp size={18} />}
           color="purple"
-          loading={loadingCycles}
+          loading={loadingSalarySummary}
         />
         <StatCard
-          label="Cycle Status"
-          value={latestCycle?.status ?? '—'}
-          sub={latestCycle?.payrollMonth}
+          label="Tentative Net / Month"
+          value={loadingSalarySummary ? '—' : salarySummary?.totalNet != null ? `₹${Number(salarySummary.totalNet).toLocaleString('en-IN')}` : '—'}
+          sub="After PF & ESI"
           icon={<CheckCircle2 size={18} />}
           color="amber"
-          loading={loadingCycles}
+          loading={loadingSalarySummary}
         />
       </div>
 
@@ -392,6 +393,12 @@ export default function HRDashboard() {
     enabled: isSuperAdmin,
   })
 
+  const { data: salarySummary, isLoading: loadingSalarySummary } = useQuery({
+    queryKey: ['salary-summary'],
+    queryFn: () => reportApi.salarySummary().then(r => r.data.data),
+    enabled: isSuperAdmin,
+  })
+
   const trendData = (trend || []).map((t: any) => ({
     month: t.payrollMonth,
     Gross: Number(t.totalGross || 0),
@@ -417,6 +424,8 @@ export default function HRDashboard() {
             cycles={cycles || []}
             loadingCycles={loadingCycles}
             trendData={trendData}
+            salarySummary={salarySummary}
+            loadingSalarySummary={loadingSalarySummary}
           />
         : <HROnlyDashboard
             summary={summary}

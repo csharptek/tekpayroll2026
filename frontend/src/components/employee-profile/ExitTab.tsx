@@ -332,7 +332,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
 
             {emp.status === 'ON_NOTICE' && (
               <Button
-                variant="destructive"
+                variant="danger"
                 icon={<UserMinus size={14} />}
                 loading={separateMut.isPending}
                 disabled={!cl?.ffUnlocked}

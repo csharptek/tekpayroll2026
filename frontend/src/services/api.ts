@@ -133,6 +133,7 @@ export const loanApi = {
 export const reportApi = {
   summary: () => api.get('/api/reports/summary'),
   trend: () => api.get('/api/reports/payroll-trend'),
+  salarySummary: () => api.get('/api/reports/salary-summary'),
 }
 
 export const configApi = {

@@ -92,7 +92,7 @@ function InitiateExitModal({ empId, empName, onClose, onDone }: {
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button
-            variant="destructive"
+            variant="danger"
             loading={mut.isPending}
             disabled={!reason.trim() || !resDate}
             onClick={() => { setError(''); mut.mutate() }}

@@ -15,7 +15,6 @@ import AddEmployeePage from './pages/hr/AddEmployeePage'
 import EditEmployeePage from './pages/hr/EditEmployeePage'
 import EmployeeDetailPage from './pages/hr/EmployeeDetailPage'
 import RunPayrollPage from './pages/hr/RunPayrollPage'
-import PayrollDryRunPage from './pages/hr/PayrollDryRunPage'
 import PayrollCyclesPage from './pages/hr/PayrollCyclesPage'
 import PayrollRunDetailPage from './pages/hr/PayrollRunDetailPage'
 import LopManagementPage from './pages/hr/LopManagementPage'
@@ -99,7 +98,6 @@ export default function App() {
 
           {/* Financial routes — SUPER_ADMIN only */}
           <Route path="payroll" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollCyclesPage /></RequireAuth>} />
-          <Route path="payroll/dry-run" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollDryRunPage /></RequireAuth>} />
           <Route path="payroll/:id/run" element={<RequireAuth roles={['SUPER_ADMIN']}><RunPayrollPage /></RequireAuth>} />
           <Route path="payroll/:id/detail" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollRunDetailPage /></RequireAuth>} />
           <Route path="payroll/:id/lop" element={<RequireAuth roles={['SUPER_ADMIN']}><LopManagementPage /></RequireAuth>} />
