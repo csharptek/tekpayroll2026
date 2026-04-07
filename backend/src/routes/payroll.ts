@@ -117,7 +117,6 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         tdsMonthly:      revisionInput.tdsMonthly,
         reimbursements:  Number(reimbs._sum.amount || 0),
         employeeStatus:  emp.status,
-        reimbursements:  Number(reimbs._sum.amount || 0),
       })
 
       const s = calc.salary
