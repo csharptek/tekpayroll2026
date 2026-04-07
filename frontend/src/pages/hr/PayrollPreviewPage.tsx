@@ -39,7 +39,7 @@ export default function PayrollPreviewPage() {
     <div className="space-y-5">
       <PageHeader
         title="Payroll Preview"
-        subtitle="View calculated payroll without saving to database"
+        subtitle="View calculated payroll without saving. Net includes all deductions (PF, ESI, PT, TDS, LOP, loans)."
       />
 
       {/* Controls */}

@@ -296,7 +296,7 @@ function SuperAdminDashboard({
         <StatCard
           label="Tentative Net / Month"
           value={loadingSalarySummary ? '—' : salarySummary?.totalNet != null ? `₹${Number(salarySummary.totalNet).toLocaleString('en-IN')}` : '—'}
-          sub="After employee PF & ESI"
+          sub="After PF & ESI only (excludes PT, TDS, loans)"
           icon={<CheckCircle2 size={18} />}
           color="amber"
           loading={loadingSalarySummary}
