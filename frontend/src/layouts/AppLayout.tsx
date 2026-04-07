@@ -92,6 +92,7 @@ const SUPER_ADMIN_NAV = [
     section: 'Payroll',
     items: [
       { label: 'Payroll Cycles',   icon: CreditCard,     to: '/hr/payroll' },
+      { label: 'Payroll Preview',  icon: FileSearch,     to: '/hr/payroll/preview' },
       { label: 'Payslips',         icon: FileText,       to: '/hr/payslips' },
       { label: 'Loans & Advances', icon: Wallet,     to: '/hr/loans' },
       { label: 'F&F Settlement',   icon: GitMerge,   to: '/hr/fnf' },

@@ -105,6 +105,7 @@ export const payrollApi = {
   unlock: (id: string, reason: string) => api.post(`/api/payroll/cycles/${id}/unlock`, { reason }),
   disburse: (id: string) => api.post(`/api/payroll/cycles/${id}/disburse`),
   adjustEntry: (id: string, data: any) => api.put(`/api/payroll/entries/${id}`, data),
+  preview: (data: any) => api.post('/api/payroll/dry-run', data),
 }
 
 export const lopApi = {
