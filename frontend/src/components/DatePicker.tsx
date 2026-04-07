@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { DayPicker } from 'react-day-picker'
-import { format, parse, isValid } from 'date-fns'
+import { DayPicker, CaptionProps, useNavigation } from 'react-day-picker'
+import { format, parse, isValid, setMonth, setYear, getMonth, getYear } from 'date-fns'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import 'react-day-picker/dist/style.css'
 
 interface DatePickerProps {
-  value: string           // YYYY-MM-DD
+  value: string
   onChange: (val: string) => void
   disabled?: boolean
   className?: string
@@ -20,14 +20,46 @@ function parseYMD(s: string): Date | undefined {
   return isValid(d) ? d : undefined
 }
 
+const MONTHS = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December'
+]
+
+const currentYear = new Date().getFullYear()
+const YEARS = Array.from({ length: 100 }, (_, i) => currentYear - 80 + i)
+
+function CustomCaption({ displayMonth }: CaptionProps) {
+  const { goToMonth } = useNavigation()
+
+  function handleMonthChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    goToMonth(setMonth(displayMonth, parseInt(e.target.value)))
+  }
+
+  function handleYearChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    goToMonth(setYear(displayMonth, parseInt(e.target.value)))
+  }
+
+  const selClass = 'text-sm font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 cursor-pointer'
+
+  return (
+    <div className="flex items-center gap-2 px-1 mb-2">
+      <select value={getMonth(displayMonth)} onChange={handleMonthChange} className={selClass + ' flex-1'}>
+        {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+      </select>
+      <select value={getYear(displayMonth)} onChange={handleYearChange} className={selClass}>
+        {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+      </select>
+    </div>
+  )
+}
+
 export function DatePicker({ value, onChange, disabled, className, placeholder, label, required }: DatePickerProps) {
   const [open, setOpen] = useState(false)
-  const [month, setMonth] = useState<Date>(parseYMD(value) ?? new Date())
+  const [month, setMonthState] = useState<Date>(parseYMD(value) ?? new Date())
   const ref = useRef<HTMLDivElement>(null)
 
   const selected = parseYMD(value)
 
-  // Close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
@@ -36,10 +68,9 @@ export function DatePicker({ value, onChange, disabled, className, placeholder, 
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Sync month when value changes externally
   useEffect(() => {
     const d = parseYMD(value)
-    if (d) setMonth(d)
+    if (d) setMonthState(d)
   }, [value])
 
   function handleSelect(day: Date | undefined) {
@@ -73,29 +104,29 @@ export function DatePicker({ value, onChange, disabled, className, placeholder, 
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-card-lg animate-fade-in"
-          style={{ minWidth: 280 }}>
+        <div
+          className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-card-lg animate-fade-in"
+          style={{ minWidth: 300 }}
+        >
           <DayPicker
             mode="single"
             selected={selected}
             onSelect={handleSelect}
             month={month}
-            onMonthChange={setMonth}
+            onMonthChange={setMonthState}
             showOutsideDays
             components={{
+              Caption: CustomCaption,
               IconLeft: () => <ChevronLeft size={14} />,
               IconRight: () => <ChevronRight size={14} />,
             }}
             classNames={{
               root: 'p-3',
               months: 'flex flex-col',
-              month: 'space-y-2',
-              caption: 'flex items-center justify-between mb-1',
-              caption_label: 'text-sm font-semibold text-slate-800',
-              nav: 'flex items-center gap-1',
-              nav_button: 'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors',
-              nav_button_previous: '',
-              nav_button_next: '',
+              month: 'space-y-1',
+              caption: '',
+              caption_label: 'hidden',
+              nav: 'hidden',
               table: 'w-full border-collapse',
               head_row: 'flex',
               head_cell: 'w-9 text-center text-[11px] font-medium text-slate-400 py-1',
