@@ -1,12 +1,15 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Mail, Phone, MapPin, Calendar, Building2, CreditCard } from 'lucide-react'
+import { Mail, Phone, MapPin, Calendar, Building2, CreditCard, FolderOpen } from 'lucide-react'
 import { format } from 'date-fns'
 import { employeeApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { PageHeader, Card, Rupee, Skeleton, Alert } from '../../components/ui'
+import MyDocumentsTab from '../../components/employee-profile/MyDocumentsTab'
 
 export default function MyProfilePage() {
   const { user } = useAuthStore()
+  const [tab, setTab] = useState<'profile' | 'documents'>('profile')
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['my-profile', user?.id],
@@ -25,6 +28,26 @@ export default function MyProfilePage() {
   return (
     <div className="space-y-5 max-w-4xl">
       <PageHeader title="My Profile" subtitle="Your employment and salary details" />
+
+      {/* Tab switcher */}
+      <div className="flex gap-1 border border-slate-200 rounded-xl p-1 w-fit bg-white">
+        {([
+          { key: 'profile'   as const, label: 'Profile',       icon: null },
+          { key: 'documents' as const, label: 'My Documents',  icon: <FolderOpen size={13} /> },
+        ]).map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              tab === t.key
+                ? 'bg-brand-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
 
       {/* Hero */}
       <Card>
@@ -47,6 +70,7 @@ export default function MyProfilePage() {
         </div>
       </Card>
 
+      {tab === 'profile' && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Personal info */}
         <Card title="Personal Information">
@@ -128,6 +152,11 @@ export default function MyProfilePage() {
           </div>
         </Card>
       </div>
+      )}
+
+      {tab === 'documents' && (
+        <MyDocumentsTab empId={profile.id} />
+      )}
     </div>
   )
 }

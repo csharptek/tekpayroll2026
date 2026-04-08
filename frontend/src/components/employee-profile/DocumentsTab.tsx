@@ -1,25 +1,27 @@
 import { useState, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Upload, Trash2, CheckCircle2, Download, FileText, Eye, Plus, X, FolderUp } from 'lucide-react'
+import { Upload, Trash2, CheckCircle2, Download, FileText, Eye, Plus, X, FolderUp, Lock } from 'lucide-react'
 import { profileApi, Field, sel } from './shared'
 import { Button, Alert } from '../ui'
 
 const DOC_TYPES = [
-  'PAN_CARD', 'AADHAAR_CARD', 'PASSPORT', 'OFFER_LETTER', 'APPOINTMENT_LETTER',
-  'EXPERIENCE_LETTER', 'EDUCATION_CERTIFICATE', 'ADDRESS_PROOF', 'BANK_PROOF', 'OTHER',
+  'PAN_CARD', 'AADHAAR_CARD', 'PASSPORT', 'OFFER_LETTER', 'RELIEVING_LETTER',
+  'APPOINTMENT_LETTER', 'EXPERIENCE_LETTER', 'EDUCATION_CERTIFICATE',
+  'ADDRESS_PROOF', 'BANK_PROOF', 'OTHER',
 ]
 
 const DOC_LABELS: Record<string, string> = {
   PAN_CARD: 'PAN Card', AADHAAR_CARD: 'Aadhaar Card', PASSPORT: 'Passport',
-  OFFER_LETTER: 'Offer Letter', APPOINTMENT_LETTER: 'Appointment Letter',
+  OFFER_LETTER: 'Offer Letter', RELIEVING_LETTER: 'Relieving Letter',
+  APPOINTMENT_LETTER: 'Appointment Letter',
   EXPERIENCE_LETTER: 'Experience Letter', EDUCATION_CERTIFICATE: 'Education Certificate',
   ADDRESS_PROOF: 'Address Proof', BANK_PROOF: 'Bank Proof', OTHER: 'Other',
 }
 
 const DOC_ICONS: Record<string, string> = {
   PAN_CARD: '🪪', AADHAAR_CARD: '🆔', PASSPORT: '📘', OFFER_LETTER: '📄',
-  APPOINTMENT_LETTER: '📋', EXPERIENCE_LETTER: '💼', EDUCATION_CERTIFICATE: '🎓',
-  ADDRESS_PROOF: '🏠', BANK_PROOF: '🏦', OTHER: '📎',
+  RELIEVING_LETTER: '📋', APPOINTMENT_LETTER: '📑', EXPERIENCE_LETTER: '💼',
+  EDUCATION_CERTIFICATE: '🎓', ADDRESS_PROOF: '🏠', BANK_PROOF: '🏦', OTHER: '📎',
 }
 
 interface PendingFile {
@@ -38,9 +40,10 @@ export default function DocumentsTab({ emp, isHR, onSaved }: { emp: any; isHR: b
   const multiRef   = useRef<HTMLInputElement>(null)
 
   // Single upload state
-  const [docType, setDocType] = useState('PAN_CARD')
-  const [notes,   setNotes]   = useState('')
-  const [error,   setError]   = useState('')
+  const [docType,         setDocType]         = useState('PAN_CARD')
+  const [notes,           setNotes]           = useState('')
+  const [referenceNumber, setReferenceNumber] = useState('')
+  const [error,           setError]           = useState('')
 
   // Multi upload state
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
@@ -53,7 +56,7 @@ export default function DocumentsTab({ emp, isHR, onSaved }: { emp: any; isHR: b
   })
 
   const uploadMut = useMutation({
-    mutationFn: (file: File) => profileApi.uploadDocument(emp.id, file, docType, notes),
+    mutationFn: (file: File) => profileApi.uploadDocument(emp.id, file, docType, notes, referenceNumber),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['documents', emp.id] }); setNotes('') },
     onError: (e: any) => setError(e?.response?.data?.error || 'Upload failed'),
   })
@@ -145,10 +148,10 @@ export default function DocumentsTab({ emp, isHR, onSaved }: { emp: any; isHR: b
                   {DOC_TYPES.map(t => <option key={t} value={t}>{DOC_LABELS[t]}</option>)}
                 </select>
               </Field>
-              <Field label="Notes (optional)">
+              <Field label="Reference No. (PAN/Aadhaar)">
                 <input
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-brand-400 focus:outline-none bg-white"
-                  value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional note"/>
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-brand-400 focus:outline-none bg-white font-mono"
+                  value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. ABCDE1234F"/>
               </Field>
               <Field label="File (PDF or Image)">
                 <input ref={fileRef} type="file" accept=".pdf,image/*" className="hidden"
@@ -268,11 +271,13 @@ export default function DocumentsTab({ emp, isHR, onSaved }: { emp: any; isHR: b
                 {docs.map((d: any) => (
                   <div key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border ${d.isVerified ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 bg-white'}`}>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">{d.fileName}</p>
-                      <div className="flex gap-3 mt-0.5 text-xs text-slate-400">
+                      <p className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">{d.isLocked && <Lock size={11} className="text-amber-500 flex-shrink-0" />}{d.fileName}</p>
+                      <div className="flex gap-3 mt-0.5 text-xs text-slate-400 flex-wrap">
                         <span>{new Date(d.uploadedAt).toLocaleDateString('en-IN')}</span>
                         {d.fileSize && <span>{formatSize(d.fileSize)}</span>}
+                        {d.referenceNumber && <span className="font-mono">{d.referenceNumber}</span>}
                         {d.notes && <span>· {d.notes}</span>}
+                        {d.uploadedByRole === 'EMPLOYEE' && <span className="text-brand-500">Self-uploaded</span>}
                         {d.isVerified && <span className="text-emerald-600 font-medium">✓ Verified</span>}
                       </div>
                     </div>

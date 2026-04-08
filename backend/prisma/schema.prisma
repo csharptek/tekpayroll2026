@@ -891,6 +891,7 @@ enum DocumentType {
   AADHAAR_CARD
   PASSPORT
   OFFER_LETTER
+  RELIEVING_LETTER
   APPOINTMENT_LETTER
   EXPERIENCE_LETTER
   EDUCATION_CERTIFICATE
@@ -910,10 +911,13 @@ model EmployeeDocument {
   fileKey      String
   fileSize     Int?
   mimeType     String?
-  isVerified   Boolean      @default(false)
-  verifiedBy   String?
-  verifiedAt   DateTime?
-  notes        String?
+  isVerified      Boolean      @default(false)
+  verifiedBy      String?
+  verifiedAt      DateTime?
+  notes           String?
+  referenceNumber String?
+  isLocked        Boolean      @default(false)
+  uploadedByRole  String?
 
   uploadedBy   String
   uploadedAt   DateTime     @default(now())

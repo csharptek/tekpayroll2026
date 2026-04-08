@@ -32,12 +32,20 @@ export const profileApi = {
   deleteBankAccount: (id: string, aid: string) => api.delete(`/api/employees/${id}/bank-accounts/${aid}`),
 
   getDocuments:      (id: string) => api.get(`/api/employees/${id}/documents`),
-  uploadDocument:    (id: string, file: File, type: string, notes?: string) => {
+  uploadDocument:    (id: string, file: File, type: string, notes?: string, referenceNumber?: string) => {
     const fd = new FormData()
     fd.append('file', file)
     fd.append('documentType', type)
     if (notes) fd.append('notes', notes)
+    if (referenceNumber) fd.append('referenceNumber', referenceNumber)
     return api.post(`/api/employees/${id}/documents`, fd)
+  },
+  selfUploadDocument: (id: string, file: File, type: string, referenceNumber?: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('documentType', type)
+    if (referenceNumber) fd.append('referenceNumber', referenceNumber)
+    return api.post(`/api/employees/${id}/documents/self`, fd)
   },
   verifyDocument:    (id: string, did: string) => api.put(`/api/employees/${id}/documents/${did}/verify`),
   deleteDocument:    (id: string, did: string) => api.delete(`/api/employees/${id}/documents/${did}`),

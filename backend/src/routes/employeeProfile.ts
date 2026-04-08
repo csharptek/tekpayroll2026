@@ -503,6 +503,11 @@ employeeProfileRouter.delete('/:id/bank-accounts/:accountId', requireHR, async (
 
 // ─── DOCUMENTS ────────────────────────────────────────────────────────────────
 
+// ─── DOCUMENT ROUTES ─────────────────────────────────────────────────────────
+
+// EMPLOYEE_SELF_UPLOAD doc types that can be locked
+const SELF_UPLOAD_TYPES = ['PAN_CARD', 'AADHAAR_CARD', 'PASSPORT', 'OFFER_LETTER', 'RELIEVING_LETTER']
+
 employeeProfileRouter.get('/:id/documents', async (req, res) => {
   const docs = await prisma.employeeDocument.findMany({
     where: { employeeId: req.params.id },
@@ -511,9 +516,10 @@ employeeProfileRouter.get('/:id/documents', async (req, res) => {
   res.json({ success: true, data: docs })
 })
 
+// HR/SA upload — never locks
 employeeProfileRouter.post('/:id/documents', requireHR, upload.single('file'), async (req, res) => {
   if (!req.file) throw new AppError('No file uploaded', 400)
-  const { documentType, notes } = req.body
+  const { documentType, notes, referenceNumber } = req.body
   if (!documentType) throw new AppError('Document type is required', 400)
 
   const empFolder = await getEmpFolder(req.params.id)
@@ -521,15 +527,62 @@ employeeProfileRouter.post('/:id/documents', requireHR, upload.single('file'), a
 
   const doc = await prisma.employeeDocument.create({
     data: {
-      employeeId:   req.params.id,
+      employeeId:     req.params.id,
       documentType,
-      fileName:     req.file.originalname,
-      fileUrl:      url,
-      fileKey:      key,
-      fileSize:     req.file.size,
-      mimeType:     req.file.mimetype,
+      fileName:       req.file.originalname,
+      fileUrl:        url,
+      fileKey:        key,
+      fileSize:       req.file.size,
+      mimeType:       req.file.mimetype,
       notes,
-      uploadedBy:   req.user!.id,
+      referenceNumber: referenceNumber || null,
+      isLocked:        false,
+      uploadedByRole:  req.user!.role,
+      uploadedBy:      req.user!.id,
+    },
+  })
+  res.status(201).json({ success: true, data: doc })
+})
+
+// Employee self-upload — locks on submission
+employeeProfileRouter.post('/:id/documents/self', upload.single('file'), async (req, res) => {
+  // Only the employee themselves can upload
+  const employee = await prisma.employee.findUnique({ where: { id: req.params.id } })
+  if (!employee) throw new AppError('Employee not found', 404)
+  if (req.user!.id !== employee.id && req.user!.role === 'EMPLOYEE') {
+    throw new AppError('Forbidden', 403)
+  }
+
+  if (!req.file) throw new AppError('No file uploaded', 400)
+  const { documentType, referenceNumber } = req.body
+  if (!documentType) throw new AppError('Document type is required', 400)
+  if (!SELF_UPLOAD_TYPES.includes(documentType)) throw new AppError('Invalid document type for self-upload', 400)
+
+  // PAN and AADHAAR: only one allowed (check not already locked)
+  const singleTypes = ['PAN_CARD', 'AADHAAR_CARD', 'PASSPORT']
+  if (singleTypes.includes(documentType)) {
+    const existing = await prisma.employeeDocument.findFirst({
+      where: { employeeId: req.params.id, documentType: documentType as any, isLocked: true },
+    })
+    if (existing) throw new AppError('Document already submitted and locked. Contact HR to update.', 400)
+  }
+
+  const empFolder = await getEmpFolder(req.params.id)
+  const { url, key } = await uploadToBlob(req.file.buffer, req.file.originalname, 'AZURE_DOCS_CONTAINER', empFolder)
+
+  const doc = await prisma.employeeDocument.create({
+    data: {
+      employeeId:      req.params.id,
+      documentType,
+      fileName:        req.file.originalname,
+      fileUrl:         url,
+      fileKey:         key,
+      fileSize:        req.file.size,
+      mimeType:        req.file.mimetype,
+      referenceNumber: referenceNumber || null,
+      isLocked:        true,
+      uploadedByRole:  'EMPLOYEE',
+      uploadedBy:      req.user!.id,
     },
   })
   res.status(201).json({ success: true, data: doc })
