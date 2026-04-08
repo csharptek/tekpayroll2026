@@ -131,6 +131,7 @@ model Employee {
   joiningDate    DateTime
   resignationDate DateTime?
   lastWorkingDay  DateTime?
+  isTrainee      Boolean        @default(false)
   status         EmployeeStatus @default(ACTIVE)
   role           UserRole       @default(EMPLOYEE)
 
@@ -999,6 +1000,9 @@ model LeavePolicy {
   casualAdvanceDays         Int      @default(2)
   plannedAdvanceDays        Int      @default(7)
 
+  // Probation (SUPER_ADMIN only)
+  probationMonths           Int      @default(3)
+
   // Carry forward rules (SUPER_ADMIN only)
   plannedCarryForwardMax    Int      @default(8)
   plannedBalanceCap         Int      @default(16)
@@ -1056,6 +1060,7 @@ model LeaveEntitlement {
   year            Int       // calendar year e.g. 2026
 
   totalDays       Decimal   @db.Decimal(5, 2)   // granted (pro-rata on join)
+  activatesOn     DateTime? // null = active immediately; set for probation employees
   usedDays        Decimal   @default(0) @db.Decimal(5, 2)
   pendingDays     Decimal   @default(0) @db.Decimal(5, 2)  // applied but not yet approved
   lopDays         Decimal   @default(0) @db.Decimal(5, 2)  // auto-LOP days

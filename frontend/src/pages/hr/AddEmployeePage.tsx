@@ -113,6 +113,7 @@ export default function AddEmployeePage() {
 
     mutation.mutate({
       ...form,
+      isTrainee: employeeType === 'TRAINEE',
       joiningDate: new Date(form.joiningDate).toISOString(),
       annualCtc:          salaryInput.annualCtc,
       basicPercent:       salaryInput.basicPercent,

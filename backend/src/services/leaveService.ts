@@ -96,11 +96,33 @@ export async function getLeavePolicy() {
 }
 
 // ─── GRANT JOINING LEAVES ─────────────────────────────────────────────────────
-// Called when employee is created. Grants pro-rata leaves for current year.
+// Called when employee is created.
+// Trainees: no entitlements (all LWP).
+// Probation employees: entitlements created with activatesOn = probationEndDate,
+//   pro-rata calculated from probation end date.
+// Normal employees: immediate, pro-rata from joining date.
 
-export async function grantJoiningLeaves(employeeId: string, joiningDate: Date) {
+export async function grantJoiningLeaves(
+  employeeId: string,
+  joiningDate: Date,
+  isTrainee: boolean = false,
+  probationMonthsOverride?: number
+) {
+  if (isTrainee) return // Trainees get no leave entitlements
+
   const policy = await getLeavePolicy()
-  const year   = getLeaveYear(joiningDate)
+  const probationMonths = probationMonthsOverride ?? policy.probationMonths
+
+  // Calculate probation end date
+  const probationEndDate = new Date(joiningDate)
+  probationEndDate.setMonth(probationEndDate.getMonth() + probationMonths)
+
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const onProbation = probationEndDate > today
+
+  // Pro-rata calculated from probation end date
+  const effectiveDate = probationEndDate
+  const year = getLeaveYear(effectiveDate)
 
   const kinds: { kind: LeaveKind; annual: number }[] = [
     { kind: LeaveKind.SICK,    annual: policy.sickDaysPerYear    },
@@ -109,35 +131,100 @@ export async function grantJoiningLeaves(employeeId: string, joiningDate: Date) 
   ]
 
   for (const { kind, annual } of kinds) {
-    const totalDays = calculateProRataLeaves(joiningDate, annual, year)
+    const totalDays = calculateProRataLeaves(effectiveDate, annual, year)
     await prisma.leaveEntitlement.upsert({
       where:  { employeeId_leaveKind_year: { employeeId, leaveKind: kind, year } },
-      create: { employeeId, leaveKind: kind, year, totalDays },
-      update: { totalDays },
+      create: {
+        employeeId, leaveKind: kind, year, totalDays,
+        activatesOn: onProbation ? probationEndDate : null,
+      },
+      update: {
+        totalDays,
+        activatesOn: onProbation ? probationEndDate : null,
+      },
     })
   }
+}
+
+// ─── EMPLOYEE LEAVE STATUS ────────────────────────────────────────────────────
+// Returns restriction info for the employee.
+
+export type LeaveRestriction =
+  | { type: 'TRAINEE' }
+  | { type: 'PROBATION'; probationEndDate: Date }
+  | { type: 'NOTICE' }
+  | { type: 'NONE' }
+
+export async function getEmployeeLeaveRestriction(employeeId: string): Promise<LeaveRestriction> {
+  const emp = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: {
+      status: true,
+      isTrainee: true,
+      joiningDate: true,
+      employmentDetail: { select: { probationMonths: true } },
+    },
+  })
+  if (!emp) return { type: 'NONE' }
+
+  if (emp.isTrainee) return { type: 'TRAINEE' }
+  if (emp.status === 'ON_NOTICE') return { type: 'NOTICE' }
+
+  const policy = await getLeavePolicy()
+  const probMonths = emp.employmentDetail?.probationMonths ?? policy.probationMonths
+  const probEnd = new Date(emp.joiningDate)
+  probEnd.setMonth(probEnd.getMonth() + probMonths)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+
+  if (probEnd > today) return { type: 'PROBATION', probationEndDate: probEnd }
+  return { type: 'NONE' }
 }
 
 // ─── GET EMPLOYEE BALANCE ─────────────────────────────────────────────────────
 
 export async function getEmployeeBalance(employeeId: string, year?: number) {
   const y = year || getCurrentLeaveYear()
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+
+  const restriction = await getEmployeeLeaveRestriction(employeeId)
+
+  // Trainee, notice, or on probation → show zero balance
+  if (restriction.type !== 'NONE') {
+    return {
+      SICK:    { total: 0, carryForward: 0, used: 0, pending: 0, lop: 0, remaining: 0 },
+      CASUAL:  { total: 0, carryForward: 0, used: 0, pending: 0, lop: 0, remaining: 0 },
+      PLANNED: { total: 0, carryForward: 0, used: 0, pending: 0, lop: 0, remaining: 0 },
+      _restriction: restriction,
+    }
+  }
+
   const entitlements = await prisma.leaveEntitlement.findMany({
-    where: { employeeId, year: y },
+    where: {
+      employeeId, year: y,
+      OR: [
+        { activatesOn: null },
+        { activatesOn: { lte: today } },
+      ],
+    },
   })
 
   const balance: Record<string, any> = {}
   for (const e of entitlements) {
     const remaining = Number(e.totalDays) + Number(e.carryForward) - Number(e.usedDays) - Number(e.pendingDays)
     balance[e.leaveKind] = {
-      total:       Number(e.totalDays),
+      total:        Number(e.totalDays),
       carryForward: Number(e.carryForward),
-      used:        Number(e.usedDays),
-      pending:     Number(e.pendingDays),
-      lop:         Number(e.lopDays),
-      remaining:   Math.max(0, remaining),
+      used:         Number(e.usedDays),
+      pending:      Number(e.pendingDays),
+      lop:          Number(e.lopDays),
+      remaining:    Math.max(0, remaining),
     }
   }
+  // Fill missing kinds with zero
+  for (const kind of ['SICK', 'CASUAL', 'PLANNED']) {
+    if (!balance[kind]) balance[kind] = { total: 0, carryForward: 0, used: 0, pending: 0, lop: 0, remaining: 0 }
+  }
+  balance._restriction = restriction
   return balance
 }
 
@@ -204,9 +291,13 @@ export async function applyLeave(params: {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const isBackdated = startDate < today
 
-  // Check if employee is ON_NOTICE — all leaves forced to LOP
-  const empStatus = await prisma.employee.findUnique({ where: { id: employeeId }, select: { status: true } })
-  const isOnNotice = empStatus?.status === 'ON_NOTICE'
+  // Check restriction status
+  const restriction = await getEmployeeLeaveRestriction(employeeId)
+  const isOnNotice   = restriction.type === 'NOTICE'
+  const isOnProbation = restriction.type === 'PROBATION'
+  const isTrainee    = restriction.type === 'TRAINEE'
+  // All three force LOP — leave can still be applied
+  const forceLop = isOnNotice || isOnProbation || isTrainee
 
   await validateLeaveApplication({ employeeId, leaveKind, startDate, endDate, isHalfDay, isBackdated })
 
@@ -217,6 +308,7 @@ export async function applyLeave(params: {
   const policy = await getLeavePolicy()
 
   // Check balance
+  // For forced-LOP cases (probation/trainee/notice), find entitlement ignoring activatesOn
   let entitlement = await prisma.leaveEntitlement.findUnique({
     where: { employeeId_leaveKind_year: { employeeId, leaveKind, year } },
   })
@@ -228,15 +320,15 @@ export async function applyLeave(params: {
       PLANNED: policy.plannedDaysPerYear,
     }[leaveKind]
     entitlement = await prisma.leaveEntitlement.create({
-      data: { employeeId, leaveKind, year, totalDays: annual },
+      data: { employeeId, leaveKind, year, totalDays: forceLop ? 0 : annual },
     })
   }
 
   const available = Number(entitlement.totalDays) + Number(entitlement.carryForward)
                   - Number(entitlement.usedDays) - Number(entitlement.pendingDays)
-  // ON_NOTICE: all leaves are LOP regardless of balance
-  const isLop  = isOnNotice ? true : available < totalDays
-  const lopDays = isOnNotice ? totalDays : (available < totalDays ? totalDays - Math.max(0, available) : 0)
+  // Force LOP for probation/trainee/notice regardless of balance
+  const isLop  = forceLop ? true : available < totalDays
+  const lopDays = forceLop ? totalDays : (available < totalDays ? totalDays - Math.max(0, available) : 0)
 
   // Determine status
   // Sick: auto-approve (unless backdated — also auto-approve for sick)

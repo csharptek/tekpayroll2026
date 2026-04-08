@@ -138,6 +138,23 @@ export default function LeaveConfigPage() {
           </div>
         </div>
 
+        {/* Probation — SUPER_ADMIN only */}
+        {isSuperAdmin && (
+          <div className="border-t border-slate-100 pt-4">
+            <h4 className="text-xs font-semibold text-slate-600 mb-3">Probation Settings <span className="text-violet-600 font-normal">(Super Admin only)</span></h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Default probation duration (months)</label>
+                <input type="number" min={0} max={12} className="input w-full text-sm"
+                  value={policy.probationMonths ?? 3}
+                  onChange={e => setPolicyField('probationMonths', Number(e.target.value))}
+                />
+                <p className="text-xs text-slate-400 mt-1">Applies to new employees. 0 = no probation.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Carry forward — SUPER_ADMIN only */}
         {isSuperAdmin && (
           <div className="border-t border-slate-100 pt-4">

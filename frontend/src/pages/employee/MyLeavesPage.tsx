@@ -104,14 +104,15 @@ export default function MyLeavesPage() {
     onError: (err: any) => setError(err?.response?.data?.error || 'Failed to submit cancellation'),
   })
 
-  const balance = balData || {}
+  const balance = (balData as any)?.balance || balData || {}
+  const restriction = (balData as any)?.restriction || { type: 'NONE' }
 
   const { data: myExit } = useQuery({
     queryKey: ['my-exit-status', user?.id],
     queryFn:  () => import('../../services/api').then(m => m.exitApi.get(user!.id).then(r => r.data.data)),
     enabled:  !!user?.id,
   })
-  const isOnNotice = myExit?.status === 'ON_NOTICE'
+  const isOnNotice = restriction.type === 'NOTICE' || myExit?.status === 'ON_NOTICE'
   const today = new Date().toISOString().slice(0, 10)
 
   function isWeekend(dateStr: string): boolean {
@@ -183,13 +184,39 @@ export default function MyLeavesPage() {
       {error   && <Alert type="error"   message={error}   />}
       {success && <Alert type="success" message={success} />}
 
-      {isOnNotice && (
+      {restriction.type === 'PROBATION' && (
+        <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+          <AlertTriangle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-700">On Probation — No Leave Balance Yet</p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              Your leave balance will activate on{' '}
+              <strong>{new Date(restriction.probationEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>.
+              You can still apply for leave, but all leaves during probation are <strong>Loss of Pay (LWP)</strong>.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {restriction.type === 'TRAINEE' && (
+        <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+          <AlertTriangle size={15} className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-blue-700">Trainee — No Leave Balance</p>
+            <p className="text-xs text-blue-600 mt-0.5">
+              Trainees do not have a leave balance. You can still apply for leave, but all leaves will be marked as <strong>Loss of Pay (LWP)</strong>.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isOnNotice && restriction.type !== 'PROBATION' && restriction.type !== 'TRAINEE' && (
         <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-100 rounded-xl">
           <AlertTriangle size={15} className="text-red-500 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-red-700">Notice Period — No Paid Leaves</p>
             <p className="text-xs text-red-600 mt-0.5">
-              You are currently on notice period. Any leave you apply for will be automatically marked as <strong>Loss of Pay (LOP)</strong>. Paid leave conversion requires Super Admin approval.
+              You are currently on notice period. Any leave you apply for will be automatically marked as <strong>Loss of Pay (LOP)</strong>.
             </p>
           </div>
         </div>

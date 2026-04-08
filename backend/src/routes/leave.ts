@@ -130,7 +130,9 @@ leaveRouter.delete('/holidays/:id', requireHR, async (req, res) => {
 leaveRouter.get('/balance/my', async (req, res) => {
   const year = req.query.year ? parseInt(req.query.year as string) : getCurrentLeaveYear()
   const balance = await getEmployeeBalance(req.user!.id, year)
-  res.json({ success: true, data: balance })
+  const restriction = (balance as any)._restriction || { type: 'NONE' }
+  delete (balance as any)._restriction
+  res.json({ success: true, data: { balance, restriction } })
 })
 
 // GET /api/leave/balance — all employees (MUST be before /:employeeId)

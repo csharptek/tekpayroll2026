@@ -34,6 +34,7 @@ const createEmployeeSchema = z.object({
   pfNumber: z.string().optional(),
   esiNumber: z.string().optional(),
   uanNumber: z.string().optional(),
+  isTrainee: z.boolean().default(false),
 });
 
 // ─── NEXT EMPLOYEE CODE ───────────────────────────────────────────────────────
@@ -168,7 +169,7 @@ employeeRouter.post('/', requireHR, async (req, res) => {
   // Grant pro-rata leaves for the joining year
   try {
     const { grantJoiningLeaves } = await import('../services/leaveService')
-    await grantJoiningLeaves(employee.id, employee.joiningDate)
+    await grantJoiningLeaves(employee.id, employee.joiningDate, employee.isTrainee)
   } catch (err) {
     console.error('[LEAVE] Failed to grant joining leaves:', err)
   };
