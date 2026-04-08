@@ -15,8 +15,8 @@ function calcSalary(ctc: number, hasIncentive: boolean, incentivePct: number,
   const hraMonthly   = (ctc * 0.35) / 12
   const annualBonus  = hasIncentive ? ctc * incentivePct / 100 : 0
   const grandTotalM  = (ctc - annualBonus - EMPLOYER_PF - mediclaim) / 12
-  const transportM   = transport != null ? transport : basicMonthly * 0.04
-  const fbpM         = fbp       != null ? fbp       : basicMonthly * 0.04
+  const transportM   = transport != null ? transport : grandTotalM * 0.02
+  const fbpM         = fbp       != null ? fbp       : grandTotalM * 0.02
   const hyiMonthly   = grandTotalM - basicMonthly - hraMonthly - transportM - fbpM
   const empPf        = Math.min(basicMonthly * 0.12, 1800)
   return {

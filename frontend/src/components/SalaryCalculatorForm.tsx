@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { RotateCcw, AlertTriangle, Info } from 'lucide-react'
@@ -21,7 +21,6 @@ export interface SalaryOutput {
 }
 
 interface Components { basic: number; hra: number; transport: number; fbp: number; hyi: number }
-interface Overrides   { basic: boolean; hra: boolean; transport: boolean; fbp: boolean; hyi: boolean }
 
 const EMPLOYER_PF_CTC_CAP = 1800  // Cap on Employer PF deducted FROM CTC (govt limit)
 
@@ -63,12 +62,7 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
     }
     return { basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 }
   })
-  const [overrides,   setOverrides]   = useState<Overrides>(() => ({
-    basic: false, hra: false,
-    transport: (initialValues?.transportMonthly ?? null) != null,
-    fbp:       (initialValues?.fbpMonthly       ?? null) != null,
-    hyi: false,
-  }))
+  const [overrides,   setOverrides]   = useState({ basic: false, hra: false, transport: false, fbp: false, hyi: false })
   const [grandTotal,  setGrandTotal]  = useState(() => {
     if ((initialValues?.annualCtc ?? 0) > 0) {
       const iv = initialValues!
@@ -87,30 +81,27 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? 0.0325)
   const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? 21000)
 
-  const employerPfActual = ri(components.basic * 0.12)      // actual uncapped 12%
-  const employerPfInCtc  = Math.min(employerPfActual, 1800)  // capped — deducted from CTC
-  const employerPf       = employerPfInCtc                    // display in table = capped amount
-  const employeePf       = Math.min(ri(components.basic * 0.12), 1800) // employee PF capped ₹1,800
+  const employerPfInCtc  = Math.min(ri(components.basic * 0.12), 1800)
+  const employerPf       = employerPfInCtc
+  const employeePf       = Math.min(ri(components.basic * 0.12), 1800)
   const annualBonus   = hasIncentive ? r2(ctc * incentivePct / 100) : 0
   const allocated     = r2(components.basic + components.hra + components.transport + components.fbp + components.hyi)
   const remainder     = r2(grandTotal - allocated)
   const isOver        = remainder < -1
-  const esiBase       = ri(grandTotal - components.hyi)  // Gross - HYI per govt rules
+  const esiBase       = ri(grandTotal - components.hyi)
   const esiApplies    = initialized && esiBase > 0 && esiBase <= esiThreshold
   const employeeEsi   = esiApplies ? ri(esiBase * esiEmployeeRate) : 0
   const employerEsi   = esiApplies ? ri(esiBase * esiEmployerRate) : 0
-  const totalCtcCheck = ctc  // CTC is the input — no need to recompute
+  const totalCtcCheck = ctc
   const netEstimate   = r2(grandTotal - employeePf - employeeEsi)
 
-  function emitChange(comps: Components, ov: Overrides, gt: number) {
-    const basicPctFinal = comps.basic > 0 ? r2((comps.basic * 12 / ctc) * 100) : basicPct
-    const hraPctFinal   = comps.hra   > 0 ? r2((comps.hra   * 12 / ctc) * 100) : hraPct
+  function emitChange(comps: Components, gt: number) {
     onChange({
       annualCtc:        ctc,
-      basicPercent:     basicPctFinal,
-      hraPercent:       hraPctFinal,
-      transportMonthly: ov.transport ? comps.transport : null,
-      fbpMonthly:       ov.fbp       ? comps.fbp       : null,
+      basicPercent:     basicPct,
+      hraPercent:       hraPct,
+      transportMonthly: null,
+      fbpMonthly:       null,
       mediclaim,
       hasIncentive,
       incentivePercent: incentivePct,
@@ -121,56 +112,11 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
     if (ctc <= 0) return
     const c = computeFromCtc(ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim)
     const newComps = { basic: c.basic, hra: c.hra, transport: c.transport, fbp: c.fbp, hyi: c.hyi }
-    const newOv    = { basic: false, hra: false, transport: false, fbp: false, hyi: false }
     setComponents(newComps)
-    setOverrides(newOv)
+    setOverrides({ basic: false, hra: false, transport: false, fbp: false, hyi: false })
     setGrandTotal(c.grandTotal)
     setInitialized(true)
-    emitChange(newComps, newOv, c.grandTotal)
-  }
-
-  function updateComponent(key: keyof Components, val: number) {
-    const prev = { ...components }
-    const next = { ...components, [key]: val }
-    const newOv = { ...overrides, [key]: true }
-
-    if (key === 'basic') {
-      if (!overrides.hra)       next.hra       = ri(ctc * hraPct / 100 / 12)
-      if (!overrides.transport) next.transport  = ri(grandTotal * TRANSPORT_DEFAULT)
-      if (!overrides.fbp)       next.fbp        = ri(grandTotal * FBP_DEFAULT)
-      next.hyi = ri(grandTotal - next.basic - next.hra - next.transport - next.fbp)
-    } else if (key === 'hra') {
-      next.hyi = ri(grandTotal - next.basic - next.hra - next.transport - next.fbp)
-    } else if (key === 'transport') {
-      const diff = val - prev.transport
-      next.fbp = ri(prev.fbp - diff)
-      next.hyi = components.hyi
-    } else if (key === 'fbp') {
-      const diff = val - prev.fbp
-      next.transport = ri(prev.transport - diff)
-      next.hyi = components.hyi
-    } else if (key === 'hyi') {
-      const diff = val - prev.hyi
-      const canT = !overrides.transport
-      const canF = !overrides.fbp
-      if (canT && canF) { const half = r2(diff / 2); next.transport = ri(prev.transport - half); next.fbp = ri(prev.fbp - (diff - half)) }
-      else if (canT)    { next.transport = ri(prev.transport - diff) }
-      else if (canF)    { next.fbp = ri(prev.fbp - diff) }
-    }
-
-    setComponents(next)
-    setOverrides(newOv)
-    emitChange(next, newOv, grandTotal)
-  }
-
-  function resetComponent(key: keyof Components) {
-    const c = computeFromCtc(ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim)
-    const newOv   = { ...overrides, [key]: false }
-    const next    = { ...components, [key]: c[key as keyof typeof c] as number }
-    next.hyi      = ri(grandTotal - next.basic - next.hra - next.transport - next.fbp)
-    setComponents(next)
-    setOverrides(newOv)
-    emitChange(next, newOv, grandTotal)
+    emitChange(newComps, c.grandTotal)
   }
 
   function reset() {
@@ -194,15 +140,14 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <Info size={14} className="text-blue-500 flex-shrink-0"/>
-            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">How component editing works</p>
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">How salary is calculated</p>
           </div>
           <ul className="space-y-1 text-xs text-blue-700 leading-relaxed">
-            <li>• <strong>Change Basic</strong> — HRA recalculates via its %, Transport &amp; FBP recalculate via 4% of new Basic, HYI absorbs the remainder.</li>
-            <li>• <strong>Change HRA</strong> — HYI absorbs the difference. Transport &amp; FBP unchanged.</li>
-            <li>• <strong>Change Transport</strong> — difference goes to/from FBP. HYI not affected.</li>
-            <li>• <strong>Change FBP</strong> — difference goes to/from Transport. HYI not affected.</li>
-            <li>• <strong>Change HYI</strong> — difference splits equally between Transport &amp; FBP.</li>
-            <li>• Use the <strong>↺ reset icon</strong> on any row to revert to auto-calculated value.</li>
+            <li>• Basic = CTC × Basic%, HRA = CTC × HRA%</li>
+            <li>• Grand Monthly = (CTC − Bonus − Employer PF − Mediclaim) ÷ 12</li>
+            <li>• Transport &amp; FBP = 2% of Grand Monthly each</li>
+            <li>• HYI = Grand Monthly − Basic − HRA − Transport − FBP</li>
+            <li>• Employee PF = min(Basic × 12%, ₹1,800/mo)</li>
           </ul>
         </div>
       )}
@@ -281,7 +226,6 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
                   <th className="text-left text-xs text-slate-500 pb-2 font-medium w-1/3">Component</th>
                   <th className="text-right text-xs text-slate-500 pb-2 font-medium">Monthly</th>
                   <th className="text-right text-xs text-slate-500 pb-2 font-medium">Annual</th>
-                  <th className="w-8"/>
                 </tr>
               </thead>
               <tbody>
@@ -289,30 +233,19 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
                   <tr key={key} className="border-b border-slate-100">
                     <td className="py-1.5 text-slate-700 font-medium text-sm">
                       {label}
-                      {overrides[key] && <span className="ml-2 text-[10px] text-brand-500 font-semibold uppercase">custom</span>}
-                      {!overrides[key] && (key === 'transport' || key === 'fbp') && <span className="ml-2 text-[10px] text-slate-400">auto</span>}
-                      {key === 'hyi' && !overrides[key] && <span className="ml-2 text-[10px] text-slate-400">balancer</span>}
+                      {key === 'hyi' && <span className="ml-2 text-[10px] text-slate-400">balancer</span>}
+                      {(key === 'transport' || key === 'fbp') && <span className="ml-2 text-[10px] text-slate-400">auto</span>}
                     </td>
                     <td className="py-1.5 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-slate-400 text-xs">₹</span>
-                        <input
-                          type="number"
-                          value={components[key] || ''}
-                          onChange={e => updateComponent(key, Number(e.target.value))}
-                          className="w-24 text-right border border-slate-200 rounded-lg px-2 py-1 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white"
-                        />
+                        <span className="w-24 text-right px-2 py-1 text-sm font-mono text-slate-700">
+                          {components[key].toLocaleString('en-IN')}
+                        </span>
                       </div>
                     </td>
                     <td className="py-1.5 text-right font-mono text-slate-500 text-sm">
                       <Rupee amount={ri(components[key] * 12)}/>
-                    </td>
-                    <td className="py-1.5 text-right">
-                      {overrides[key] && (
-                        <button type="button" onClick={() => resetComponent(key)} className="text-slate-300 hover:text-brand-600 transition-colors" title="Reset to auto">
-                          <RotateCcw size={11}/>
-                        </button>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -320,13 +253,13 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
                   <td className="py-2 text-slate-800">Gross Monthly</td>
                   <td className="py-2 text-right font-mono text-brand-700"><Rupee amount={grandTotal}/></td>
                   <td className="py-2 text-right font-mono text-slate-600"><Rupee amount={r2(grandTotal * 12)}/></td>
-                  <td/>
+
                 </tr>
                 <tr className="text-slate-500 text-xs">
                   <td className="py-1.5">Employer PF (in CTC)</td>
                   <td className="py-1.5 text-right font-mono"><Rupee amount={employerPf}/></td>
                   <td className="py-1.5 text-right font-mono"><Rupee amount={r2(employerPf * 12)}/></td>
-                  <td/>
+
                 </tr>
                 {mediclaim > 0 && (
                   <tr className="text-slate-500 text-xs">

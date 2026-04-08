@@ -60,9 +60,9 @@ function computeBreakdown(row: EmpRow) {
   const emplPf     = r2(emplPfM * 12)
   const hraA       = r2(ctc * 0.35)
   const hraM       = r2(hraA / 12)
-  const transport  = row.transportMonthly ?? r2(basicM * 0.04)
-  const fbp        = row.fbpMonthly       ?? r2(basicM * 0.04)
   const grandTotal = r2((ctc - incentive - emplPf - mediclaim) / 12)
+  const transport  = row.transportMonthly ?? r2(grandTotal * 0.02)
+  const fbp        = row.fbpMonthly       ?? r2(grandTotal * 0.02)
   // Employee PF = min(Basic × 12%, 1800/mo) — same rule
   const empPf      = Math.min(r2(basicM * 0.12), 1800)
   const net        = r2(grandTotal - empPf)

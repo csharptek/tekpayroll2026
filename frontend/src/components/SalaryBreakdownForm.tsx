@@ -137,7 +137,7 @@ export default function SalaryBreakdownForm({ initialCtc = 0, initialValues, onC
             value={transportCustom ?? ''}
             onChange={e => setTransportCustom(e.target.value ? Number(e.target.value) : null)}
             className={inputClass}
-            placeholder="Auto (4% Basic)"
+            placeholder="Auto (2% Grand Total)"
             disabled={readOnly}
           />
         </div>
@@ -147,7 +147,7 @@ export default function SalaryBreakdownForm({ initialCtc = 0, initialValues, onC
             value={fbpCustom ?? ''}
             onChange={e => setFbpCustom(e.target.value ? Number(e.target.value) : null)}
             className={inputClass}
-            placeholder="Auto (4% Basic)"
+            placeholder="Auto (2% Grand Total)"
             disabled={readOnly}
           />
         </div>
