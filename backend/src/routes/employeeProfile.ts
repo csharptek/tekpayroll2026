@@ -172,12 +172,14 @@ employeeProfileRouter.put('/:id/profile', requireHR, async (req, res) => {
       employeeId: req.params.id,
       firstName, lastName, personalEmail,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-      gender, maritalStatus, bloodGroup,
+      gender, maritalStatus,
+      bloodGroup: bloodGroup || null,
     },
     update: {
       firstName, lastName, personalEmail,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-      gender, maritalStatus, bloodGroup,
+      gender, maritalStatus,
+      bloodGroup: bloodGroup || null,
     },
   })
 
