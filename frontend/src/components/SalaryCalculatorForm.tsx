@@ -6,8 +6,8 @@ import { Rupee } from './ui'
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 const ri = (n: number) => Math.round(n)  // round to whole rupee
-const TRANSPORT_DEFAULT = 0.04
-const FBP_DEFAULT       = 0.04
+const TRANSPORT_DEFAULT = 0.02
+const FBP_DEFAULT       = 0.02
 
 export interface SalaryOutput {
   annualCtc:        number
@@ -32,8 +32,8 @@ function computeFromCtc(ctc: number, basicPct: number, hraPct: number, incentive
   // Annual bonus IS deducted from CTC when computing monthly gross
   const grandTotal        = ri((ctc - (hasIncentive ? annualBonus : 0) - employerPfInCtc * 12 - mediclaim) / 12)
   const hraMonthly        = ri(ctc * hraPct / 100 / 12)
-  const transport         = ri(basicMonthly * TRANSPORT_DEFAULT)
-  const fbp               = ri(basicMonthly * FBP_DEFAULT)
+  const transport         = ri(grandTotal * TRANSPORT_DEFAULT)
+  const fbp               = ri(grandTotal * FBP_DEFAULT)
   const hyi               = ri(grandTotal - basicMonthly - hraMonthly - transport - fbp)
   const employerPfActual  = ri(basicMonthly * 0.12)
   return { basic: basicMonthly, hra: hraMonthly, transport, fbp, hyi, grandTotal, employerPfInCtc, employerPfActual, annualBonus }
@@ -136,8 +136,8 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
 
     if (key === 'basic') {
       if (!overrides.hra)       next.hra       = ri(ctc * hraPct / 100 / 12)
-      if (!overrides.transport) next.transport  = ri(val * TRANSPORT_DEFAULT)
-      if (!overrides.fbp)       next.fbp        = ri(val * FBP_DEFAULT)
+      if (!overrides.transport) next.transport  = ri(grandTotal * TRANSPORT_DEFAULT)
+      if (!overrides.fbp)       next.fbp        = ri(grandTotal * FBP_DEFAULT)
       next.hyi = ri(grandTotal - next.basic - next.hra - next.transport - next.fbp)
     } else if (key === 'hra') {
       next.hyi = ri(grandTotal - next.basic - next.hra - next.transport - next.fbp)

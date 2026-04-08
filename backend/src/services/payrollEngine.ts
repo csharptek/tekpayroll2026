@@ -69,8 +69,8 @@ export interface PayrollCalculation {
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const TRANSPORT_DEFAULT_PCT = 0.04 // 4% of Basic monthly
-const FBP_DEFAULT_PCT       = 0.04 // 4% of Basic monthly
+const TRANSPORT_DEFAULT_PCT = 0.02 // 2% of Grand Monthly Total
+const FBP_DEFAULT_PCT       = 0.02 // 2% of Grand Monthly Total
 const BONUS_MONTH           = 3    // March
 
 // ESI/PF defaults — overridden by SystemConfig at runtime
@@ -122,11 +122,11 @@ export function computeSalaryStructure(
 
   const transportMonthly = input.transportMonthly != null
     ? Math.round(input.transportMonthly)
-    : ri(basicMonthly * TRANSPORT_DEFAULT_PCT)
+    : ri(grandTotalMonthly * TRANSPORT_DEFAULT_PCT)
 
   const fbpMonthly = input.fbpMonthly != null
     ? Math.round(input.fbpMonthly)
-    : ri(basicMonthly * FBP_DEFAULT_PCT)
+    : ri(grandTotalMonthly * FBP_DEFAULT_PCT)
 
   const hyiMonthly = ri(grandTotalMonthly - basicMonthly - hraMonthly - transportMonthly - fbpMonthly)
 
