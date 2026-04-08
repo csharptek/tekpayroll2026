@@ -32,13 +32,15 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function HRLeavePage() {
   const qc = useQueryClient()
-  const [tab, setTab]               = useState<'applications' | 'cancellations' | 'balances'>('applications')
+  const [tab, setTab]               = useState<'applications' | 'cancellations' | 'balances' | 'monthly'>('applications')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterKind, setFilterKind]     = useState('')
   const [filterYear, setFilterYear]     = useState(new Date().getFullYear())
   const [page, setPage]                 = useState(1)
   const [error, setError]               = useState('')
   const [success, setSuccess]           = useState('')
+  const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null)
+  const [monthlyYear, setMonthlyYear]   = useState(new Date().getFullYear())
 
   // Inline action state
   const [declineId, setDeclineId]           = useState<string | null>(null)
@@ -67,6 +69,18 @@ export default function HRLeavePage() {
     queryKey: ['all-leave-balances', filterYear],
     queryFn: () => leaveApi.allBalances(filterYear).then(r => r.data.data),
     enabled: tab === 'balances',
+  })
+
+  const { data: monthlyAllBalances, isLoading: monthlyBalLoading } = useQuery({
+    queryKey: ['all-leave-balances-monthly', monthlyYear],
+    queryFn: () => leaveApi.allBalances(monthlyYear).then(r => r.data.data),
+    enabled: tab === 'monthly',
+  })
+
+  const { data: empMonthlyHistory, isLoading: historyLoading } = useQuery({
+    queryKey: ['emp-leave-history', expandedEmpId],
+    queryFn: () => leaveApi.balanceHistory(expandedEmpId!).then(r => r.data.data),
+    enabled: !!expandedEmpId && tab === 'monthly',
   })
 
   const approveMutation = useMutation({
@@ -115,6 +129,7 @@ export default function HRLeavePage() {
           { key: 'applications',  label: 'Applications' },
           { key: 'cancellations', label: `Cancellation Requests${cancelReqs?.length > 0 ? ` (${cancelReqs.length})` : ''}` },
           { key: 'balances',      label: 'All Balances' },
+          { key: 'monthly',       label: 'Monthly View' },
         ] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={clsx('px-4 py-1.5 text-xs font-medium rounded-lg transition-colors',
@@ -438,6 +453,125 @@ export default function HRLeavePage() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+      {/* ── MONTHLY VIEW TAB ── */}
+      {tab === 'monthly' && (
+        <div className="space-y-4">
+          {/* Year selector */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-500">Click an employee to view month-by-month breakdown</p>
+            <select className="input text-xs py-1.5 px-3 w-28"
+              value={monthlyYear} onChange={e => { setMonthlyYear(Number(e.target.value)); setExpandedEmpId(null) }}>
+              {[0, 1].map(i => { const y = new Date().getFullYear() - i; return <option key={y} value={y}>{y}</option> })}
+            </select>
+          </div>
+
+          {/* Employee list with expandable monthly history */}
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            {/* Header row */}
+            <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr] bg-slate-50 border-b border-slate-100 px-4 py-3 gap-2">
+              <div className="text-xs font-semibold text-slate-500">Employee</div>
+              {['Sick Total', 'Sick Used', 'Sick Bal', 'Casual Total', 'Casual Used', 'Casual Bal', 'Planned Total', 'Planned Used', 'Planned Bal'].map(h => (
+                <div key={h} className="text-center text-xs font-semibold text-slate-500">{h}</div>
+              ))}
+            </div>
+
+            {monthlyBalLoading ? (
+              <div className="text-center py-10 text-sm text-slate-400">Loading…</div>
+            ) : (monthlyAllBalances || []).length === 0 ? (
+              <div className="text-center py-10 text-sm text-slate-400">No data</div>
+            ) : (monthlyAllBalances || []).map((emp: any) => {
+              const b = emp.balance || {}
+              const s = (kind: string, field: string) => {
+                const val = b[kind]?.[field]
+                return val !== undefined ? Number(val) : '—'
+              }
+              const isExpanded = expandedEmpId === emp.id
+              const yearSnaps = (empMonthlyHistory || []).filter((h: any) => h.year === monthlyYear)
+              const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+              return (
+                <div key={emp.id}>
+                  {/* Employee summary row */}
+                  <button
+                    className="w-full grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr] px-4 py-2.5 gap-2 border-b border-slate-50 hover:bg-slate-50/60 text-left transition-colors"
+                    onClick={() => {
+                      if (isExpanded) { setExpandedEmpId(null) }
+                      else { setExpandedEmpId(emp.id) }
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={clsx('text-slate-300 transition-transform text-xs', isExpanded && 'rotate-90')}>▶</span>
+                      <div>
+                        <div className="text-xs font-medium text-slate-800">{emp.name}</div>
+                        <div className="text-xs text-slate-400">{emp.employeeCode}</div>
+                      </div>
+                    </div>
+                    {/* SICK */}
+                    <div className="text-center text-xs text-slate-500">{s('SICK','total')}</div>
+                    <div className="text-center text-xs text-slate-500">{s('SICK','used')}</div>
+                    <div className={clsx('text-center text-xs font-semibold', s('SICK','remaining') === 0 ? 'text-red-500' : 'text-emerald-700')}>{s('SICK','remaining')}</div>
+                    {/* CASUAL */}
+                    <div className="text-center text-xs text-slate-500">{s('CASUAL','total')}</div>
+                    <div className="text-center text-xs text-slate-500">{s('CASUAL','used')}</div>
+                    <div className={clsx('text-center text-xs font-semibold', s('CASUAL','remaining') === 0 ? 'text-red-500' : 'text-emerald-700')}>{s('CASUAL','remaining')}</div>
+                    {/* PLANNED */}
+                    <div className="text-center text-xs text-slate-500">{s('PLANNED','total')}</div>
+                    <div className="text-center text-xs text-slate-500">{s('PLANNED','used')}</div>
+                    <div className={clsx('text-center text-xs font-semibold', s('PLANNED','remaining') === 0 ? 'text-red-500' : 'text-emerald-700')}>{s('PLANNED','remaining')}</div>
+                  </button>
+
+                  {/* Expanded monthly snapshot */}
+                  {isExpanded && (
+                    <div className="bg-slate-50/80 border-b border-slate-100 px-6 py-3">
+                      {historyLoading ? (
+                        <p className="text-xs text-slate-400 py-2">Loading history…</p>
+                      ) : yearSnaps.length === 0 ? (
+                        <p className="text-xs text-slate-400 py-2">No monthly snapshots yet for {monthlyYear}. Snapshots are taken during payroll runs.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs min-w-[700px]">
+                            <thead>
+                              <tr className="border-b border-slate-200">
+                                <th className="text-left font-semibold text-slate-500 py-1.5 pr-4">Month</th>
+                                {['Sick Total','Sick Used','Sick Bal','Casual Total','Casual Used','Casual Bal','Planned Total','Planned Used','Planned Carry','Planned Bal'].map(h => (
+                                  <th key={h} className="text-center font-semibold text-slate-500 py-1.5 px-2">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {yearSnaps
+                                .sort((a: any, b: any) => a.snapshotMonth.localeCompare(b.snapshotMonth))
+                                .map((snap: any) => {
+                                  const monthIdx = parseInt(snap.snapshotMonth.slice(5,7), 10) - 1
+                                  return (
+                                    <tr key={snap.id} className="border-b border-slate-100 hover:bg-white/60">
+                                      <td className="py-1.5 pr-4 font-medium text-slate-700">{MONTHS[monthIdx]} {snap.snapshotMonth.slice(0,4)}</td>
+                                      <td className="text-center px-2 text-slate-500">{snap.sickTotal}</td>
+                                      <td className="text-center px-2 text-slate-500">{snap.sickUsed}</td>
+                                      <td className={clsx('text-center px-2 font-semibold', snap.sickBalance === 0 ? 'text-red-500' : 'text-emerald-700')}>{snap.sickBalance}</td>
+                                      <td className="text-center px-2 text-slate-500">{snap.casualTotal}</td>
+                                      <td className="text-center px-2 text-slate-500">{snap.casualUsed}</td>
+                                      <td className={clsx('text-center px-2 font-semibold', snap.casualBalance === 0 ? 'text-red-500' : 'text-emerald-700')}>{snap.casualBalance}</td>
+                                      <td className="text-center px-2 text-slate-500">{snap.plannedTotal}</td>
+                                      <td className="text-center px-2 text-slate-500">{snap.plannedUsed}</td>
+                                      <td className="text-center px-2 text-violet-600">{snap.plannedCarry || 0}</td>
+                                      <td className={clsx('text-center px-2 font-semibold', snap.plannedBalance === 0 ? 'text-red-500' : 'text-emerald-700')}>{snap.plannedBalance}</td>
+                                    </tr>
+                                  )
+                                })
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
