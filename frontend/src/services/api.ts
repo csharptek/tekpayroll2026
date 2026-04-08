@@ -28,6 +28,11 @@ api.interceptors.response.use(
     const { isDevMode, setUser, logout } = useAuthStore.getState()
 
     if (err.response?.status === 401 && !isDevMode && !err.config._retry) {
+      const errorCode = err.response?.data?.code
+      // Only attempt refresh for expired/invalid tokens — not for other 401s
+      if (errorCode && !['TOKEN_EXPIRED', 'INVALID_TOKEN', 'NO_TOKEN', 'AUTH_FAILED'].includes(errorCode)) {
+        return Promise.reject(err)
+      }
       // Try silent token refresh before giving up
       if (isRefreshing) {
         // Queue this request until refresh completes
@@ -68,11 +73,17 @@ api.interceptors.response.use(
         err.config.headers['Authorization'] = `Bearer ${newToken}`
         return api(err.config)
       } catch (refreshErr) {
-        // Refresh failed — clear session and redirect to login
         refreshQueue = []
         isRefreshing = false
-        logout()
-        window.location.href = '/login'
+
+        // Only logout if MSAL has no accounts at all (truly signed out)
+        // Transient failures (network, DB down) should NOT log the user out
+        const accounts = msalInstance.getAllAccounts()
+        if (accounts.length === 0) {
+          logout()
+          window.location.href = '/login'
+        }
+        // Otherwise silently fail — user stays logged in, request just fails
         return Promise.reject(refreshErr)
       }
     }

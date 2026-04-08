@@ -56,8 +56,30 @@ function handleDevBypass(req: Request): AuthUser | null {
   }
 }
 
+// ─── TOKEN CACHE ─────────────────────────────────────────────────────────────
+// Avoids hitting DB on every request. Cache keyed by token, TTL = token expiry.
+interface CachedAuth {
+  user: AuthUser
+  expiresAt: number
+}
+const tokenCache = new Map<string, CachedAuth>()
+
+// Purge expired entries periodically
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, val] of tokenCache.entries()) {
+    if (val.expiresAt <= now) tokenCache.delete(key)
+  }
+}, 5 * 60 * 1000) // every 5 minutes
+
 // ─── MSAL TOKEN VALIDATION ────────────────────────────────────────────────────
 async function validateMsalToken(token: string): Promise<AuthUser> {
+  // Return cached result if still valid (with 60s buffer)
+  const cached = tokenCache.get(token)
+  if (cached && cached.expiresAt > Date.now() + 60_000) {
+    return cached.user
+  }
+
   const decoded = jwt.decode(token, { complete: true })
   if (!decoded || typeof decoded === 'string') {
     throw new AppError('Invalid token format', 401, 'INVALID_TOKEN')
@@ -101,21 +123,29 @@ async function validateMsalToken(token: string): Promise<AuthUser> {
         status:       'ACTIVE',
       },
     })
-  } else {
-    // Link existing employee to Entra ID
+  } else if (!employee.entraId || employee.entraId !== entraId) {
+    // Only update when entraId needs linking — avoid unnecessary writes
     await prisma.employee.update({
       where: { id: employee.id },
       data:  { entraId, role, name: payload.name || employee.name },
     })
   }
 
-  return {
+  const user: AuthUser = {
     id:      employee.id,
     name:    payload.name || employee.name,
     email:   employee.email,
     role:    employee.role,
     entraId: employee.entraId || entraId,
   }
+
+  // Cache until token expiry
+  const expiresAt = (payload.exp || 0) * 1000
+  if (expiresAt > Date.now()) {
+    tokenCache.set(token, { user, expiresAt })
+  }
+
+  return user
 }
 
 // ─── MAIN MIDDLEWARE ──────────────────────────────────────────────────────────
