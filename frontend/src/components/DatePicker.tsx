@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { DayPicker, CaptionProps, useNavigation } from 'react-day-picker'
 import { format, parse, isValid, setMonth, setYear, getMonth, getYear } from 'date-fns'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -59,12 +60,17 @@ export function DatePicker({ value, onChange, disabled, className, placeholder, 
   const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
+  const portalRef = useRef<HTMLDivElement>(null)
 
   const selected = parseYMD(value)
 
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (
+        ref.current && !ref.current.contains(target) &&
+        portalRef.current && !portalRef.current.contains(target)
+      ) setOpen(false)
     }
     function closeOnScroll() { setOpen(false) }
     document.addEventListener('mousedown', handler)
@@ -86,7 +92,18 @@ export function DatePicker({ value, onChange, disabled, className, placeholder, 
     if (disabled) return
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect()
-      setRect({ top: r.bottom + window.scrollY, left: r.left + window.scrollX, width: r.width })
+      const calendarHeight = 320
+      const calendarWidth = 300
+      const spaceBelow = window.innerHeight - r.bottom
+      const spaceAbove = r.top
+      const topPos = spaceBelow >= calendarHeight || spaceBelow >= spaceAbove
+        ? r.bottom + window.scrollY + 4
+        : r.top + window.scrollY - calendarHeight - 4
+      const leftPos = Math.min(
+        r.left + window.scrollX,
+        window.scrollX + window.innerWidth - calendarWidth - 8
+      )
+      setRect({ top: topPos, left: Math.max(8, leftPos), width: r.width })
     }
     setOpen(o => !o)
   }
@@ -122,12 +139,13 @@ export function DatePicker({ value, onChange, disabled, className, placeholder, 
         <CalendarDays size={15} className="flex-shrink-0 text-slate-400" />
       </button>
 
-      {open && rect && (
+      {open && rect && createPortal(
         <div
+          ref={portalRef}
           className="bg-white border border-slate-200 rounded-xl shadow-card-lg animate-fade-in"
           style={{
             position: 'fixed',
-            top: rect.top + 4,
+            top: rect.top,
             left: rect.left,
             minWidth: 300,
             zIndex: 9999,
@@ -164,7 +182,8 @@ export function DatePicker({ value, onChange, disabled, className, placeholder, 
               day_disabled: 'text-slate-200 cursor-not-allowed',
             }}
           />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
