@@ -161,7 +161,7 @@ export default function MonthCalendar() {
   }
 
   ;(allLeaves || []).forEach((lv: any) => {
-    if (!['APPROVED', 'PENDING'].includes(lv.status)) return
+    if (!['APPROVED', 'AUTO_APPROVED', 'PENDING'].includes(lv.status)) return
     eachDayOfInterval({ start: new Date(lv.startDate), end: new Date(lv.endDate) }).forEach(d => {
       if (d.getMonth() + 1 !== month || d.getFullYear() !== year) return
       get(format(d, 'yyyy-MM-dd')).leaves.push({
