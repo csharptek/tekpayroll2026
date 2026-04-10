@@ -56,7 +56,9 @@ function CustomCaption({ displayMonth }: CaptionProps) {
 export function DatePicker({ value, onChange, disabled, className, placeholder, label, required }: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const [month, setMonthState] = useState<Date>(parseYMD(value) ?? new Date())
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
 
   const selected = parseYMD(value)
 
@@ -64,14 +66,30 @@ export function DatePicker({ value, onChange, disabled, className, placeholder, 
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
+    function closeOnScroll() { setOpen(false) }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    window.addEventListener('scroll', closeOnScroll, true)
+    window.addEventListener('resize', closeOnScroll)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      window.removeEventListener('scroll', closeOnScroll, true)
+      window.removeEventListener('resize', closeOnScroll)
+    }
   }, [])
 
   useEffect(() => {
     const d = parseYMD(value)
     if (d) setMonthState(d)
   }, [value])
+
+  function toggleOpen() {
+    if (disabled) return
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setRect({ top: r.bottom + window.scrollY, left: r.left + window.scrollX, width: r.width })
+    }
+    setOpen(o => !o)
+  }
 
   function handleSelect(day: Date | undefined) {
     if (!day) return
@@ -90,8 +108,9 @@ export function DatePicker({ value, onChange, disabled, className, placeholder, 
       )}
       <button
         type="button"
+        ref={btnRef}
         disabled={disabled}
-        onClick={() => !disabled && setOpen(o => !o)}
+        onClick={toggleOpen}
         className={[
           'input text-left flex items-center justify-between gap-2',
           !displayValue ? 'text-slate-400' : 'text-slate-800',
@@ -103,10 +122,16 @@ export function DatePicker({ value, onChange, disabled, className, placeholder, 
         <CalendarDays size={15} className="flex-shrink-0 text-slate-400" />
       </button>
 
-      {open && (
+      {open && rect && (
         <div
-          className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-card-lg animate-fade-in"
-          style={{ minWidth: 300 }}
+          className="bg-white border border-slate-200 rounded-xl shadow-card-lg animate-fade-in"
+          style={{
+            position: 'fixed',
+            top: rect.top + 4,
+            left: rect.left,
+            minWidth: 300,
+            zIndex: 9999,
+          }}
         >
           <DayPicker
             mode="single"
