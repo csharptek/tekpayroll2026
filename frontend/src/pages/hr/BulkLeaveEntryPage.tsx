@@ -118,6 +118,7 @@ export default function BulkLeaveEntryPage() {
       if (!block.employeeId) { setError('Select an employee for each block'); return }
       for (const row of block.rows) {
         if (!row.startDate || !row.reasonLabel) { setError('Fill in start date and reason for every row'); return }
+        if (row.reasonLabel === '__custom__' && !row.customReason.trim()) { setError('Fill in custom reason text for every row'); return }
         entries.push({
           employeeId:   block.employeeId,
           leaveKind:    row.leaveKind,
@@ -126,8 +127,8 @@ export default function BulkLeaveEntryPage() {
           isHalfDay:    row.isHalfDay,
           halfDaySlot:  row.isHalfDay ? row.halfDaySlot : undefined,
           isLop:        row.isLop,
-          reasonLabel:  row.reasonLabel,
-          customReason: row.customReason || undefined,
+          reasonLabel:  row.reasonLabel === '__custom__' ? row.customReason : row.reasonLabel,
+          customReason: row.reasonLabel === '__custom__' ? row.customReason : undefined,
         })
         rowIndex++
       }

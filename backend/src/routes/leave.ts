@@ -440,8 +440,13 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
     try {
       const {
         employeeId, leaveKind, startDate: startDateStr, endDate: endDateStr,
-        isHalfDay, halfDaySlot, isLop: forceIsLop, reasonLabel, customReason,
+        isHalfDay, halfDaySlot: rawHalfDaySlot, isLop: forceIsLop, reasonLabel, customReason,
       } = entry
+
+      // Normalize legacy FIRST_HALF/SECOND_HALF values to FIRST/SECOND
+      const halfDaySlot = rawHalfDaySlot === 'FIRST_HALF' ? 'FIRST'
+                        : rawHalfDaySlot === 'SECOND_HALF' ? 'SECOND'
+                        : rawHalfDaySlot
 
       if (!employeeId || !leaveKind || !startDateStr || !reasonLabel) {
         throw new Error('employeeId, leaveKind, startDate, reasonLabel are required')
