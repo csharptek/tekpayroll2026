@@ -7,7 +7,7 @@ import {
   getLeavePolicy, getEmployeeBalance, applyLeave, approveLeave, declineLeave,
   requestCancellation, cancelLeaveDirectly, approveCancellationRequest,
   declineCancellationRequest, triggerYearEndRollover, seedDefaultLeaveReasons,
-  grantJoiningLeaves, getCurrentLeaveYear,
+  grantJoiningLeaves, getCurrentLeaveYear, countWorkingDays,
 } from '../services/leaveService'
 
 export const leaveRouter = Router()
@@ -421,4 +421,131 @@ leaveRouter.put('/balance-adjust', requireSuperAdmin, async (req, res) => {
     create: { employeeId, leaveKind, year, ...data },
   })
   res.json({ success: true, data: upserted })
+})
+
+// ─── BULK LEAVE ENTRY (HR / Super Admin) ─────────────────────────────────────
+// POST /api/leave/bulk-entry
+// Body: { entries: Array<{ employeeId, leaveKind, startDate, endDate, isHalfDay, halfDaySlot, isLop, reasonLabel, customReason }> }
+
+leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
+  const { entries } = req.body
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new AppError('entries array is required', 400)
+  }
+
+  const results: Array<{ index: number; employeeId: string; status: 'success' | 'error'; message?: string; data?: any }> = []
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
+    try {
+      const {
+        employeeId, leaveKind, startDate: startDateStr, endDate: endDateStr,
+        isHalfDay, halfDaySlot, isLop: forceIsLop, reasonLabel, customReason,
+      } = entry
+
+      if (!employeeId || !leaveKind || !startDateStr || !reasonLabel) {
+        throw new Error('employeeId, leaveKind, startDate, reasonLabel are required')
+      }
+      if (!['SICK', 'CASUAL', 'PLANNED'].includes(leaveKind)) {
+        throw new Error(`Invalid leaveKind: ${leaveKind}`)
+      }
+
+      const startDate = new Date(startDateStr)
+      const endDate   = endDateStr ? new Date(endDateStr) : new Date(startDateStr)
+
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        throw new Error('Invalid date format')
+      }
+      if (startDate > endDate) {
+        throw new Error('startDate must be before endDate')
+      }
+
+      // Check for overlap
+      const overlap = await prisma.lvApplication.findFirst({
+        where: {
+          employeeId,
+          status: { in: ['PENDING', 'APPROVED', 'AUTO_APPROVED'] },
+          OR: [{ startDate: { lte: endDate }, endDate: { gte: startDate } }],
+        },
+      })
+      if (overlap) throw new Error('Overlapping leave application already exists for these dates')
+
+      const totalDays = await countWorkingDays(startDate, endDate, Boolean(isHalfDay))
+      if (totalDays === 0) throw new Error('No working days in selected range')
+
+      const year = startDate.getFullYear()
+      const policy = await getLeavePolicy()
+
+      // Get or create entitlement
+      let entitlement = await prisma.leaveEntitlement.findUnique({
+        where: { employeeId_leaveKind_year: { employeeId, leaveKind, year } },
+      })
+      if (!entitlement) {
+        const annual = { SICK: policy.sickDaysPerYear, CASUAL: policy.casualDaysPerYear, PLANNED: policy.plannedDaysPerYear }[leaveKind as string] || 0
+        entitlement = await prisma.leaveEntitlement.create({
+          data: { employeeId, leaveKind, year, totalDays: annual },
+        })
+      }
+
+      const available = Number(entitlement.totalDays) + Number(entitlement.carryForward)
+                      - Number(entitlement.usedDays) - Number(entitlement.pendingDays)
+
+      // Admin can force isLop; otherwise auto-detect from balance
+      const isLop   = forceIsLop === true ? true : available < totalDays
+      const lopDays = isLop ? (forceIsLop === true ? totalDays : Math.max(0, totalDays - Math.max(0, available))) : 0
+
+      const application = await prisma.lvApplication.create({
+        data: {
+          employeeId,
+          leaveKind,
+          startDate,
+          endDate,
+          totalDays,
+          isHalfDay:   Boolean(isHalfDay),
+          halfDaySlot: isHalfDay ? halfDaySlot : null,
+          reasonLabel,
+          customReason: customReason || null,
+          isBackdated:  startDate < new Date(),
+          status:       'AUTO_APPROVED',
+          isLop,
+          lopDays,
+          approvedById:   req.user!.id,
+          approvedByName: req.user!.name,
+          approvedAt:     new Date(),
+        },
+      })
+
+      // Update entitlement
+      await prisma.leaveEntitlement.update({
+        where: { employeeId_leaveKind_year: { employeeId, leaveKind, year } },
+        data: {
+          usedDays: { increment: totalDays - lopDays },
+          lopDays:  { increment: lopDays },
+        },
+      })
+
+      // Create LOP entry in payroll if isLop
+      if (isLop && lopDays > 0) {
+        const cycle = await prisma.payrollCycle.findFirst({
+          where: { status: { in: ['DRAFT', 'CALCULATED'] } },
+          orderBy: { cycleStart: 'desc' },
+        })
+        if (cycle) {
+          await prisma.lopEntry.upsert({
+            where: { cycleId_employeeId: { cycleId: cycle.id, employeeId } },
+            create: { cycleId: cycle.id, employeeId, lopDays: Math.round(lopDays), reason: 'Bulk leave entry (admin)' },
+            update: { lopDays: { increment: Math.round(lopDays) } },
+          })
+        }
+      }
+
+      results.push({ index: i, employeeId, status: 'success', data: { id: application.id, totalDays, isLop, lopDays } })
+    } catch (err: any) {
+      results.push({ index: i, employeeId: entry?.employeeId || '', status: 'error', message: err.message || 'Unknown error' })
+    }
+  }
+
+  const successCount = results.filter(r => r.status === 'success').length
+  const errorCount   = results.filter(r => r.status === 'error').length
+  res.status(200).json({ success: true, data: { results, successCount, errorCount } })
 })

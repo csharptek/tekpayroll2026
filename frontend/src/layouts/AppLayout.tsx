@@ -38,6 +38,7 @@ const HR_NAV = [
       { label: 'Leave Applications', icon: CalendarCheck, to: '/hr/leaves' },
       { label: 'Public Holidays',    icon: CalendarDays,  to: '/hr/public-holidays' },
       { label: 'Leave Config',       icon: CalendarClock, to: '/hr/leave-config' },
+      { label: 'Bulk Leave Entry',   icon: ClipboardList, to: '/hr/bulk-leave-entry' },
     ]
   },
   {
@@ -104,6 +105,7 @@ const SUPER_ADMIN_NAV = [
       { label: 'Leave Applications', icon: CalendarCheck, to: '/hr/leaves' },
       { label: 'Public Holidays',    icon: CalendarDays,  to: '/hr/public-holidays' },
       { label: 'Leave Config',       icon: CalendarClock, to: '/hr/leave-config' },
+      { label: 'Bulk Leave Entry',   icon: ClipboardList, to: '/hr/bulk-leave-entry' },
     ]
   },
   {
@@ -413,6 +415,7 @@ function usePageTitle() {
     '/hr/leaves': 'Leave Management',
     '/hr/public-holidays': 'Public Holidays',
     '/hr/leave-config': 'Leave Configuration',
+    '/hr/bulk-leave-entry': 'Bulk Leave Entry',
     '/my/dashboard': 'My Dashboard',
     '/my/payslips': 'My Payslips',
     '/my/profile': 'My Profile',

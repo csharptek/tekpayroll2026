@@ -34,6 +34,7 @@ import BulkEditEmployeePage from './pages/hr/BulkEditEmployeePage'
 import HRLeavePage from './pages/hr/HRLeavePage'
 import PublicHolidaysPage from './pages/hr/PublicHolidaysPage'
 import LeaveConfigPage from './pages/hr/LeaveConfigPage'
+import BulkLeaveEntryPage from './pages/hr/BulkLeaveEntryPage'
 
 // Employee Pages
 import EmployeeDashboard from './pages/employee/EmployeeDashboard'
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="leaves" element={<HRLeavePage />} />
           <Route path="public-holidays" element={<PublicHolidaysPage />} />
           <Route path="leave-config" element={<LeaveConfigPage />} />
+          <Route path="bulk-leave-entry" element={<BulkLeaveEntryPage />} />
 
           {/* Financial routes — SUPER_ADMIN only */}
           <Route path="payroll" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollCyclesPage /></RequireAuth>} />
