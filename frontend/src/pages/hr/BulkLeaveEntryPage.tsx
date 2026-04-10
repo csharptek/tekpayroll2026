@@ -15,7 +15,7 @@ interface LeaveRow {
   startDate: string
   endDate: string
   isHalfDay: boolean
-  halfDaySlot: 'FIRST_HALF' | 'SECOND_HALF'
+  halfDaySlot: 'FIRST' | 'SECOND'
   isLop: boolean
   reasonLabel: string
   customReason: string
@@ -34,7 +34,7 @@ function newRow(): LeaveRow {
     startDate: '',
     endDate: '',
     isHalfDay: false,
-    halfDaySlot: 'FIRST_HALF',
+    halfDaySlot: 'FIRST',
     isLop: false,
     reasonLabel: '',
     customReason: '',
@@ -308,8 +308,8 @@ export default function BulkLeaveEntryPage() {
                             value={row.halfDaySlot}
                             onChange={e => updateRow(block.id, row.id, 'halfDaySlot', e.target.value)}
                           >
-                            <option value="FIRST_HALF">First Half</option>
-                            <option value="SECOND_HALF">Second Half</option>
+                            <option value="FIRST">First Half</option>
+                            <option value="SECOND">Second Half</option>
                           </select>
                         </div>
                       )}
