@@ -11,7 +11,7 @@ import { Card } from './ui'
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
 interface DayMeta {
-  leaves:    { name: string; type: string; status: string }[]
+  leaves:    { name: string; type: string; status: string; isHalfDay: boolean; halfDaySlot?: string }[]
   holidays:  { name: string }[]
   birthdays: { name: string; department?: string }[]
 }
@@ -59,7 +59,10 @@ function DayCell({ date, meta, isCurrentMonth }: {
   // Tooltip lines
   const tooltipLines: string[] = [
     ...meta.holidays.map(h => `🏖️ ${h.name}`),
-    ...meta.leaves.map(l => `🌿 ${l.name}${l.status === 'PENDING' ? ' (pending)' : ''}`),
+    ...meta.leaves.map(l => {
+      const halfInfo = l.isHalfDay ? ` (half day${l.halfDaySlot === 'FIRST' ? ' - AM' : l.halfDaySlot === 'SECOND' ? ' - PM' : ''})` : ''
+      return `🌿 ${l.name}${halfInfo}${l.status === 'PENDING' ? ' · pending' : ''}`
+    }),
     ...meta.birthdays.map(b => `🎂 ${b.name}`),
   ]
 
@@ -165,9 +168,11 @@ export default function MonthCalendar() {
     eachDayOfInterval({ start: new Date(lv.startDate), end: new Date(lv.endDate) }).forEach(d => {
       if (d.getMonth() + 1 !== month || d.getFullYear() !== year) return
       get(format(d, 'yyyy-MM-dd')).leaves.push({
-        name:   lv.employee?.name || 'Unknown',
-        type:   lv.leaveKind || '',
-        status: lv.status,
+        name:        lv.employee?.name || 'Unknown',
+        type:        lv.leaveKind || '',
+        status:      lv.status,
+        isHalfDay:   Boolean(lv.isHalfDay),
+        halfDaySlot: lv.halfDaySlot || undefined,
       })
     })
   })
@@ -194,7 +199,10 @@ export default function MonthCalendar() {
     if (!meta) return
     meta.holidays.forEach(h => upcoming.push({ date: d, icon: '🏖️', label: h.name, color: 'bg-emerald-50 text-emerald-800 border-emerald-200' }))
     meta.birthdays.forEach(b => upcoming.push({ date: d, icon: '🎂', label: `${b.name}'s Birthday`, color: 'bg-amber-50 text-amber-800 border-amber-200' }))
-    meta.leaves.slice(0, 3).forEach(l => upcoming.push({ date: d, icon: '🌿', label: `${l.name} on leave`, color: 'bg-blue-50 text-blue-800 border-blue-200' }))
+    meta.leaves.slice(0, 3).forEach(l => {
+      const halfInfo = l.isHalfDay ? ` · half day${l.halfDaySlot === 'FIRST' ? ' (AM)' : l.halfDaySlot === 'SECOND' ? ' (PM)' : ''}` : ''
+      upcoming.push({ date: d, icon: '🌿', label: `${l.name} on leave${halfInfo}`, color: 'bg-blue-50 text-blue-800 border-blue-200' })
+    })
   })
 
   const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
