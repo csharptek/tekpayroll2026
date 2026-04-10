@@ -23,7 +23,7 @@ export default function LeaveConfigPage() {
   const [rolloverConfirm, setRolloverConfirm] = useState(false)
   const [balanceYear, setBalanceYear] = useState(new Date().getFullYear())
   const [balanceSearch, setBalanceSearch] = useState('')
-  const [editing, setEditing] = useState<{ empId: string; kind: string; value: string } | null>(null)
+  const [editing, setEditing] = useState<{ empId: string; values: Record<string, string> } | null>(null)
 
   const { data: policyData } = useQuery({ queryKey: ['leave-policy'], queryFn: () => leaveApi.policy().then(r => r.data.data) })
   const { data: reasons, isLoading: reasonsLoading } = useQuery({
@@ -42,7 +42,6 @@ export default function LeaveConfigPage() {
   const adjustMutation = useMutation({
     mutationFn: (data: any) => leaveApi.balanceAdjust(data),
     onSuccess: () => {
-      setEditing(null)
       qc.invalidateQueries({ queryKey: ['balance-adjust-employees', balanceYear] })
     },
     onError: (e: any) => setError(e?.response?.data?.error || 'Failed to update balance'),
@@ -371,6 +370,7 @@ export default function LeaveConfigPage() {
                     {['SICK', 'CASUAL', 'PLANNED'].map(k => (
                       <th key={k} className="text-center text-xs font-semibold text-slate-500 py-2 px-3">{KIND_LABEL[k]}</th>
                     ))}
+                    <th className="text-center text-xs font-semibold text-slate-500 py-2 px-3 w-24">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -380,79 +380,92 @@ export default function LeaveConfigPage() {
                       e.name.toLowerCase().includes(balanceSearch.toLowerCase()) ||
                       e.employeeCode.toLowerCase().includes(balanceSearch.toLowerCase())
                     )
-                    .map((emp: any) => (
-                      <tr key={emp.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                        <td className="py-2.5 pr-4">
-                          <p className="text-slate-800 font-medium text-xs">{emp.name}</p>
-                          <p className="text-slate-400 text-xs">{emp.employeeCode}</p>
-                        </td>
-                        {['SICK', 'CASUAL', 'PLANNED'].map(kind => {
-                          const bal = emp.balances[kind]
-                          const isEdit = editing?.empId === emp.id && editing?.kind === kind
-                          return (
-                            <td key={kind} className="py-2.5 px-3 text-center">
-                              {isEdit ? (
-                                <div className="flex items-center justify-center gap-1">
+                    .map((emp: any) => {
+                      const isEdit = editing?.empId === emp.id
+                      return (
+                        <tr key={emp.id} className={clsx('border-b border-slate-50', isEdit ? 'bg-indigo-50/40' : 'hover:bg-slate-50/50')}>
+                          <td className="py-2.5 pr-4">
+                            <p className="text-slate-800 font-medium text-xs">{emp.name}</p>
+                            <p className="text-slate-400 text-xs">{emp.employeeCode}</p>
+                          </td>
+                          {['SICK', 'CASUAL', 'PLANNED'].map(kind => {
+                            const bal = emp.balances[kind]
+                            return (
+                              <td key={kind} className="py-2.5 px-3 text-center">
+                                {isEdit ? (
                                   <input
                                     type="number"
                                     min={0}
                                     max={365}
                                     step={0.5}
                                     className="input text-sm text-center w-20"
-                                    value={editing.value}
-                                    onChange={e => setEditing(prev => prev ? { ...prev, value: e.target.value } : null)}
-                                    autoFocus
+                                    value={editing!.values[kind] ?? String(bal ? bal.totalDays : 0)}
+                                    onChange={e => setEditing(prev => prev ? {
+                                      ...prev,
+                                      values: { ...prev.values, [kind]: e.target.value }
+                                    } : null)}
                                   />
-                                  <button
-                                    className="p-1 rounded-lg bg-brand-600 text-white hover:bg-brand-700"
-                                    onClick={() => {
-                                      setError('')
-                                      adjustMutation.mutate({
-                                        employeeId: emp.id,
-                                        leaveKind: kind,
-                                        year: balanceYear,
-                                        totalDays: Number(editing.value),
-                                      })
-                                    }}
-                                  >
-                                    <Check size={12} />
-                                  </button>
-                                  <button
-                                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-400"
-                                    onClick={() => setEditing(null)}
-                                  >
-                                    <XIcon size={12} />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex flex-col items-center gap-0.5 group">
-                                  <div className="flex items-center gap-1">
-                                    <span className="font-semibold text-slate-700">
-                                      {bal ? bal.totalDays : '—'}
-                                    </span>
-                                    <button
-                                      className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-brand-600 transition-opacity"
-                                      onClick={() => setEditing({
-                                        empId: emp.id,
-                                        kind,
-                                        value: String(bal ? bal.totalDays : 0),
-                                      })}
-                                    >
-                                      <Edit3 size={11} />
-                                    </button>
+                                ) : (
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <span className="font-semibold text-slate-700">{bal ? bal.totalDays : '—'}</span>
+                                    {bal && <span className="text-xs text-slate-400">used {bal.usedDays}</span>}
                                   </div>
-                                  {bal && (
-                                    <span className="text-xs text-slate-400">
-                                      used {bal.usedDays}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))
+                                )}
+                              </td>
+                            )
+                          })}
+                          <td className="py-2.5 px-3 text-center">
+                            {isEdit ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  className="p-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
+                                  disabled={adjustMutation.isPending}
+                                  onClick={async () => {
+                                    setError('')
+                                    const kinds = ['SICK', 'CASUAL', 'PLANNED']
+                                    for (const kind of kinds) {
+                                      const val = editing!.values[kind]
+                                      if (val !== undefined) {
+                                        await leaveApi.balanceAdjust({
+                                          employeeId: emp.id,
+                                          leaveKind: kind,
+                                          year: balanceYear,
+                                          totalDays: Number(val),
+                                        }).catch((e: any) => setError(e?.response?.data?.error || 'Failed to update'))
+                                      }
+                                    }
+                                    setEditing(null)
+                                    qc.invalidateQueries({ queryKey: ['balance-adjust-employees', balanceYear] })
+                                  }}
+                                >
+                                  <Check size={13} />
+                                </button>
+                                <button
+                                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"
+                                  onClick={() => setEditing(null)}
+                                >
+                                  <XIcon size={13} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-indigo-50 transition-colors"
+                                onClick={() => {
+                                  const vals: Record<string, string> = {}
+                                  for (const k of ['SICK', 'CASUAL', 'PLANNED']) {
+                                    const bal = emp.balances[k]
+                                    vals[k] = String(bal ? bal.totalDays : 0)
+                                  }
+                                  setEditing({ empId: emp.id, values: vals })
+                                }}
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })
                   }
                 </tbody>
               </table>
