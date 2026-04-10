@@ -502,7 +502,7 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
           endDate,
           totalDays,
           isHalfDay:   Boolean(isHalfDay),
-          halfDaySlot: isHalfDay ? halfDaySlot : null,
+          ...(isHalfDay && halfDaySlot ? { halfDaySlot } : {}),
           reasonLabel,
           customReason: customReason || null,
           isBackdated:  startDate < new Date(),
