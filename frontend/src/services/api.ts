@@ -213,6 +213,8 @@ export const leaveApi = {
 
   // Seed
   seedReasons:        () => api.post('/api/leave/seed-reasons', {}),
+  balanceAdjustEmployees: (year?: number) => api.get('/api/leave/balance-adjust/employees', { params: year ? { year } : {} }),
+  balanceAdjust:      (data: any) => api.put('/api/leave/balance-adjust', data),
 }
 
 export const policiesApi = {

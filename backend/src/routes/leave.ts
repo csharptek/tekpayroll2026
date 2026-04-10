@@ -373,3 +373,52 @@ leaveRouter.post('/seed-reasons', requireSuperAdmin, async (_req, res) => {
   await seedDefaultLeaveReasons()
   res.json({ success: true, message: 'Default reasons seeded' })
 })
+
+// ─── ADJUST LEAVE BALANCE (Super Admin) ──────────────────────────────────────
+
+leaveRouter.get('/balance-adjust/employees', requireSuperAdmin, async (req, res) => {
+  const year = parseInt(req.query.year as string) || new Date().getFullYear()
+  const employees = await prisma.employee.findMany({
+    where: { status: 'ACTIVE' },
+    select: { id: true, name: true, employeeCode: true },
+    orderBy: { name: 'asc' },
+  })
+  const results = await Promise.all(employees.map(async emp => {
+    const entitlements = await prisma.leaveEntitlement.findMany({
+      where: { employeeId: emp.id, year },
+    })
+    const byKind: Record<string, any> = {}
+    for (const e of entitlements) {
+      byKind[e.leaveKind] = {
+        id: e.id,
+        totalDays: Number(e.totalDays),
+        usedDays: Number(e.usedDays),
+        pendingDays: Number(e.pendingDays),
+        lopDays: Number(e.lopDays),
+        carryForward: Number(e.carryForward),
+      }
+    }
+    return { ...emp, balances: byKind }
+  }))
+  res.json({ success: true, data: results })
+})
+
+leaveRouter.put('/balance-adjust', requireSuperAdmin, async (req, res) => {
+  const { employeeId, leaveKind, year, totalDays } = req.body
+  if (!employeeId || !leaveKind || !year || totalDays === undefined) {
+    throw new AppError('employeeId, leaveKind, year, totalDays are required', 400)
+  }
+  if (!['SICK', 'CASUAL', 'PLANNED'].includes(leaveKind)) {
+    throw new AppError('Invalid leaveKind', 400)
+  }
+  if (Number(totalDays) < 0 || Number(totalDays) > 365) {
+    throw new AppError('totalDays must be 0–365', 400)
+  }
+  const data = { totalDays: Number(totalDays) }
+  const upserted = await prisma.leaveEntitlement.upsert({
+    where: { employeeId_leaveKind_year: { employeeId, leaveKind, year } },
+    update: data,
+    create: { employeeId, leaveKind, year, ...data },
+  })
+  res.json({ success: true, data: upserted })
+})

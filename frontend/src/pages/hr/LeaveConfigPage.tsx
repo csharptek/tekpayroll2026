@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, Plus, Trash2, AlertTriangle } from 'lucide-react'
+import { Save, RefreshCw, Plus, Trash2, AlertTriangle, Search, Edit3, Check, X as XIcon } from 'lucide-react'
 import { leaveApi } from '../../services/api'
 import { PageHeader, Button, Alert } from '../../components/ui'
 import { useAuthStore } from '../../store/authStore'
@@ -21,6 +21,9 @@ export default function LeaveConfigPage() {
   const [selectedKind, setSelectedKind]   = useState<'SICK' | 'CASUAL' | 'PLANNED'>('SICK')
   const [newReasonLabel, setNewReasonLabel] = useState('')
   const [rolloverConfirm, setRolloverConfirm] = useState(false)
+  const [balanceYear, setBalanceYear] = useState(new Date().getFullYear())
+  const [balanceSearch, setBalanceSearch] = useState('')
+  const [editing, setEditing] = useState<{ empId: string; kind: string; value: string } | null>(null)
 
   const { data: policyData } = useQuery({ queryKey: ['leave-policy'], queryFn: () => leaveApi.policy().then(r => r.data.data) })
   const { data: reasons, isLoading: reasonsLoading } = useQuery({
@@ -29,6 +32,21 @@ export default function LeaveConfigPage() {
   })
   const { data: rolloverStatus } = useQuery({ queryKey: ['rollover-status'], queryFn: () => leaveApi.rolloverStatus().then(r => r.data.data) })
   const { data: rolloverHistory } = useQuery({ queryKey: ['rollover-history'], queryFn: () => leaveApi.rolloverHistory().then(r => r.data.data) })
+
+  const { data: balanceEmployees, isLoading: balanceLoading } = useQuery({
+    queryKey: ['balance-adjust-employees', balanceYear],
+    queryFn: () => leaveApi.balanceAdjustEmployees(balanceYear).then(r => r.data.data),
+    enabled: isSuperAdmin,
+  })
+
+  const adjustMutation = useMutation({
+    mutationFn: (data: any) => leaveApi.balanceAdjust(data),
+    onSuccess: () => {
+      setEditing(null)
+      qc.invalidateQueries({ queryKey: ['balance-adjust-employees', balanceYear] })
+    },
+    onError: (e: any) => setError(e?.response?.data?.error || 'Failed to update balance'),
+  })
 
   useEffect(() => { if (policyData && !policy) setPolicy(policyData) }, [policyData])
 
@@ -305,6 +323,146 @@ export default function LeaveConfigPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      )}
+      {/* ── ADJUST LEAVE BALANCES ── */}
+      {isSuperAdmin && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Adjust Leave Balances</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Edit total entitlement days per employee. Used/pending days are not changed.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                className="input text-sm w-28"
+                value={balanceYear}
+                onChange={e => setBalanceYear(Number(e.target.value))}
+              >
+                {[balanceYear - 1, balanceYear, balanceYear + 1].map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              className="input pl-8 text-sm w-full"
+              placeholder="Search employee…"
+              value={balanceSearch}
+              onChange={e => setBalanceSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Table */}
+          {balanceLoading ? (
+            <p className="text-xs text-slate-400">Loading…</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left text-xs font-semibold text-slate-500 py-2 pr-4 w-48">Employee</th>
+                    {['SICK', 'CASUAL', 'PLANNED'].map(k => (
+                      <th key={k} className="text-center text-xs font-semibold text-slate-500 py-2 px-3">{KIND_LABEL[k]}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(balanceEmployees || [])
+                    .filter((e: any) =>
+                      !balanceSearch ||
+                      e.name.toLowerCase().includes(balanceSearch.toLowerCase()) ||
+                      e.employeeCode.toLowerCase().includes(balanceSearch.toLowerCase())
+                    )
+                    .map((emp: any) => (
+                      <tr key={emp.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                        <td className="py-2.5 pr-4">
+                          <p className="text-slate-800 font-medium text-xs">{emp.name}</p>
+                          <p className="text-slate-400 text-xs">{emp.employeeCode}</p>
+                        </td>
+                        {['SICK', 'CASUAL', 'PLANNED'].map(kind => {
+                          const bal = emp.balances[kind]
+                          const isEdit = editing?.empId === emp.id && editing?.kind === kind
+                          return (
+                            <td key={kind} className="py-2.5 px-3 text-center">
+                              {isEdit ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={365}
+                                    step={0.5}
+                                    className="input text-sm text-center w-20"
+                                    value={editing.value}
+                                    onChange={e => setEditing(prev => prev ? { ...prev, value: e.target.value } : null)}
+                                    autoFocus
+                                  />
+                                  <button
+                                    className="p-1 rounded-lg bg-brand-600 text-white hover:bg-brand-700"
+                                    onClick={() => {
+                                      setError('')
+                                      adjustMutation.mutate({
+                                        employeeId: emp.id,
+                                        leaveKind: kind,
+                                        year: balanceYear,
+                                        totalDays: Number(editing.value),
+                                      })
+                                    }}
+                                  >
+                                    <Check size={12} />
+                                  </button>
+                                  <button
+                                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-400"
+                                    onClick={() => setEditing(null)}
+                                  >
+                                    <XIcon size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-0.5 group">
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-semibold text-slate-700">
+                                      {bal ? bal.totalDays : '—'}
+                                    </span>
+                                    <button
+                                      className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-brand-600 transition-opacity"
+                                      onClick={() => setEditing({
+                                        empId: emp.id,
+                                        kind,
+                                        value: String(bal ? bal.totalDays : 0),
+                                      })}
+                                    >
+                                      <Edit3 size={11} />
+                                    </button>
+                                  </div>
+                                  {bal && (
+                                    <span className="text-xs text-slate-400">
+                                      used {bal.usedDays}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+              {(balanceEmployees || []).filter((e: any) =>
+                !balanceSearch ||
+                e.name.toLowerCase().includes(balanceSearch.toLowerCase()) ||
+                e.employeeCode.toLowerCase().includes(balanceSearch.toLowerCase())
+              ).length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-6">No employees found.</p>
+              )}
             </div>
           )}
         </div>
