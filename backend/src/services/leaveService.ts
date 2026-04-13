@@ -235,10 +235,11 @@ export async function validateLeaveApplication(params: {
   leaveKind:  LeaveKind
   startDate:  Date
   endDate:    Date
-  isHalfDay:  boolean
+  isHalfDay:   boolean
+  halfDaySlot?: string | null
   isBackdated: boolean
 }) {
-  const { employeeId, leaveKind, startDate, endDate, isHalfDay, isBackdated } = params
+  const { employeeId, leaveKind, startDate, endDate, isHalfDay, halfDaySlot, isBackdated } = params
   const policy = await getLeavePolicy()
   const today  = new Date(); today.setHours(0, 0, 0, 0)
 
@@ -258,16 +259,35 @@ export async function validateLeaveApplication(params: {
 
   // 2. Backdated casual — never auto-approve, handled in apply logic
   // 3. Check for overlapping applications
-  const overlap = await prisma.lvApplication.findFirst({
+  const overlaps = await prisma.lvApplication.findMany({
     where: {
       employeeId,
       status: { in: [LeaveStatus.PENDING, LeaveStatus.APPROVED, LeaveStatus.AUTO_APPROVED] },
-      OR: [
-        { startDate: { lte: endDate }, endDate: { gte: startDate } },
-      ],
+      startDate: { lte: endDate },
+      endDate:   { gte: startDate },
     },
+    select: { id: true, isHalfDay: true, halfDaySlot: true, startDate: true, endDate: true },
   })
-  if (overlap) throw new AppError('You already have a leave application overlapping these dates', 400)
+
+  for (const existing of overlaps) {
+    // Allow two half-days on the same single date if slots are different
+    const singleDaySame =
+      isHalfDay &&
+      existing.isHalfDay &&
+      startDate.getTime() === endDate.getTime() &&
+      existing.startDate.getTime() === existing.endDate.getTime() &&
+      startDate.getTime() === existing.startDate.getTime()
+
+    if (singleDaySame) {
+      // Block if same slot already taken
+      if (halfDaySlot && existing.halfDaySlot && halfDaySlot === existing.halfDaySlot) {
+        throw new AppError(`You already have a ${halfDaySlot.replace('_', ' ').toLowerCase()} leave on this date`, 400)
+      }
+      continue
+    }
+
+    throw new AppError('You already have a leave application overlapping these dates', 400)
+  }
 
   return true
 }
@@ -299,7 +319,7 @@ export async function applyLeave(params: {
   // All three force LOP — leave can still be applied
   const forceLop = isOnNotice || isOnProbation || isTrainee
 
-  await validateLeaveApplication({ employeeId, leaveKind, startDate, endDate, isHalfDay, isBackdated })
+  await validateLeaveApplication({ employeeId, leaveKind, startDate, endDate, isHalfDay, halfDaySlot, isBackdated })
 
   const totalDays = await countWorkingDays(startDate, endDate, isHalfDay)
   if (totalDays === 0) throw new AppError('No working days in the selected date range. Please avoid weekends and public holidays.', 400)
