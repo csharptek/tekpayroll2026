@@ -208,6 +208,20 @@ const badgeVariants: Record<string, string> = {
   ADJUSTED:    'badge-yellow',
   ACTIVE_LOAN: 'badge-blue',
   CLOSED:      'badge-gray',
+  // Asset statuses
+  AVAILABLE:   'badge-green',
+  ASSIGNED:    'badge-blue',
+  UNDER_REPAIR:'badge-yellow',
+  RETIRED:     'badge-gray',
+  // Asset condition
+  GOOD:        'badge-green',
+  DAMAGED:     'badge-yellow',
+  LOST:        'badge-red',
+  // Asset request
+  APPROVED:    'badge-green',
+  REJECTED:    'badge-red',
+  NEEDED:      'badge-blue',
+  RETURN:      'badge-yellow',
 }
 
 export function StatusBadge({ status }: { status: string }) {

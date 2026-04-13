@@ -113,10 +113,10 @@ function DayCell({ date, meta, isCurrentMonth }: {
 
       {/* Hover tooltip */}
       {hover && tooltipLines.length > 0 && isCurrentMonth && (
-        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-52 bg-slate-900 text-white rounded-xl shadow-xl p-2.5 pointer-events-none">
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-72 bg-slate-900 text-white rounded-xl shadow-xl p-2.5 pointer-events-none">
           <div className="space-y-1">
             {tooltipLines.map((t, i) => (
-              <p key={i} className="text-[11px] leading-4 whitespace-nowrap overflow-hidden text-ellipsis">{t}</p>
+              <p key={i} className="text-[11px] leading-4 break-words">{t}</p>
             ))}
           </div>
           <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />

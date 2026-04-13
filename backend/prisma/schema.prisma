@@ -212,6 +212,8 @@ model Employee {
   exitClearance       ExitClearance?
   exitInterview       ExitInterview?
   resignationHistory  ResignationHistory[]
+  assetAssignments    AssetAssignment[]
+  assetRequests       AssetRequest[]
 
   @@index([status])
   @@index([department])
@@ -1293,4 +1295,135 @@ model CronLog {
 
   @@index([jobName])
   @@index([startedAt])
+}
+
+// ─── ASSET MODULE ─────────────────────────────────────────────────────────────
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  UNDER_REPAIR
+  RETIRED
+}
+
+enum AssetCategory {
+  IT
+  PHYSICAL
+}
+
+enum AssetCondition {
+  GOOD
+  DAMAGED
+  LOST
+}
+
+enum AssetRequestType {
+  NEEDED
+  RETURN
+}
+
+enum AssetRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AssetCategoryConfig {
+  id          String                  @id @default(cuid())
+  name        String
+  type        AssetCategory
+  isActive    Boolean                 @default(true)
+  subCategories AssetSubCategoryConfig[]
+  assets      Asset[]
+
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@unique([name, type])
+}
+
+model AssetSubCategoryConfig {
+  id         String              @id @default(cuid())
+  name       String
+  categoryId String
+  category   AssetCategoryConfig @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isActive   Boolean             @default(true)
+  assets     Asset[]
+
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@unique([name, categoryId])
+}
+
+model Asset {
+  id              String                  @id @default(cuid())
+  assetCode       String                  @unique
+  name            String
+  categoryId      String
+  category        AssetCategoryConfig     @relation(fields: [categoryId], references: [id])
+  subCategoryId   String?
+  subCategory     AssetSubCategoryConfig? @relation(fields: [subCategoryId], references: [id])
+  brand           String?
+  model           String?
+  serialNumber    String?
+  purchaseDate    DateTime?
+  warrantyExpiry  DateTime?
+  status          AssetStatus             @default(AVAILABLE)
+  notes           String?                 @db.Text
+
+  assignments     AssetAssignment[]
+  requests        AssetRequest[]
+
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@index([status])
+  @@index([categoryId])
+}
+
+model AssetAssignment {
+  id           String         @id @default(cuid())
+  assetId      String
+  asset        Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  employeeId   String
+  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  assignedDate DateTime       @default(now())
+  returnedDate DateTime?
+  assignedById String
+  assignedByName String
+  condition    AssetCondition @default(GOOD)
+  returnCondition AssetCondition?
+  notes        String?        @db.Text
+  isActive     Boolean        @default(true)
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([assetId])
+  @@index([employeeId])
+  @@index([isActive])
+}
+
+model AssetRequest {
+  id          String             @id @default(cuid())
+  employeeId  String
+  employee    Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  assetId     String?
+  asset       Asset?             @relation(fields: [assetId], references: [id])
+  type        AssetRequestType
+  category    String?
+  subCategory String?
+  reason      String             @db.Text
+  status      AssetRequestStatus @default(PENDING)
+  reviewedById   String?
+  reviewedByName String?
+  reviewNotes    String?         @db.Text
+  reviewedAt     DateTime?
+
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
 }

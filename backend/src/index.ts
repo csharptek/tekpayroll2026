@@ -28,6 +28,7 @@ import cron from 'node-cron';
 import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from './services/cronJobs';
 import { policiesRouter } from './routes/policies';
 import { exitRouter } from './routes/exit';
+import { assetRouter } from './routes/assets';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -72,6 +73,7 @@ app.use('/api/employees', employeeProfileRouter)
 app.use('/api/cron', cronRouter);
 app.use('/api/policies', policiesRouter);
 app.use('/api/exit', exitRouter);
+app.use('/api/assets', assetRouter);
 
 // ─── ERROR HANDLER ───────────────────────────────────────────────────────────
 app.use(errorHandler);

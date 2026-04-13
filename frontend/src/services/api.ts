@@ -250,3 +250,33 @@ export const cronApi = {
   logs:            (params?: any) => api.get('/api/cron/logs', { params }),
   triggerManual:   (job: string)  => api.post(`/api/cron/manual/${job}`),
 }
+
+export const assetApi = {
+  // Config
+  categories:          ()                        => api.get('/api/assets/config/categories'),
+  createCategory:      (data: any)               => api.post('/api/assets/config/categories', data),
+  updateCategory:      (id: string, data: any)   => api.put(`/api/assets/config/categories/${id}`, data),
+  deleteCategory:      (id: string)              => api.delete(`/api/assets/config/categories/${id}`),
+  createSubCategory:   (data: any)               => api.post('/api/assets/config/subcategories', data),
+  updateSubCategory:   (id: string, data: any)   => api.put(`/api/assets/config/subcategories/${id}`, data),
+  deleteSubCategory:   (id: string)              => api.delete(`/api/assets/config/subcategories/${id}`),
+
+  // Assets
+  list:              (params?: any)              => api.get('/api/assets', { params }),
+  get:               (id: string)                => api.get(`/api/assets/${id}`),
+  create:            (data: any)                 => api.post('/api/assets', data),
+  update:            (id: string, data: any)     => api.put(`/api/assets/${id}`, data),
+  updateStatus:      (id: string, status: string)=> api.patch(`/api/assets/${id}/status`, { status }),
+  assign:            (id: string, data: any)     => api.post(`/api/assets/${id}/assign`, data),
+  return:            (id: string, data: any)     => api.post(`/api/assets/${id}/return`, data),
+  byEmployee:        (employeeId: string)        => api.get(`/api/assets/employee/${employeeId}`),
+  myAssets:          ()                          => api.get('/api/assets/my'),
+  bulkTemplate:      ()                          => api.get('/api/assets/bulk/template', { responseType: 'blob' }),
+  bulkUpload:        (file: File)                => { const fd = new FormData(); fd.append('file', file); return api.post('/api/assets/bulk/upload', fd) },
+
+  // Requests
+  allRequests:       (params?: any)              => api.get('/api/assets/requests/all', { params }),
+  myRequests:        ()                          => api.get('/api/assets/requests/my'),
+  createRequest:     (data: any)                 => api.post('/api/assets/requests', data),
+  reviewRequest:     (id: string, data: any)     => api.patch(`/api/assets/requests/${id}/review`, data),
+}

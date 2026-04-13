@@ -9,7 +9,7 @@ import {
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
-  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer
+  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -42,18 +42,19 @@ const HR_NAV = [
     ]
   },
   {
+    section: 'Assets',
+    items: [
+      { label: 'Asset List',        icon: Package,     to: '/hr/assets' },
+      { label: 'Asset Requests',    icon: Package,     to: '/hr/asset-requests' },
+      { label: 'Asset Configurator',icon: Settings,    to: '/hr/asset-configurator' },
+    ]
+  },
+  {
     section: 'Admin',
     items: [
       { label: 'Audit Log', icon: ScrollText, to: '/hr/audit' },
     ]
   },
-  {
-    section: 'Company',
-    items: [
-      { label: 'Policies', icon: BookOpen, to: '/policies' },
-    ]
-  },
-  // HR is also an employee — they can access their own payroll & leave data
   {
     section: 'My Payroll',
     items: [
@@ -67,6 +68,12 @@ const HR_NAV = [
     items: [
       { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
       { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
+    ]
+  },
+  {
+    section: 'My Assets',
+    items: [
+      { label: 'My Assets', icon: Package, to: '/my/assets' },
     ]
   },
 ]
@@ -109,6 +116,14 @@ const SUPER_ADMIN_NAV = [
     ]
   },
   {
+    section: 'Assets',
+    items: [
+      { label: 'Asset List',         icon: Package,  to: '/hr/assets' },
+      { label: 'Asset Requests',     icon: Package,  to: '/hr/asset-requests' },
+      { label: 'Asset Configurator', icon: Settings, to: '/hr/asset-configurator' },
+    ]
+  },
+  {
     section: 'Admin',
     items: [
       { label: 'Audit Log',        icon: ScrollText, to: '/hr/audit' },
@@ -139,6 +154,12 @@ const SUPER_ADMIN_NAV = [
       { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
     ]
   },
+  {
+    section: 'My Assets',
+    items: [
+      { label: 'My Assets', icon: Package, to: '/my/assets' },
+    ]
+  },
 ]
 
 const EMPLOYEE_NAV = [
@@ -162,6 +183,12 @@ const EMPLOYEE_NAV = [
     items: [
       { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
       { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
+    ]
+  },
+  {
+    section: 'Assets',
+    items: [
+      { label: 'My Assets', icon: Package, to: '/my/assets' },
     ]
   },
 ]
@@ -195,6 +222,13 @@ const MANAGEMENT_NAV = [
     items: [
       { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
       { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
+    ]
+  },
+  {
+    section: 'Assets',
+    items: [
+      { label: 'All Assets', icon: Package, to: '/hr/assets' },
+      { label: 'My Assets',  icon: Package, to: '/my/assets' },
     ]
   },
 ]

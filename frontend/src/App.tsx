@@ -46,6 +46,11 @@ import MyResignationPage from './pages/employee/MyResignationPage'
 
 // Shared Pages
 import PoliciesPage from './pages/shared/PoliciesPage'
+import AssetListPage from './pages/hr/assets/AssetListPage'
+import AssetDetailPage from './pages/hr/assets/AssetDetailPage'
+import AssetRequestsPage from './pages/hr/assets/AssetRequestsPage'
+import AssetConfiguratorPage from './pages/hr/assets/AssetConfiguratorPage'
+import MyAssetsPage from './pages/employee/MyAssetsPage'
 
 // Management Pages
 import ManagementDashboard from './pages/management/ManagementDashboard'
@@ -101,6 +106,12 @@ export default function App() {
           <Route path="leave-config" element={<LeaveConfigPage />} />
           <Route path="bulk-leave-entry" element={<BulkLeaveEntryPage />} />
 
+          {/* Asset routes */}
+          <Route path="assets" element={<AssetListPage />} />
+          <Route path="assets/:id" element={<AssetDetailPage />} />
+          <Route path="asset-requests" element={<AssetRequestsPage />} />
+          <Route path="asset-configurator" element={<AssetConfiguratorPage />} />
+
           {/* Financial routes — SUPER_ADMIN only */}
           <Route path="payroll" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollCyclesPage /></RequireAuth>} />
           <Route path="payroll/preview" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollPreviewPage /></RequireAuth>} />
@@ -121,6 +132,7 @@ export default function App() {
           <Route path="loans" element={<MyLoansPage />} />
           <Route path="leaves" element={<MyLeavesPage />} />
           <Route path="resignation" element={<MyResignationPage />} />
+          <Route path="assets" element={<MyAssetsPage />} />
         </Route>
 
         {/* Management */}
