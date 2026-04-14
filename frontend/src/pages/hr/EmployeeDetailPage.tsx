@@ -193,7 +193,7 @@ export default function EmployeeDetailPage() {
   if (error || !emp) return <Alert type="error" message="Employee not found." />
 
   const showExit  = emp.status === 'ON_NOTICE' || emp.status === 'SEPARATED'
-  const canInitiateExit  = isHR && emp.status === 'ACTIVE' && !emp.isTrainee
+  const canInitiateExit  = isHR && emp.status === 'ACTIVE'
   const canConvert       = isHR && emp.isTrainee && emp.status === 'ACTIVE' && !emp.convertedToEmployeeId
 
   const visibleTabs = TABS.filter(t =>
