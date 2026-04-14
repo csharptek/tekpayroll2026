@@ -132,6 +132,8 @@ model Employee {
   resignationDate DateTime?
   lastWorkingDay  DateTime?
   isTrainee      Boolean        @default(false)
+  convertedToEmployeeId   String?   // trainee record: points to new employee
+  convertedFromTraineeId  String?   // employee record: points to original trainee
   status         EmployeeStatus @default(ACTIVE)
   role           UserRole       @default(EMPLOYEE)
 

@@ -103,6 +103,7 @@ export const employeeApi = {
   create: (data: any) => api.post('/api/employees', data),
   update: (id: string, data: any) => api.put(`/api/employees/${id}`, data),
   deactivate: (id: string) => api.post(`/api/employees/${id}/deactivate`),
+  convertToEmployee: (id: string, traineeEndDate: string) => api.post(`/api/employees/${id}/convert-to-employee`, { traineeEndDate }),
   payrollHistory: (id: string) => api.get(`/api/employees/${id}/payroll-history`),
   salaryRevisions: (id: string) => api.get(`/api/employees/${id}/salary-revisions`),
 }

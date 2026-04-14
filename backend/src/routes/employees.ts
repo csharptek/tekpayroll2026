@@ -301,6 +301,113 @@ employeeRouter.post('/:id/deactivate', requireHR, async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
+// ─── CONVERT TRAINEE → EMPLOYEE ──────────────────────────────────────────────
+// POST /api/employees/:id/convert-to-employee
+// Body: { traineeEndDate: string (ISO date) }
+
+employeeRouter.post('/:id/convert-to-employee', requireHR, async (req, res) => {
+  const trainee = await prisma.employee.findUnique({ where: { id: req.params.id } })
+  if (!trainee) throw new AppError('Employee not found', 404)
+  if (!trainee.isTrainee) throw new AppError('Employee is not a trainee', 400)
+  if (trainee.status !== 'ACTIVE') throw new AppError('Trainee is not active', 400)
+  if (trainee.convertedToEmployeeId) throw new AppError('Trainee already converted', 400)
+
+  const { traineeEndDate } = req.body
+  if (!traineeEndDate) throw new AppError('traineeEndDate is required', 400)
+
+  const endDate = new Date(traineeEndDate)
+  if (isNaN(endDate.getTime())) throw new AppError('Invalid traineeEndDate', 400)
+
+  const joiningDate = new Date(endDate)
+  joiningDate.setDate(joiningDate.getDate() + 1)
+
+  // Auto-generate next C#TEK code
+  const allCodes = await prisma.employee.findMany({ select: { employeeCode: true } })
+  let maxNum = 0
+  for (const emp of allCodes) {
+    const code = emp.employeeCode
+    if (!code.startsWith('C#TEK') || code.startsWith('C#TEKT')) continue
+    const num = parseInt(code.replace('C#TEK', ''), 10)
+    if (!isNaN(num) && num > maxNum) maxNum = num
+  }
+  const newCode = `C#TEK${maxNum + 1}`
+
+  // Suffix trainee email to free it up
+  const originalEmail = trainee.email
+  const [localPart, domain] = originalEmail.split('@')
+  const traineeEmail = `${localPart}+trainee@${domain}`
+
+  // Deactivate trainee record — suffix email
+  await prisma.employee.update({
+    where: { id: trainee.id },
+    data: {
+      status: 'INACTIVE' as any,
+      email: traineeEmail,
+    },
+  })
+
+  // Create new employee record — inherit profile, not financials
+  const company = await prisma.company.findFirst()
+  if (!company) throw new AppError('Company not configured', 500)
+
+  const newEmployee = await prisma.employee.create({
+    data: {
+      companyId:    company.id,
+      entraId:      trainee.entraId,
+      employeeCode: newCode,
+      name:         trainee.name,
+      email:        originalEmail,
+      jobTitle:     trainee.jobTitle,
+      department:   trainee.department,
+      mobilePhone:  trainee.mobilePhone,
+      officeLocation: trainee.officeLocation,
+      state:        trainee.state,
+      role:         'EMPLOYEE' as any,
+      isTrainee:    false,
+      joiningDate,
+      annualCtc:    0,  // HR sets salary separately
+      status:       'ACTIVE' as any,
+      convertedFromTraineeId: trainee.id,
+    },
+  })
+
+  // Link trainee → new employee
+  await prisma.employee.update({
+    where: { id: trainee.id },
+    data: { convertedToEmployeeId: newEmployee.id },
+  })
+
+  // Grant pro-rata leave entitlements
+  try {
+    const { grantJoiningLeaves } = await import('../services/leaveService')
+    await grantJoiningLeaves(newEmployee.id, joiningDate, false)
+  } catch (err) {
+    console.error('[CONVERT] Failed to grant leaves:', err)
+  }
+
+  // Assign Payroll.Employee role in Entra ID
+  if (trainee.entraId) {
+    try {
+      const { assignPayrollRole } = await import('../services/graphSyncService')
+      await assignPayrollRole(trainee.entraId, 'EMPLOYEE')
+    } catch (err) {
+      console.warn('[CONVERT] Entra role assignment failed:', err)
+    }
+  }
+
+  await createAuditLog({
+    user: req.user!,
+    action: AuditAction.CREATE,
+    tableName: 'employees',
+    recordId: newEmployee.id,
+    targetEmployeeId: newEmployee.id,
+    newValue: { employeeCode: newCode, convertedFrom: trainee.employeeCode },
+    description: `Converted trainee ${trainee.name} (${trainee.employeeCode}) → employee (${newCode})`,
+  })
+
+  res.json({ success: true, data: { newEmployeeId: newEmployee.id, employeeCode: newCode } })
+})
+
 // ─── DELETE EMPLOYEE (hard delete — SUPER_ADMIN only) ────────────────────────
 
 employeeRouter.delete('/:id', async (req, res) => {

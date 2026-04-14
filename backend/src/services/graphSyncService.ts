@@ -385,7 +385,7 @@ export async function importSelected(rows: ImportRow[], triggeredBy: string): Pr
 
 // ─── ASSIGN PAYROLL ROLE IN ENTRA ─────────────────────────────────────────────
 
-async function assignPayrollRole(userId: string, payrollRole: string): Promise<void> {
+export async function assignPayrollRole(userId: string, payrollRole: string): Promise<void> {
   const token = await getGraphToken()
   const spId  = await getServicePrincipalId(token)
   if (!spId) throw new Error('Service principal not found')

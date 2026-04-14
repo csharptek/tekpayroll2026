@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, User, Briefcase, DollarSign, Phone, GraduationCap,
-  Building2, CreditCard, FileText, LogOut, UserMinus, X,
+  Building2, CreditCard, FileText, LogOut, UserMinus, X, UserCheck,
 } from 'lucide-react'
 import { employeeApi, exitApi } from '../../services/api'
 import { PageHeader, Button, Alert, Skeleton, StatusBadge } from '../../components/ui'
@@ -105,13 +105,75 @@ function InitiateExitModal({ empId, empName, onClose, onDone }: {
   )
 }
 
+function ConvertToEmployeeModal({ trainee, onClose, onDone }: {
+  trainee: any; onClose: () => void; onDone: (newId: string) => void
+}) {
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10))
+  const [error, setError]     = useState('')
+
+  const mut = useMutation({
+    mutationFn: () => employeeApi.convertToEmployee(trainee.id, endDate),
+    onSuccess:  (r: any) => { onDone(r.data.data.newEmployeeId) },
+    onError:    (e: any) => setError(e?.response?.data?.error || 'Conversion failed'),
+  })
+
+  const joiningDate = endDate
+    ? new Date(new Date(endDate).getTime() + 86400000).toISOString().slice(0, 10)
+    : ''
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <UserCheck size={16} className="text-emerald-500" />
+            <h3 className="text-sm font-semibold text-slate-800">Convert to Employee — {trainee.name}</h3>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {error && <Alert type="error" message={error} />}
+
+          <div>
+            <label className="label">Trainee End Date <span className="text-red-500">*</span></label>
+            <DatePicker value={endDate} onChange={v => setEndDate(v)} />
+            <p className="text-xs text-slate-400 mt-1">Employee joining date will be set to {joiningDate || '—'}</p>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 space-y-1">
+            <p>• New employee record created with auto-generated C#TEK code</p>
+            <p>• Profile data (name, email, department, job title) will be inherited</p>
+            <p>• Leave balance calculated from joining date</p>
+            <p>• Salary must be set separately after conversion</p>
+            <p>• Trainee record will be deactivated</p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            loading={mut.isPending}
+            disabled={!endDate}
+            onClick={() => { setError(''); mut.mutate() }}
+          >
+            Convert to Employee
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function EmployeeDetailPage() {
   const { id }      = useParams<{ id: string }>()
   const navigate    = useNavigate()
   const qc          = useQueryClient()
   const { user }    = useAuthStore()
   const [tab, setTab]           = useState('personal')
-  const [showExitModal, setShowExitModal] = useState(false)
+  const [showExitModal, setShowExitModal]       = useState(false)
+  const [showConvertModal, setShowConvertModal] = useState(false)
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const isHR         = user?.role === 'HR' || user?.role === 'SUPER_ADMIN'
@@ -131,7 +193,8 @@ export default function EmployeeDetailPage() {
   if (error || !emp) return <Alert type="error" message="Employee not found." />
 
   const showExit  = emp.status === 'ON_NOTICE' || emp.status === 'SEPARATED'
-  const canInitiateExit = isHR && emp.status === 'ACTIVE'
+  const canInitiateExit  = isHR && emp.status === 'ACTIVE' && !emp.isTrainee
+  const canConvert       = isHR && emp.isTrainee && emp.status === 'ACTIVE' && !emp.convertedToEmployeeId
 
   const visibleTabs = TABS.filter(t =>
     (t.key !== 'exit' || showExit) &&
@@ -142,6 +205,13 @@ export default function EmployeeDetailPage() {
 
   return (
     <div className="space-y-5 max-w-5xl">
+      {showConvertModal && (
+        <ConvertToEmployeeModal
+          trainee={emp}
+          onClose={() => setShowConvertModal(false)}
+          onDone={(newId) => { setShowConvertModal(false); navigate(`/hr/employees/${newId}`) }}
+        />
+      )}
       {showExitModal && (
         <InitiateExitModal
           empId={emp.id}
@@ -153,10 +223,33 @@ export default function EmployeeDetailPage() {
 
       <PageHeader
         title={emp.name}
-        subtitle={`${emp.employeeCode} · ${emp.jobTitle || 'No title'} · ${emp.department || 'No dept'}`}
+        subtitle={
+          <span className="flex items-center gap-2 flex-wrap">
+            <span>{emp.employeeCode} · {emp.jobTitle || 'No title'} · {emp.department || 'No dept'}</span>
+            {emp.isTrainee && emp.convertedToEmployeeId && (
+              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                Converted → Employee
+              </span>
+            )}
+            {!emp.isTrainee && emp.convertedFromTraineeId && (
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                Converted from Trainee
+              </span>
+            )}
+          </span>
+        }
         actions={
           <div className="flex items-center gap-3">
             <StatusBadge status={emp.status} />
+            {canConvert && (
+              <Button
+                icon={<UserCheck size={14} />}
+                variant="primary"
+                onClick={() => setShowConvertModal(true)}
+              >
+                Convert to Employee
+              </Button>
+            )}
             {canInitiateExit && (
               <Button
                 icon={<UserMinus size={14} />}
