@@ -181,8 +181,9 @@ leaveRouter.post('/apply', async (req, res) => {
     throw new AppError('leaveKind, startDate, and reasonLabel are required', 400)
   }
 
-  const start = new Date(startDate)
-  const end   = endDate ? new Date(endDate) : new Date(startDate)
+  const toUtcDay = (s: string) => new Date(s.slice(0, 10) + 'T00:00:00.000Z')
+  const start = toUtcDay(startDate as string)
+  const end   = endDate ? toUtcDay(endDate as string) : toUtcDay(startDate as string)
 
   const application = await applyLeave({
     employeeId:   req.user!.id,
@@ -455,8 +456,9 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
         throw new Error(`Invalid leaveKind: ${leaveKind}`)
       }
 
-      const startDate = new Date(startDateStr)
-      const endDate   = endDateStr ? new Date(endDateStr) : new Date(startDateStr)
+      const toUtcMidnight = (s: string) => new Date(s.slice(0, 10) + 'T00:00:00.000Z')
+      const startDate = toUtcMidnight(startDateStr)
+      const endDate   = endDateStr ? toUtcMidnight(endDateStr) : toUtcMidnight(startDateStr)
 
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
         throw new Error('Invalid date format')
@@ -465,15 +467,38 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
         throw new Error('startDate must be before endDate')
       }
 
-      // Check for overlap
-      const overlap = await prisma.lvApplication.findFirst({
+      // Check for overlap (allow two different half-day slots on same date)
+      const overlaps = await prisma.lvApplication.findMany({
         where: {
           employeeId,
           status: { in: ['PENDING', 'APPROVED', 'AUTO_APPROVED'] },
-          OR: [{ startDate: { lte: endDate }, endDate: { gte: startDate } }],
+          startDate: { lte: endDate },
+          endDate:   { gte: startDate },
         },
+        select: { id: true, isHalfDay: true, halfDaySlot: true, startDate: true, endDate: true },
       })
-      if (overlap) throw new Error('Overlapping leave application already exists for these dates')
+
+      for (const existing of overlaps) {
+        const toDay = (d: Date) => d.toISOString().slice(0, 10)
+        const newStart = toDay(startDate)
+        const newEnd   = toDay(endDate)
+        const exStart  = toDay(existing.startDate)
+        const exEnd    = toDay(existing.endDate)
+        const sameSingleDate = newStart === newEnd && exStart === exEnd && newStart === exStart
+
+        if (sameSingleDate && Boolean(isHalfDay) && existing.isHalfDay) {
+          // Both are half-days on same date — allow only if different slots
+          if (halfDaySlot && existing.halfDaySlot && halfDaySlot === existing.halfDaySlot) {
+            throw new Error(`Employee already has a ${halfDaySlot === 'FIRST' ? 'first half' : 'second half'} day leave on this date`)
+          }
+          // Slots differ or one slot unknown — allow through
+          continue
+        }
+        // Existing is full-day, or new is full-day, or multi-day — block
+        const existingType = existing.isHalfDay ? 'half-day' : 'full-day'
+        const newType = Boolean(isHalfDay) ? 'half-day' : 'full-day'
+        throw new Error(`Cannot add ${newType} leave — employee already has a ${existingType} leave overlapping these dates`)
+      }
 
       const totalDays = await countWorkingDays(startDate, endDate, Boolean(isHalfDay))
       if (totalDays === 0) throw new Error('No working days in selected range')
