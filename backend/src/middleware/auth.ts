@@ -138,7 +138,7 @@ async function validateMsalToken(token: string): Promise<AuthUser> {
     email:   employee.email,
     role:    employee.role,
     entraId: employee.entraId || entraId,
-    photoUrl: employee.profilePhotoUrl || null,
+    photoUrl: (employee as any).profilePhotoUrl || null,
   }
 
   // Cache until token expiry
