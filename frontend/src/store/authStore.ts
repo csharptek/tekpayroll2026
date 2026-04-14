@@ -9,6 +9,7 @@ export interface AuthUser {
   email: string
   role: UserRole
   entraId?: string
+  photoUrl?: string | null
 }
 
 interface AuthStore {

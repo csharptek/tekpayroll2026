@@ -10,6 +10,7 @@ export interface AuthUser {
   email: string
   role: UserRole
   entraId?: string
+  photoUrl?: string | null
 }
 
 declare global {
@@ -137,6 +138,7 @@ async function validateMsalToken(token: string): Promise<AuthUser> {
     email:   employee.email,
     role:    employee.role,
     entraId: employee.entraId || entraId,
+    photoUrl: employee.profilePhotoUrl || null,
   }
 
   // Cache until token expiry

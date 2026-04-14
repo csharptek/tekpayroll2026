@@ -357,10 +357,11 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         {/* User Footer */}
         <div className="border-t border-brand-800 p-3">
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-            <div className="w-8 h-8 rounded-full bg-brand-700 border border-brand-600 flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-semibold text-brand-200">
-                {user?.name?.charAt(0) || '?'}
-              </span>
+            <div className="w-8 h-8 rounded-full bg-brand-700 border border-brand-600 flex items-center justify-center flex-shrink-0 overflow-hidden">
+              {user?.photoUrl
+                ? <img src={user.photoUrl} alt={user.name} className="w-full h-full object-cover" />
+                : <span className="text-xs font-semibold text-brand-200">{user?.name?.charAt(0) || '?'}</span>
+              }
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-white truncate">{user?.name}</p>
@@ -419,8 +420,11 @@ function TopBar({
           <span className="badge badge-green hidden sm:inline-flex">Management</span>
         )}
 
-        <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center">
-          <span className="text-xs font-semibold text-white">{user?.name?.charAt(0)}</span>
+        <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center overflow-hidden">
+          {user?.photoUrl
+            ? <img src={user.photoUrl} alt={user?.name} className="w-full h-full object-cover" />
+            : <span className="text-xs font-semibold text-white">{user?.name?.charAt(0)}</span>
+          }
         </div>
       </div>
     </header>
