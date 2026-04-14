@@ -284,7 +284,7 @@ export async function validateLeaveApplication(params: {
 
     if (sameSingleDate && isHalfDay && existing.isHalfDay) {
       if (halfDaySlot && existing.halfDaySlot && halfDaySlot === existing.halfDaySlot) {
-        throw new AppError(`You already have a ${halfDaySlot === 'FIRST_HALF' ? 'first half' : 'second half'} day leave on this date`, 400)
+        throw new AppError(`You already have a ${halfDaySlot === 'FIRST' ? 'first half' : 'second half'} day leave on this date`, 400)
       }
       // Different slots — allow
       continue
