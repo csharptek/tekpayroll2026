@@ -198,12 +198,12 @@ export default function HRLeavePage() {
       {tab === 'applications' && (
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
           {/* Filters */}
-          <div className="flex flex-wrap gap-3 p-4 border-b border-slate-100">
+          <div className="flex flex-wrap items-center gap-3 p-4 border-b border-slate-100">
             {/* Name search */}
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="relative flex items-center">
+              <Search size={13} className="absolute left-2.5 text-slate-400 pointer-events-none" />
               <input
-                className="input text-xs py-1.5 pl-7 pr-3 w-44"
+                className="input text-xs py-1.5 pl-7 pr-3 w-40 h-8"
                 placeholder="Search employee…"
                 value={filterName}
                 onChange={e => { setFilterName(e.target.value); setPage(1) }}
