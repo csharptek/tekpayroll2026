@@ -547,14 +547,24 @@ export async function cancelLeaveDirectly(
     })
   }
 
-  // Restore balance
+  // Restore balance — clamp to prevent negative usedDays/pendingDays
   const wasApproved = ([LeaveStatus.APPROVED, LeaveStatus.AUTO_APPROVED] as string[]).includes(app.status as string)
-  await prisma.leaveEntitlement.update({
+  const entitlement = await prisma.leaveEntitlement.findUnique({
     where: { employeeId_leaveKind_year: { employeeId: app.employeeId, leaveKind: app.leaveKind, year } },
-    data: wasApproved
-      ? { usedDays: { decrement: daysToRestore } }
-      : { pendingDays: { decrement: daysToRestore } },
   })
+  if (entitlement) {
+    const safeRestore = wasApproved
+      ? Math.min(daysToRestore, Number(entitlement.usedDays))
+      : Math.min(daysToRestore, Number(entitlement.pendingDays))
+    if (safeRestore > 0) {
+      await prisma.leaveEntitlement.update({
+        where: { employeeId_leaveKind_year: { employeeId: app.employeeId, leaveKind: app.leaveKind, year } },
+        data: wasApproved
+          ? { usedDays: { decrement: safeRestore } }
+          : { pendingDays: { decrement: safeRestore } },
+      })
+    }
+  }
 }
 
 // ─── APPROVE CANCELLATION REQUEST ────────────────────────────────────────────
