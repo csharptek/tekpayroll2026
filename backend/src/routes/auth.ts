@@ -62,7 +62,6 @@ authRouter.post('/microsoft/callback', async (req, res) => {
   // Find or auto-create employee record
   let employee = await prisma.employee.findFirst({
     where: { OR: [{ entraId }, { email }] },
-    include: { profile: { select: { profilePhotoUrl: true } } },
   })
 
   if (!employee) {
@@ -92,6 +91,12 @@ authRouter.post('/microsoft/callback', async (req, res) => {
     })
   }
 
+  // Fetch photo separately to avoid TS type conflicts
+  const empProfile = await prisma.employeeProfile.findUnique({
+    where: { employeeId: employee.id },
+    select: { profilePhotoUrl: true },
+  }).catch(() => null)
+
   // Return employee info + the original token (used as Bearer on subsequent requests)
   res.json({
     success: true,
@@ -102,7 +107,7 @@ authRouter.post('/microsoft/callback', async (req, res) => {
         email:   employee.email,
         role:    employee.role,
         entraId: employee.entraId,
-        photoUrl: (employee as any).profile?.profilePhotoUrl || null,
+        photoUrl: empProfile?.profilePhotoUrl || null,
       },
       accessToken: token,
     },
