@@ -269,20 +269,24 @@ export async function validateLeaveApplication(params: {
     select: { id: true, isHalfDay: true, halfDaySlot: true, startDate: true, endDate: true },
   })
 
-  for (const existing of overlaps) {
-    // Allow two half-days on the same single date if slots are different
-    const singleDaySame =
-      isHalfDay &&
-      existing.isHalfDay &&
-      startDate.getTime() === endDate.getTime() &&
-      existing.startDate.getTime() === existing.endDate.getTime() &&
-      startDate.getTime() === existing.startDate.getTime()
+  const toDay = (d: Date) => d.toISOString().slice(0, 10)
 
-    if (singleDaySame) {
-      // Block if same slot already taken
+  for (const existing of overlaps) {
+    const newStart = toDay(startDate)
+    const newEnd   = toDay(endDate)
+    const exStart  = toDay(existing.startDate)
+    const exEnd    = toDay(existing.endDate)
+
+    // Allow two half-days on the same single date if slots differ
+    const isSingleDay  = newStart === newEnd
+    const exSingleDay  = exStart === exEnd
+    const sameSingleDate = isSingleDay && exSingleDay && newStart === exStart
+
+    if (sameSingleDate && isHalfDay && existing.isHalfDay) {
       if (halfDaySlot && existing.halfDaySlot && halfDaySlot === existing.halfDaySlot) {
-        throw new AppError(`You already have a ${halfDaySlot.replace('_', ' ').toLowerCase()} leave on this date`, 400)
+        throw new AppError(`You already have a ${halfDaySlot === 'FIRST_HALF' ? 'first half' : 'second half'} day leave on this date`, 400)
       }
+      // Different slots — allow
       continue
     }
 
