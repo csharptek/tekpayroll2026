@@ -104,6 +104,7 @@ async function validateMsalToken(token: string): Promise<AuthUser> {
   // Find by entraId first, then by email as fallback
   let employee = await prisma.employee.findFirst({
     where: { OR: [{ entraId }, { email }] },
+    include: { profile: { select: { profilePhotoUrl: true } } },
   })
 
   if (!employee) {
@@ -138,7 +139,7 @@ async function validateMsalToken(token: string): Promise<AuthUser> {
     email:   employee.email,
     role:    employee.role,
     entraId: employee.entraId || entraId,
-    photoUrl: (employee as any).profilePhotoUrl || null,
+    photoUrl: (employee as any).profile?.profilePhotoUrl || null,
   }
 
   // Cache until token expiry
