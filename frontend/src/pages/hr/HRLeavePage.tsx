@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, XCircle, Clock, AlertTriangle, RefreshCw, Scissors } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, AlertTriangle, RefreshCw, Scissors, Search, ArrowUpDown } from 'lucide-react'
 import { leaveApi } from '../../services/api'
 import { PageHeader, Button, Alert } from '../../components/ui'
 import { DatePicker } from '../../components/DatePicker'
@@ -15,12 +15,12 @@ const KIND_COLOR: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { icon: any; label: string; cls: string }> = {
-    PENDING:       { icon: <Clock size={11} />,         label: 'Pending',   cls: 'bg-amber-100 text-amber-700' },
-    APPROVED:      { icon: <CheckCircle2 size={11} />,  label: 'Approved',  cls: 'bg-emerald-100 text-emerald-700' },
+    PENDING:       { icon: <Clock size={11} />,         label: 'Pending',       cls: 'bg-amber-100 text-amber-700' },
+    APPROVED:      { icon: <CheckCircle2 size={11} />,  label: 'Approved',      cls: 'bg-emerald-100 text-emerald-700' },
     AUTO_APPROVED: { icon: <CheckCircle2 size={11} />,  label: 'Auto-Approved', cls: 'bg-emerald-50 text-emerald-600' },
-    DECLINED:      { icon: <XCircle size={11} />,       label: 'Declined',  cls: 'bg-red-100 text-red-700' },
-    CANCELLED:     { icon: <XCircle size={11} />,       label: 'Cancelled', cls: 'bg-slate-100 text-slate-500' },
-    LOP:           { icon: <AlertTriangle size={11} />, label: 'LOP',       cls: 'bg-orange-100 text-orange-700' },
+    DECLINED:      { icon: <XCircle size={11} />,       label: 'Declined',      cls: 'bg-red-100 text-red-700' },
+    CANCELLED:     { icon: <XCircle size={11} />,       label: 'Cancelled',     cls: 'bg-slate-100 text-slate-500' },
+    LOP:           { icon: <AlertTriangle size={11} />, label: 'LOP',           cls: 'bg-orange-100 text-orange-700' },
   }
   const s = map[status] || map['PENDING']
   return (
@@ -30,12 +30,20 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+type SortField = 'startDate' | 'appliedDate' | 'none'
+type SortDir   = 'asc' | 'desc'
+
 export default function HRLeavePage() {
   const qc = useQueryClient()
   const [tab, setTab]               = useState<'applications' | 'cancellations' | 'balances' | 'monthly'>('applications')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterKind, setFilterKind]     = useState('')
   const [filterYear, setFilterYear]     = useState(new Date().getFullYear())
+  const [filterName, setFilterName]     = useState('')
+  const [filterFromDate, setFilterFromDate] = useState('')
+  const [filterToDate, setFilterToDate]     = useState('')
+  const [sortField, setSortField]       = useState<SortField>('none')
+  const [sortDir, setSortDir]           = useState<SortDir>('desc')
   const [page, setPage]                 = useState(1)
   const [error, setError]               = useState('')
   const [success, setSuccess]           = useState('')
@@ -55,7 +63,7 @@ export default function HRLeavePage() {
 
   const { data: appsData, isLoading: appsLoading } = useQuery({
     queryKey: ['hr-leave-apps', filterStatus, filterKind, page],
-    queryFn: () => leaveApi.allApplications({ status: filterStatus || undefined, leaveKind: filterKind || undefined, page, limit: 30 }).then(r => r.data),
+    queryFn: () => leaveApi.allApplications({ status: filterStatus || undefined, leaveKind: filterKind || undefined, page, limit: 200 }).then(r => r.data),
     enabled: tab === 'applications',
   })
 
@@ -113,8 +121,53 @@ export default function HRLeavePage() {
     onError: (e: any) => setError(e?.response?.data?.error || 'Failed'),
   })
 
-  const apps       = appsData?.data || []
-  const pagination = appsData?.pagination
+  const rawApps = appsData?.data || []
+
+  // Client-side filter + sort
+  const apps = useMemo(() => {
+    let list = [...rawApps]
+
+    // Name filter
+    if (filterName.trim()) {
+      const q = filterName.trim().toLowerCase()
+      list = list.filter((a: any) =>
+        a.employee?.name?.toLowerCase().includes(q) ||
+        a.employee?.employeeCode?.toLowerCase().includes(q)
+      )
+    }
+
+    // Date range filter (leave start date)
+    if (filterFromDate) {
+      const from = new Date(filterFromDate)
+      list = list.filter((a: any) => new Date(a.startDate) >= from)
+    }
+    if (filterToDate) {
+      const to = new Date(filterToDate)
+      to.setHours(23, 59, 59)
+      list = list.filter((a: any) => new Date(a.startDate) <= to)
+    }
+
+    // Sort
+    if (sortField !== 'none') {
+      list.sort((a: any, b: any) => {
+        const av = sortField === 'startDate' ? new Date(a.startDate).getTime() : new Date(a.createdAt).getTime()
+        const bv = sortField === 'startDate' ? new Date(b.startDate).getTime() : new Date(b.createdAt).getTime()
+        return sortDir === 'asc' ? av - bv : bv - av
+      })
+    }
+
+    return list
+  }, [rawApps, filterName, filterFromDate, filterToDate, sortField, sortDir])
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('desc') }
+  }
+
+  const clearFilters = () => {
+    setFilterName(''); setFilterFromDate(''); setFilterToDate('')
+    setFilterStatus(''); setFilterKind(''); setSortField('none'); setPage(1)
+  }
 
   return (
     <div className="space-y-4">
@@ -146,6 +199,17 @@ export default function HRLeavePage() {
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
           {/* Filters */}
           <div className="flex flex-wrap gap-3 p-4 border-b border-slate-100">
+            {/* Name search */}
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                className="input text-xs py-1.5 pl-7 pr-3 w-44"
+                placeholder="Search employee…"
+                value={filterName}
+                onChange={e => { setFilterName(e.target.value); setPage(1) }}
+              />
+            </div>
+
             <select className="input text-xs py-1.5 px-3 w-36"
               value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1) }}>
               <option value="">All Statuses</option>
@@ -153,24 +217,70 @@ export default function HRLeavePage() {
                 <option key={s} value={s}>{s.replace('_', ' ')}</option>
               )}
             </select>
+
             <select className="input text-xs py-1.5 px-3 w-32"
               value={filterKind} onChange={e => { setFilterKind(e.target.value); setPage(1) }}>
               <option value="">All Types</option>
               {['SICK', 'CASUAL', 'PLANNED'].map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
             </select>
+
+            {/* Date range */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-400">From</span>
+              <DatePicker value={filterFromDate} onChange={v => { setFilterFromDate(v); setPage(1) }} />
+              <span className="text-xs text-slate-400">To</span>
+              <DatePicker value={filterToDate} onChange={v => { setFilterToDate(v); setPage(1) }} />
+            </div>
+
             <Button variant="secondary" icon={<RefreshCw size={12} />}
               onClick={() => { qc.invalidateQueries({ queryKey: ['hr-leave-apps'] }) }}>
               Refresh
             </Button>
+
+            {(filterName || filterFromDate || filterToDate || filterStatus || filterKind || sortField !== 'none') && (
+              <button onClick={clearFilters} className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2">
+                Clear all
+              </button>
+            )}
           </div>
+
+          {/* Result count */}
+          {(filterName || filterFromDate || filterToDate) && (
+            <div className="px-4 py-2 text-xs text-slate-500 border-b border-slate-50">
+              Showing {apps.length} result{apps.length !== 1 ? 's' : ''}
+            </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[900px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {['Employee', 'Type', 'Dates', 'Days', 'Reason', 'Status', 'Applied', 'Actions'].map(h => (
-                    <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
-                  ))}
+                  <th className="text-left text-xs font-semibold text-slate-500 px-4 py-3">Employee</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 px-4 py-3">Type</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 px-4 py-3">
+                    <button
+                      className="flex items-center gap-1 hover:text-slate-700"
+                      onClick={() => toggleSort('startDate')}
+                    >
+                      Dates
+                      <ArrowUpDown size={11} className={clsx(sortField === 'startDate' ? 'text-slate-700' : 'text-slate-300')} />
+                      {sortField === 'startDate' && <span className="text-slate-400">{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                    </button>
+                  </th>
+                  <th className="text-left text-xs font-semibold text-slate-500 px-4 py-3">Days</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 px-4 py-3">Reason</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 px-4 py-3">Status</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 px-4 py-3">
+                    <button
+                      className="flex items-center gap-1 hover:text-slate-700"
+                      onClick={() => toggleSort('appliedDate')}
+                    >
+                      Applied
+                      <ArrowUpDown size={11} className={clsx(sortField === 'appliedDate' ? 'text-slate-700' : 'text-slate-300')} />
+                      {sortField === 'appliedDate' && <span className="text-slate-400">{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                    </button>
+                  </th>
+                  <th className="text-left text-xs font-semibold text-slate-500 px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -293,19 +403,6 @@ export default function HRLeavePage() {
               </tbody>
             </table>
           </div>
-
-          {/* Pagination */}
-          {pagination && pagination.total > 30 && (
-            <div className="flex justify-between items-center px-4 py-3 border-t border-slate-100 text-xs text-slate-500">
-              <span>{pagination.total} total</span>
-              <div className="flex gap-2">
-                <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
-                  className="px-3 py-1 border border-slate-200 rounded-lg disabled:opacity-40">Prev</button>
-                <button disabled={page * 30 >= pagination.total} onClick={() => setPage(p => p + 1)}
-                  className="px-3 py-1 border border-slate-200 rounded-lg disabled:opacity-40">Next</button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -456,10 +553,10 @@ export default function HRLeavePage() {
           </div>
         </div>
       )}
+
       {/* ── MONTHLY VIEW TAB ── */}
       {tab === 'monthly' && (
         <div className="space-y-4">
-          {/* Year selector */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-slate-500">Click an employee to view month-by-month breakdown</p>
             <select className="input text-xs py-1.5 px-3 w-28"
@@ -468,9 +565,7 @@ export default function HRLeavePage() {
             </select>
           </div>
 
-          {/* Employee list with expandable monthly history */}
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            {/* Header row */}
             <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr] bg-slate-50 border-b border-slate-100 px-4 py-3 gap-2">
               <div className="text-xs font-semibold text-slate-500">Employee</div>
               {['Sick Total', 'Sick Used', 'Sick Bal', 'Casual Total', 'Casual Used', 'Casual Bal', 'Planned Total', 'Planned Used', 'Planned Bal'].map(h => (
@@ -494,13 +589,9 @@ export default function HRLeavePage() {
 
               return (
                 <div key={emp.id}>
-                  {/* Employee summary row */}
                   <button
                     className="w-full grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr] px-4 py-2.5 gap-2 border-b border-slate-50 hover:bg-slate-50/60 text-left transition-colors"
-                    onClick={() => {
-                      if (isExpanded) { setExpandedEmpId(null) }
-                      else { setExpandedEmpId(emp.id) }
-                    }}
+                    onClick={() => { if (isExpanded) { setExpandedEmpId(null) } else { setExpandedEmpId(emp.id) } }}
                   >
                     <div className="flex items-center gap-2">
                       <span className={clsx('text-slate-300 transition-transform text-xs', isExpanded && 'rotate-90')}>▶</span>
@@ -509,21 +600,17 @@ export default function HRLeavePage() {
                         <div className="text-xs text-slate-400">{emp.employeeCode}</div>
                       </div>
                     </div>
-                    {/* SICK */}
                     <div className="text-center text-xs text-slate-500">{s('SICK','total')}</div>
                     <div className="text-center text-xs text-slate-500">{s('SICK','used')}</div>
                     <div className={clsx('text-center text-xs font-semibold', s('SICK','remaining') === 0 ? 'text-red-500' : 'text-emerald-700')}>{s('SICK','remaining')}</div>
-                    {/* CASUAL */}
                     <div className="text-center text-xs text-slate-500">{s('CASUAL','total')}</div>
                     <div className="text-center text-xs text-slate-500">{s('CASUAL','used')}</div>
                     <div className={clsx('text-center text-xs font-semibold', s('CASUAL','remaining') === 0 ? 'text-red-500' : 'text-emerald-700')}>{s('CASUAL','remaining')}</div>
-                    {/* PLANNED */}
                     <div className="text-center text-xs text-slate-500">{s('PLANNED','total')}</div>
                     <div className="text-center text-xs text-slate-500">{s('PLANNED','used')}</div>
                     <div className={clsx('text-center text-xs font-semibold', s('PLANNED','remaining') === 0 ? 'text-red-500' : 'text-emerald-700')}>{s('PLANNED','remaining')}</div>
                   </button>
 
-                  {/* Expanded monthly snapshot */}
                   {isExpanded && (
                     <div className="bg-slate-50/80 border-b border-slate-100 px-6 py-3">
                       {historyLoading ? (

@@ -254,6 +254,16 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
     data: updateData,
   });
 
+  // Recalculate leave entitlements if joining date changed
+  if (joiningDate && new Date(joiningDate).toISOString() !== existing.joiningDate?.toISOString()) {
+    try {
+      const { grantJoiningLeaves } = await import('../services/leaveService')
+      await grantJoiningLeaves(existing.id, new Date(joiningDate), existing.isTrainee)
+    } catch (err) {
+      console.error('[LEAVE] Failed to recalculate joining leaves on date update:', err)
+    }
+  }
+
   await createAuditLog({
     user: req.user!,
     action: AuditAction.UPDATE,
