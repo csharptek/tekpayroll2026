@@ -1,15 +1,23 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Wallet, User, Download, Calendar, TrendingUp } from 'lucide-react'
+import { FileText, Wallet, User, Download, Eye, EyeOff } from 'lucide-react'
 import { format } from 'date-fns'
 import { payslipApi, employeeApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { Card, Rupee, Button, StatusBadge, Skeleton } from '../../components/ui'
 import MonthCalendar from '../../components/MonthCalendar'
 
+function HiddenAmount({ amount, show, loading, bold }: { amount: number; show: boolean; loading?: boolean; bold?: boolean }) {
+  if (loading) return <Skeleton className="h-4 w-24" />
+  if (!show) return <span className={bold ? 'text-sm font-bold text-slate-400' : 'text-sm text-slate-400'}>₹ ••••••</span>
+  return <Rupee amount={amount} className={bold ? 'text-sm font-bold text-slate-900' : 'text-sm text-slate-600'} />
+}
+
 export default function EmployeeDashboard() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
+  const [showSalary, setShowSalary] = useState(false)
 
   const { data: profile, isLoading: loadingProfile } = useQuery({
     queryKey: ['my-profile', user?.id],
@@ -17,7 +25,7 @@ export default function EmployeeDashboard() {
     enabled: !!user?.id,
   })
 
-  const { data: payslips, isLoading: loadingPayslips } = useQuery({
+  const { data: payslips } = useQuery({
     queryKey: ['my-payslips', user?.id],
     queryFn: () => payslipApi.forEmployee(user!.id).then(r => r.data.data),
     enabled: !!user?.id,
@@ -38,20 +46,20 @@ export default function EmployeeDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome */}
       <div>
         <h1 className="page-title">Welcome back, {user?.name?.split(' ')[0]} 👋</h1>
         <p className="text-sm text-slate-500 mt-0.5">{format(new Date(), 'EEEE, dd MMMM yyyy')}</p>
       </div>
 
-      {/* Top stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-5">
           <p className="stat-label">Last Net Salary</p>
           {loadingProfile
             ? <Skeleton className="h-8 w-36 mt-1" />
             : latestEntry
-              ? <Rupee amount={latestEntry.netSalary} className="text-2xl font-display font-bold text-slate-900 mt-1" />
+              ? showSalary
+                ? <Rupee amount={latestEntry.netSalary} className="text-2xl font-display font-bold text-slate-900 mt-1" />
+                : <span className="text-2xl font-display font-bold text-slate-400 mt-1 block">₹ ••••••</span>
               : <p className="text-2xl font-display font-bold text-slate-300 mt-1">—</p>
           }
           <p className="stat-sub mt-1">{latestEntry?.cycle?.payrollMonth || 'No payroll yet'}</p>
@@ -61,10 +69,12 @@ export default function EmployeeDashboard() {
           <p className="stat-label">Monthly CTC</p>
           {loadingProfile
             ? <Skeleton className="h-8 w-32 mt-1" />
-            : <Rupee amount={monthly} className="text-2xl font-display font-bold text-slate-900 mt-1" />
+            : showSalary
+              ? <Rupee amount={monthly} className="text-2xl font-display font-bold text-slate-900 mt-1" />
+              : <span className="text-2xl font-display font-bold text-slate-400 mt-1 block">₹ ••••••</span>
           }
           <p className="stat-sub mt-1">
-            <Rupee amount={profile?.annualCtc || 0} /> per year
+            {showSalary ? <><Rupee amount={profile?.annualCtc || 0} /> per year</> : '₹ •••••• per year'}
           </p>
         </div>
 
@@ -85,9 +95,19 @@ export default function EmployeeDashboard() {
       <MonthCalendar />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Salary breakdown */}
         <div className="lg:col-span-2 space-y-5">
-          <Card title="My Salary Structure">
+          <Card
+            title="My Salary Structure"
+            action={
+              <button
+                onClick={() => setShowSalary(v => !v)}
+                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors px-2 py-1 rounded-lg hover:bg-slate-100"
+              >
+                {showSalary ? <EyeOff size={14} /> : <Eye size={14} />}
+                {showSalary ? 'Hide' : 'Show'}
+              </button>
+            }
+          >
             <div className="p-5">
               <div className="space-y-3">
                 {[
@@ -102,10 +122,7 @@ export default function EmployeeDashboard() {
                     {(i === 2 || i === 5) && <hr className="border-slate-100 my-3" />}
                     <div className="flex justify-between items-center">
                       <span className={bold ? 'text-sm font-semibold text-slate-700' : 'text-sm text-slate-500'}>{label}</span>
-                      {loadingProfile
-                        ? <Skeleton className="h-4 w-24" />
-                        : <Rupee amount={value} className={bold ? 'text-sm font-bold text-slate-900' : 'text-sm text-slate-600'} />
-                      }
+                      <HiddenAmount amount={value} show={showSalary} loading={loadingProfile} bold={bold} />
                     </div>
                   </div>
                 ))}
@@ -113,7 +130,6 @@ export default function EmployeeDashboard() {
             </div>
           </Card>
 
-          {/* Payslip history */}
           <Card title="Recent Payslips" action={
             <Button variant="ghost" size="sm" onClick={() => navigate('/my/payslips')}>View all</Button>
           }>
@@ -141,7 +157,6 @@ export default function EmployeeDashboard() {
           </Card>
         </div>
 
-        {/* Quick links */}
         <div className="space-y-5">
           <Card title="Quick Links">
             <div className="p-4 space-y-2">

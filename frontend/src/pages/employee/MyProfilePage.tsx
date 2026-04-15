@@ -1,15 +1,21 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Mail, Phone, MapPin, Calendar, Building2, CreditCard, FolderOpen } from 'lucide-react'
+import { Mail, Phone, MapPin, Calendar, Building2, CreditCard, FolderOpen, Eye, EyeOff } from 'lucide-react'
 import { format } from 'date-fns'
 import { employeeApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { PageHeader, Card, Rupee, Skeleton, Alert } from '../../components/ui'
 import MyDocumentsTab from '../../components/employee-profile/MyDocumentsTab'
 
+function HiddenAmount({ amount, show, bold }: { amount: number; show: boolean; bold?: boolean }) {
+  if (!show) return <span className={bold ? 'text-sm font-bold text-slate-400' : 'text-sm text-slate-400'}>₹ ••••••</span>
+  return <Rupee amount={amount} className={bold ? 'text-sm font-bold text-slate-900' : 'text-sm text-slate-600'} />
+}
+
 export default function MyProfilePage() {
   const { user } = useAuthStore()
   const [tab, setTab] = useState<'profile' | 'documents'>('profile')
+  const [showSalary, setShowSalary] = useState(false)
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['my-profile', user?.id],
@@ -29,7 +35,6 @@ export default function MyProfilePage() {
     <div className="space-y-5 max-w-4xl">
       <PageHeader title="My Profile" subtitle="Your employment and salary details" />
 
-      {/* Tab switcher */}
       <div className="flex gap-1 border border-slate-200 rounded-xl p-1 w-fit bg-white">
         {([
           { key: 'profile'   as const, label: 'Profile',       icon: null },
@@ -65,7 +70,19 @@ export default function MyProfilePage() {
           </div>
           <div className="text-right hidden sm:block">
             <p className="text-xs text-slate-400">Annual CTC</p>
-            <Rupee amount={profile.annualCtc} className="text-xl font-display font-bold text-slate-900" />
+            <div className="flex items-center gap-2 justify-end">
+              {showSalary
+                ? <Rupee amount={profile.annualCtc} className="text-xl font-display font-bold text-slate-900" />
+                : <span className="text-xl font-display font-bold text-slate-400">₹ ••••••</span>
+              }
+              <button
+                onClick={() => setShowSalary(v => !v)}
+                className="text-slate-400 hover:text-slate-700 transition-colors"
+                title={showSalary ? 'Hide salary' : 'Show salary'}
+              >
+                {showSalary ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </div>
         </div>
       </Card>
@@ -76,10 +93,10 @@ export default function MyProfilePage() {
         <Card title="Personal Information">
           <div className="divide-y divide-slate-50">
             {[
-              { label: 'Email',      value: profile.email,           icon: Mail },
-              { label: 'Phone',      value: profile.mobilePhone || '—', icon: Phone },
+              { label: 'Email',      value: profile.email,               icon: Mail },
+              { label: 'Phone',      value: profile.mobilePhone || '—',  icon: Phone },
               { label: 'Location',   value: profile.officeLocation || '—', icon: MapPin },
-              { label: 'State',      value: profile.state || '—',    icon: MapPin },
+              { label: 'State',      value: profile.state || '—',         icon: MapPin },
             ].map(({ label, value, icon: Icon }) => (
               <div key={label} className="flex items-center gap-3 px-5 py-3">
                 <Icon size={14} className="text-slate-400 flex-shrink-0" />
@@ -91,15 +108,26 @@ export default function MyProfilePage() {
         </Card>
 
         {/* Salary structure */}
-        <Card title="Salary Structure">
+        <Card
+          title="Salary Structure"
+          action={
+            <button
+              onClick={() => setShowSalary(v => !v)}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors px-2 py-1 rounded-lg hover:bg-slate-100"
+            >
+              {showSalary ? <EyeOff size={14} /> : <Eye size={14} />}
+              {showSalary ? 'Hide' : 'Show'}
+            </button>
+          }
+        >
           <div className="p-5 space-y-3">
             {[
-              { label: 'Annual CTC',     value: profile.annualCtc, bold: true },
-              { label: 'Monthly CTC',    value: monthly, bold: true },
+              { label: 'Annual CTC',       value: profile.annualCtc,      bold: true },
+              { label: 'Monthly CTC',      value: monthly,                bold: true },
               null,
-              { label: 'Basic (40%)',    value: basic },
-              { label: 'HRA (80%)',      value: hra },
-              { label: 'Allowances',     value: allowances },
+              { label: 'Basic (40%)',      value: basic },
+              { label: 'HRA (80%)',        value: hra },
+              { label: 'Allowances',       value: allowances },
               null,
               { label: 'Annual Incentive', value: profile.annualIncentive },
             ].map((row, i) =>
@@ -107,7 +135,7 @@ export default function MyProfilePage() {
                 ? <hr key={i} className="border-slate-100" />
                 : <div key={row.label} className="flex justify-between">
                     <span className={row.bold ? 'text-sm font-semibold text-slate-700' : 'text-sm text-slate-500'}>{row.label}</span>
-                    <Rupee amount={row.value} className={row.bold ? 'text-sm font-bold text-slate-900' : 'text-sm text-slate-600'} />
+                    <HiddenAmount amount={row.value} show={showSalary} bold={row.bold} />
                   </div>
             )}
           </div>
