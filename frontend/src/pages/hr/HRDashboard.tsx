@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import {
   Users, CreditCard, TrendingUp, AlertCircle,
   Play, Plus, FileText, ArrowRight, CheckCircle2,
-  Lock, Banknote, Clock, CalendarCheck, UserCheck, Palmtree
+  Lock, Banknote, Clock, CalendarCheck, UserCheck, Palmtree,
+  Eye, EyeOff,
 } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -17,7 +19,7 @@ import MonthCalendar from '../../components/MonthCalendar'
 
 // ─── CUSTOM TOOLTIP ──────────────────────────────────────────────────────────
 
-function ChartTooltip({ active, payload, label }: any) {
+function ChartTooltip({ active, payload, label, show }: any) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white border border-slate-100 rounded-xl shadow-card-md p-3">
@@ -27,7 +29,7 @@ function ChartTooltip({ active, payload, label }: any) {
           <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
           <span className="text-slate-500">{p.name}:</span>
           <span className="font-semibold text-slate-800">
-            ₹{Number(p.value).toLocaleString('en-IN')}
+            {show ? `₹${Number(p.value).toLocaleString('en-IN')}` : '₹ ••••••'}
           </span>
         </div>
       ))}
@@ -266,14 +268,16 @@ function HROnlyDashboard({ summary, loadingSummary }: { summary: any; loadingSum
 // ─── SUPER ADMIN DASHBOARD (full financial view) ──────────────────────────────
 
 function SuperAdminDashboard({
-  summary, loadingSummary, cycles, loadingCycles, trendData, salarySummary, loadingSalarySummary
+  summary, loadingSummary, cycles, loadingCycles, trendData, salarySummary, loadingSalarySummary, show
 }: {
   summary: any; loadingSummary: boolean
   cycles: any[]; loadingCycles: boolean
   trendData: any[]
   salarySummary: any; loadingSalarySummary: boolean
+  show: boolean
 }) {
   const latestCycle = cycles?.[0]
+  const fmt = (v: any) => show ? `₹${Number(v).toLocaleString('en-IN')}` : '₹ ••••••'
   return (
     <div className="space-y-6">
       {/* Row 1 — headcount + gross + net */}
@@ -287,7 +291,7 @@ function SuperAdminDashboard({
         />
         <StatCard
           label="Tentative Gross / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalGross != null ? `₹${Number(salarySummary.totalGross).toLocaleString('en-IN')}` : '—'}
+          value={loadingSalarySummary ? '—' : salarySummary?.totalGross != null ? fmt(salarySummary.totalGross) : '—'}
           sub={salarySummary ? `${salarySummary.employeeCount} employees on payroll` : undefined}
           icon={<CreditCard size={18} />}
           color="green"
@@ -295,7 +299,7 @@ function SuperAdminDashboard({
         />
         <StatCard
           label="Tentative Net / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalNet != null ? `₹${Number(salarySummary.totalNet).toLocaleString('en-IN')}` : '—'}
+          value={loadingSalarySummary ? '—' : salarySummary?.totalNet != null ? fmt(salarySummary.totalNet) : '—'}
           sub="After PF & ESI only (excludes PT, TDS, loans)"
           icon={<CheckCircle2 size={18} />}
           color="amber"
@@ -307,7 +311,7 @@ function SuperAdminDashboard({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Employee PF / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployeePf != null ? `₹${Number(salarySummary.totalEmployeePf).toLocaleString('en-IN')}` : '—'}
+          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployeePf != null ? fmt(salarySummary.totalEmployeePf) : '—'}
           sub="Deducted from salary"
           icon={<TrendingUp size={18} />}
           color="purple"
@@ -315,7 +319,7 @@ function SuperAdminDashboard({
         />
         <StatCard
           label="Employer PF / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployerPf != null ? `₹${Number(salarySummary.totalEmployerPf).toLocaleString('en-IN')}` : '—'}
+          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployerPf != null ? fmt(salarySummary.totalEmployerPf) : '—'}
           sub="Company contribution"
           icon={<TrendingUp size={18} />}
           color="blue"
@@ -323,7 +327,7 @@ function SuperAdminDashboard({
         />
         <StatCard
           label="Employee ESI / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployeeEsi != null ? `₹${Number(salarySummary.totalEmployeeEsi).toLocaleString('en-IN')}` : '—'}
+          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployeeEsi != null ? fmt(salarySummary.totalEmployeeEsi) : '—'}
           sub="Deducted from salary"
           icon={<TrendingUp size={18} />}
           color="purple"
@@ -331,7 +335,7 @@ function SuperAdminDashboard({
         />
         <StatCard
           label="Employer ESI / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployerEsi != null ? `₹${Number(salarySummary.totalEmployerEsi).toLocaleString('en-IN')}` : '—'}
+          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployerEsi != null ? fmt(salarySummary.totalEmployerEsi) : '—'}
           sub="Company contribution"
           icon={<TrendingUp size={18} />}
           color="blue"
@@ -362,8 +366,8 @@ function SuperAdminDashboard({
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false}
-                      tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip content={<ChartTooltip />} />
+                      tickFormatter={(v) => show ? `₹${(v / 1000).toFixed(0)}k` : '•••'} />
+                    <Tooltip content={<ChartTooltip show={show} />} />
                     <Area type="monotone" dataKey="Gross" stroke="#2e6dba" strokeWidth={2} fill="url(#gradGross)" dot={false} />
                     <Area type="monotone" dataKey="Net"   stroke="#10b981" strokeWidth={2} fill="url(#gradNet)"   dot={false} />
                   </AreaChart>
@@ -402,6 +406,7 @@ function SuperAdminDashboard({
 export default function HRDashboard() {
   const { user } = useAuthStore()
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
+  const [showFinancials, setShowFinancials] = useState(false)
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['hr-summary'],
@@ -443,6 +448,15 @@ export default function HRDashboard() {
             {format(new Date(), 'EEEE, dd MMMM yyyy')}
           </p>
         </div>
+        {isSuperAdmin && (
+          <button
+            onClick={() => setShowFinancials(v => !v)}
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-100 border border-slate-200"
+          >
+            {showFinancials ? <EyeOff size={14} /> : <Eye size={14} />}
+            {showFinancials ? 'Hide Figures' : 'Show Figures'}
+          </button>
+        )}
       </div>
 
       {isSuperAdmin
@@ -454,6 +468,7 @@ export default function HRDashboard() {
             trendData={trendData}
             salarySummary={salarySummary}
             loadingSalarySummary={loadingSalarySummary}
+            show={showFinancials}
           />
         : <HROnlyDashboard
             summary={summary}

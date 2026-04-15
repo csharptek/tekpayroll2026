@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Users, TrendingUp, CreditCard, BarChart3 } from 'lucide-react'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
+import { Users, TrendingUp, CreditCard, BarChart3, Eye, EyeOff } from 'lucide-react'
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { reportApi } from '../../services/api'
 import { Card, Rupee, Skeleton, StatCard } from '../../components/ui'
 import { format } from 'date-fns'
@@ -8,7 +9,7 @@ import MonthCalendar from '../../components/MonthCalendar'
 
 const DEPT_COLORS = ['#1f4e79','#2e75b6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4']
 
-function ChartTooltip({ active, payload, label }: any) {
+function ChartTooltip({ active, payload, label, show }: any) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white border border-slate-100 rounded-xl shadow-card-md p-3 text-xs">
@@ -17,7 +18,7 @@ function ChartTooltip({ active, payload, label }: any) {
         <div key={p.name} className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
           <span className="text-slate-500">{p.name}:</span>
-          <span className="font-bold">₹{Number(p.value).toLocaleString('en-IN')}</span>
+          <span className="font-bold">{show ? `₹${Number(p.value).toLocaleString('en-IN')}` : '₹ ••••••'}</span>
         </div>
       ))}
     </div>
@@ -25,6 +26,8 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 export default function ManagementDashboard() {
+  const [showFinancials, setShowFinancials] = useState(false)
+
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['report-summary'],
     queryFn: () => reportApi.summary().then(r => r.data.data),
@@ -43,12 +46,22 @@ export default function ManagementDashboard() {
   }))
 
   const lastCycle = summary?.lastCycle
+  const fmt = (v: any) => showFinancials ? `₹${Number(v).toLocaleString('en-IN')}` : '₹ ••••••'
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="page-title">Management Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-0.5">{format(new Date(), 'EEEE, dd MMMM yyyy')}</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="page-title">Management Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{format(new Date(), 'EEEE, dd MMMM yyyy')}</p>
+        </div>
+        <button
+          onClick={() => setShowFinancials(v => !v)}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-100 border border-slate-200"
+        >
+          {showFinancials ? <EyeOff size={14} /> : <Eye size={14} />}
+          {showFinancials ? 'Hide Figures' : 'Show Figures'}
+        </button>
       </div>
 
       {/* KPI cards */}
@@ -56,10 +69,10 @@ export default function ManagementDashboard() {
         <StatCard label="Active Employees" value={loadingSummary ? '—' : summary?.totalEmployees ?? '—'}
           icon={<Users size={18} />} color="blue" loading={loadingSummary} />
         <StatCard label="Last Net Payout"
-          value={lastCycle?.totalNet ? `₹${Number(lastCycle.totalNet).toLocaleString('en-IN')}` : '—'}
+          value={lastCycle?.totalNet ? fmt(lastCycle.totalNet) : '—'}
           sub={lastCycle?.payrollMonth} icon={<CreditCard size={18} />} color="green" loading={loadingSummary} />
         <StatCard label="Last Gross Payout"
-          value={lastCycle?.totalGross ? `₹${Number(lastCycle.totalGross).toLocaleString('en-IN')}` : '—'}
+          value={lastCycle?.totalGross ? fmt(lastCycle.totalGross) : '—'}
           sub={lastCycle?.payrollMonth} icon={<TrendingUp size={18} />} color="purple" loading={loadingSummary} />
         <StatCard label="Cycle Status"
           value={lastCycle?.status ?? '—'} sub={lastCycle?.payrollMonth}
@@ -70,7 +83,6 @@ export default function ManagementDashboard() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Trend area chart */}
         <Card title="Payroll Cost Trend — Last 12 Months">
           <div className="px-5 pb-5">
             {loadingTrend
@@ -91,8 +103,8 @@ export default function ManagementDashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false}
-                      tickFormatter={v => `₹${(v / 100000).toFixed(0)}L`} />
-                    <Tooltip content={<ChartTooltip />} />
+                      tickFormatter={v => showFinancials ? `₹${(v / 100000).toFixed(0)}L` : '•••'} />
+                    <Tooltip content={<ChartTooltip show={showFinancials} />} />
                     <Area type="monotone" dataKey="Gross" stroke="#1f4e79" strokeWidth={2} fill="url(#mgGross)" dot={false} />
                     <Area type="monotone" dataKey="Net"   stroke="#10b981" strokeWidth={2} fill="url(#mgNet)"   dot={false} />
                   </AreaChart>
@@ -109,7 +121,6 @@ export default function ManagementDashboard() {
           </div>
         </Card>
 
-        {/* Bar chart — headcount */}
         <Card title="Headcount vs Net Payout">
           <div className="px-5 pb-5">
             {loadingTrend
@@ -120,8 +131,8 @@ export default function ManagementDashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false}
-                      tickFormatter={v => `₹${(v / 100000).toFixed(0)}L`} />
-                    <Tooltip content={<ChartTooltip />} />
+                      tickFormatter={v => showFinancials ? `₹${(v / 100000).toFixed(0)}L` : '•••'} />
+                    <Tooltip content={<ChartTooltip show={showFinancials} />} />
                     <Bar dataKey="Net" fill="#2e75b6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -144,15 +155,21 @@ export default function ManagementDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {[...trendData].reverse().map((row: any, i: number) => {
+                {[...trendData].reverse().map((row: any) => {
                   const diff = row.Gross - row.Net
                   return (
                     <tr key={row.month} className="table-row">
                       <td className="table-cell font-semibold">{row.month}</td>
                       <td className="table-cell">{row.Count || '—'}</td>
-                      <td className="table-cell"><Rupee amount={row.Gross} /></td>
-                      <td className="table-cell font-bold"><Rupee amount={row.Net} /></td>
-                      <td className="table-cell text-slate-400"><Rupee amount={diff} /></td>
+                      <td className="table-cell">
+                        {showFinancials ? <Rupee amount={row.Gross} /> : <span className="text-slate-400">₹ ••••••</span>}
+                      </td>
+                      <td className="table-cell font-bold">
+                        {showFinancials ? <Rupee amount={row.Net} /> : <span className="text-slate-400">₹ ••••••</span>}
+                      </td>
+                      <td className="table-cell text-slate-400">
+                        {showFinancials ? <Rupee amount={diff} /> : <span>₹ ••••••</span>}
+                      </td>
                     </tr>
                   )
                 })}
