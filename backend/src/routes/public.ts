@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { prisma } from '../lib/prisma'
+import { prisma } from '../utils/prisma'
 
 export const publicRouter = Router()
 
@@ -49,12 +49,12 @@ publicRouter.get('/birthdays', async (req, res) => {
   })
 
   const birthdays = profiles
-    .filter((p) => {
+    .filter((p: typeof profiles[number]) => {
       if (!p.dateOfBirth) return false
       const d = new Date(p.dateOfBirth)
       return d.getMonth() + 1 === month && d.getDate() === day
     })
-    .map((p) => ({
+    .map((p: typeof profiles[number]) => ({
       employeeId: p.employee.id,
       name: p.firstName && p.lastName
         ? `${p.firstName} ${p.lastName}`
@@ -85,15 +85,15 @@ publicRouter.get('/birthdays', async (req, res) => {
   })
 
   const anniversaries = employees
-    .filter((e) => {
+    .filter((e: typeof employees[number]) => {
       const d = new Date(e.joiningDate)
       return (
         d.getMonth() + 1 === month &&
         d.getDate() === day &&
-        d.getFullYear() !== today.getFullYear() // exclude joining year
+        d.getFullYear() !== today.getFullYear()
       )
     })
-    .map((e) => {
+    .map((e: typeof employees[number]) => {
       const years = today.getFullYear() - new Date(e.joiningDate).getFullYear()
       return {
         employeeId: e.id,
