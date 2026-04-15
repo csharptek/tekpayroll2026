@@ -164,6 +164,12 @@ const SUPER_ADMIN_NAV = [
 
 const EMPLOYEE_NAV = [
   {
+    section: 'Overview',
+    items: [
+      { label: 'Dashboard', icon: LayoutDashboard, to: '/my/dashboard' },
+    ]
+  },
+  {
     section: 'Company',
     items: [
       { label: 'Policies', icon: BookOpen, to: '/policies' },
@@ -172,7 +178,6 @@ const EMPLOYEE_NAV = [
   {
     section: 'My Payroll',
     items: [
-      { label: 'Dashboard',  icon: LayoutDashboard, to: '/my/dashboard' },
       { label: 'My Payslips',icon: FileText,        to: '/my/payslips' },
       { label: 'My Loans',   icon: Wallet,          to: '/my/loans' },
       { label: 'My Profile', icon: UserCircle,      to: '/my/profile' },
@@ -306,6 +311,31 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           {nav.map((group) => {
             const isOpen = openSections.has(group.section)
             const hasActive = group.items.some((item) => location.pathname.startsWith(item.to))
+
+            // Standalone items (no section header, no collapse)
+            if (group.section === '__standalone__') {
+              return (
+                <div key="__standalone__" className="mb-1">
+                  {group.items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={onClose}
+                      className={({ isActive }) => clsx(
+                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+                        isActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-brand-300 hover:text-white hover:bg-white/5'
+                      )}
+                    >
+                      <item.icon size={15} className="flex-shrink-0" />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )
+            }
+
             return (
               <div key={group.section}>
                 {/* Section header — clickable */}
