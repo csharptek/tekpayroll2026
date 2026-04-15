@@ -565,6 +565,47 @@ export async function cancelLeaveDirectly(
       })
     }
   }
+
+  // Reverse LOP if this leave had LOP days
+  if (app.isLop && Number(app.lopDays) > 0) {
+    // For partial cancel, calculate proportional LOP to reverse
+    let lopToReverse: number
+    if (newEndDate && newEndDate < app.endDate) {
+      // Proportional: (daysToRestore / totalDays) * lopDays
+      const ratio = daysToRestore / Number(app.totalDays)
+      lopToReverse = Math.round(ratio * Number(app.lopDays))
+    } else {
+      lopToReverse = Math.round(Number(app.lopDays))
+    }
+
+    if (lopToReverse > 0) {
+      // Find active payroll cycle
+      const cycle = await prisma.payrollCycle.findFirst({
+        where: { status: { in: ['DRAFT', 'CALCULATED'] } },
+        orderBy: { cycleStart: 'desc' },
+      })
+      if (cycle) {
+        const lopEntry = await prisma.lopEntry.findUnique({
+          where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: app.employeeId } },
+        })
+        if (lopEntry) {
+          const safeLopReverse = Math.min(lopToReverse, lopEntry.lopDays)
+          const newLopDays = lopEntry.lopDays - safeLopReverse
+          if (newLopDays <= 0) {
+            await prisma.lopEntry.delete({
+              where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: app.employeeId } },
+            })
+          } else {
+            await prisma.lopEntry.update({
+              where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: app.employeeId } },
+              data: { lopDays: newLopDays },
+            })
+          }
+        }
+        // If no lopEntry in active cycle — LOP may have been in a processed cycle; nothing to reverse
+      }
+    }
+  }
 }
 
 // ─── APPROVE CANCELLATION REQUEST ────────────────────────────────────────────
