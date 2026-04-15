@@ -46,11 +46,22 @@ export default function EmployeeDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="page-title">Welcome back, {user?.name?.split(' ')[0]} 👋</h1>
-        <p className="text-sm text-slate-500 mt-0.5">{format(new Date(), 'EEEE, dd MMMM yyyy')}</p>
+      {/* Welcome */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="page-title">Welcome back, {user?.name?.split(' ')[0]} 👋</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{format(new Date(), 'EEEE, dd MMMM yyyy')}</p>
+        </div>
+        <button
+          onClick={() => setShowSalary(v => !v)}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-100 border border-slate-200 mt-1"
+        >
+          {showSalary ? <EyeOff size={14} /> : <Eye size={14} />}
+          {showSalary ? 'Hide Figures' : 'Show Figures'}
+        </button>
       </div>
 
+      {/* Top stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-5">
           <p className="stat-label">Last Net Salary</p>
@@ -96,18 +107,7 @@ export default function EmployeeDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-5">
-          <Card
-            title="My Salary Structure"
-            action={
-              <button
-                onClick={() => setShowSalary(v => !v)}
-                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors px-2 py-1 rounded-lg hover:bg-slate-100"
-              >
-                {showSalary ? <EyeOff size={14} /> : <Eye size={14} />}
-                {showSalary ? 'Hide' : 'Show'}
-              </button>
-            }
-          >
+          <Card title="My Salary Structure">
             <div className="p-5">
               <div className="space-y-3">
                 {[
