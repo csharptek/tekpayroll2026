@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Save, AlertTriangle } from 'lucide-react'
+import { Save, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { employeeApi } from '../../services/api'
 import { Button, Alert, Rupee } from '../ui'
 import SalaryCalculatorForm, { SalaryOutput } from '../SalaryCalculatorForm'
+
+function HiddenRupee({ amount, show, className }: { amount: number; show: boolean; className?: string }) {
+  if (!show) return <span className={className || 'text-lg font-bold text-slate-400'}>₹ ••••••</span>
+  return <Rupee amount={amount} className={className} />
+}
 
 export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: boolean; onSaved: () => void }) {
   const [salaryInput, setSalaryInput] = useState<SalaryOutput>({
@@ -18,8 +23,9 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
   })
 
   const [revisionReason, setRevisionReason] = useState('')
-  const [error,   setError]   = useState('')
-  const [success, setSuccess] = useState('')
+  const [error,      setError]      = useState('')
+  const [success,    setSuccess]    = useState('')
+  const [showSalary, setShowSalary] = useState(false)
 
   const ctcChanged = salaryInput.annualCtc !== Number(emp.annualCtc)
 
@@ -30,8 +36,8 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
       hraPercent:       salaryInput.hraPercent,
       hasIncentive:     salaryInput.hasIncentive,
       incentivePercent: salaryInput.incentivePercent,
-      transportMonthly: salaryInput.transportMonthly,  // null = auto
-      fbpMonthly:       salaryInput.fbpMonthly,          // null = auto
+      transportMonthly: salaryInput.transportMonthly,
+      fbpMonthly:       salaryInput.fbpMonthly,
       mediclaim:        salaryInput.mediclaim,
       revisionReason,
     }),
@@ -61,8 +67,16 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
       {!isHR && Number(emp.annualCtc) > 0 && (
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-xs text-slate-400 mb-1">Annual CTC</p>
-            <Rupee amount={emp.annualCtc} className="text-lg font-bold text-slate-800"/>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-slate-400">Annual CTC</p>
+              <button
+                onClick={() => setShowSalary(v => !v)}
+                className="text-slate-400 hover:text-slate-700 transition-colors"
+              >
+                {showSalary ? <EyeOff size={13} /> : <Eye size={13} />}
+              </button>
+            </div>
+            <HiddenRupee amount={emp.annualCtc} show={showSalary} className="text-lg font-bold text-slate-800" />
           </div>
           <div className="bg-emerald-50 rounded-xl p-4">
             <p className="text-xs text-slate-400 mb-1">Incentive</p>
@@ -77,7 +91,13 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
         <div>
           <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-xl border border-blue-100 text-xs text-blue-700 mb-3">
             <AlertTriangle size={13} className="flex-shrink-0 mt-0.5"/>
-            <span>CTC changing from <Rupee amount={emp.annualCtc} className="font-semibold"/> to <Rupee amount={salaryInput.annualCtc} className="font-semibold"/>. This will log a salary revision.</span>
+            <span>
+              CTC changing from{' '}
+              <HiddenRupee amount={emp.annualCtc} show={showSalary} className="font-semibold text-blue-700" />{' '}
+              to{' '}
+              <HiddenRupee amount={salaryInput.annualCtc} show={showSalary} className="font-semibold text-blue-700" />.
+              {' '}This will log a salary revision.
+            </span>
           </div>
           <label className="block text-xs font-medium text-slate-500 mb-1.5">Revision Reason</label>
           <input className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-brand-400 focus:outline-none"
@@ -88,13 +108,24 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
 
       {emp.salaryRevisions?.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Revision History</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Revision History</p>
+            <button
+              onClick={() => setShowSalary(v => !v)}
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition-colors"
+            >
+              {showSalary ? <EyeOff size={13} /> : <Eye size={13} />}
+              {showSalary ? 'Hide' : 'Show'}
+            </button>
+          </div>
           <div className="space-y-2">
             {emp.salaryRevisions.map((r: any) => (
               <div key={r.id} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl text-sm">
                 <div>
                   <span className="font-medium text-slate-700">
-                    <Rupee amount={r.previousCtc}/> → <Rupee amount={r.newCtc}/>
+                    <HiddenRupee amount={r.previousCtc} show={showSalary} className="font-medium text-slate-700" />
+                    {' → '}
+                    <HiddenRupee amount={r.newCtc} show={showSalary} className="font-medium text-slate-700" />
                   </span>
                   {r.reason && <span className="text-slate-400 ml-2 text-xs">· {r.reason}</span>}
                 </div>

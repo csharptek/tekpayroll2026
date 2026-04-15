@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, User, Briefcase, DollarSign, Phone, GraduationCap,
-  Building2, CreditCard, FileText, LogOut, UserMinus, X, UserCheck,
+  Building2, CreditCard, FileText, LogOut, UserMinus, X, UserCheck, Eye, EyeOff,
 } from 'lucide-react'
 import { employeeApi, exitApi } from '../../services/api'
 import { PageHeader, Button, Alert, Skeleton, StatusBadge } from '../../components/ui'
@@ -174,6 +174,7 @@ export default function EmployeeDetailPage() {
   const [tab, setTab]           = useState('personal')
   const [showExitModal, setShowExitModal]       = useState(false)
   const [showConvertModal, setShowConvertModal] = useState(false)
+  const [showCtc, setShowCtc]   = useState(false)
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const isHR         = user?.role === 'HR' || user?.role === 'SUPER_ADMIN'
@@ -291,11 +292,20 @@ export default function EmployeeDetailPage() {
           {isSuperAdmin && (
             <div>
               <p className="text-xs text-slate-400 mb-0.5">Annual CTC</p>
-              <p className="text-sm font-medium">
-                {Number(emp.annualCtc) > 0
-                  ? <span className="text-slate-700">₹{Number(emp.annualCtc).toLocaleString('en-IN')}</span>
-                  : <span className="text-amber-500">Not set</span>}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium">
+                  {Number(emp.annualCtc) > 0
+                    ? showCtc
+                      ? <span className="text-slate-700">₹{Number(emp.annualCtc).toLocaleString('en-IN')}</span>
+                      : <span className="text-slate-400">₹ ••••••</span>
+                    : <span className="text-amber-500">Not set</span>}
+                </p>
+                {Number(emp.annualCtc) > 0 && (
+                  <button onClick={() => setShowCtc(v => !v)} className="text-slate-400 hover:text-slate-700 transition-colors">
+                    {showCtc ? <EyeOff size={13} /> : <Eye size={13} />}
+                  </button>
+                )}
+              </div>
             </div>
           )}
           <div>
