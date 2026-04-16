@@ -130,6 +130,7 @@ const SUPER_ADMIN_NAV = [
       { label: 'Run Tasks',          icon: Timer,      to: '/hr/run-tasks' },
       { label: 'Configuration',    icon: Settings,   to: '/hr/config' },
       { label: 'Salary Calculator', icon: Calculator, to: '/hr/salary-calculator' },
+      { label: 'Salary Calc (New ESIC)', icon: Calculator, to: '/hr/salary-calculator-new-esic' },
     ]
   },
   {
@@ -480,6 +481,7 @@ function usePageTitle() {
     '/hr/audit': 'Audit Log',
     '/hr/config': 'Configuration',
     '/hr/salary-calculator': 'Salary Calculator',
+    '/hr/salary-calculator-new-esic': 'Salary Calculator (New ESIC)',
     '/hr/leaves': 'Leave Management',
     '/hr/public-holidays': 'Public Holidays',
     '/hr/leave-config': 'Leave Configuration',

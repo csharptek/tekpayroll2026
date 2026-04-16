@@ -27,6 +27,7 @@ import AuditLogPage from './pages/hr/AuditLogPage'
 import RunTasksPage from './pages/hr/RunTasksPage'
 import ConfigPage from './pages/hr/ConfigPage'
 import SalaryCalculatorPage from './pages/hr/SalaryCalculatorPage'
+import SalaryCalculatorNewEsicPage from './pages/hr/SalaryCalculatorNewEsicPage'
 import SyncPage from './pages/hr/SyncPage'
 import BulkImportPage from './pages/hr/BulkImportPage'
 import BulkEditEmployeesPage from './pages/hr/BulkEditEmployeesPage'
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="run-tasks" element={<RequireAuth roles={['SUPER_ADMIN']}><RunTasksPage /></RequireAuth>} />
           <Route path="config" element={<ConfigPage />} />
           <Route path="salary-calculator" element={<SalaryCalculatorPage />} />
+          <Route path="salary-calculator-new-esic" element={<SalaryCalculatorNewEsicPage />} />
           <Route path="leaves" element={<HRLeavePage />} />
           <Route path="public-holidays" element={<PublicHolidaysPage />} />
           <Route path="leave-config" element={<LeaveConfigPage />} />
