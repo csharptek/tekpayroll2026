@@ -6,19 +6,35 @@ import { Rupee } from '../../components/ui'
 
 const ri = (n: number) => Math.round(n)
 const r2 = (n: number) => Math.round(n * 100) / 100
-const EMPLOYER_PF_CTC_CAP = 1800
+const EMPLOYER_PF_CAP = 1800
 
-function computeFromCtc(ctc: number, basicPct: number, hraPct: number, incentivePct: number, hasIncentive: boolean, mediclaim: number) {
+function computeFromCtc(
+  ctc: number,
+  basicPct: number,
+  hraPct: number,
+  incentivePct: number,
+  hasIncentive: boolean,
+  mediclaim: number,
+  esiEmployerRate: number,
+  esiThreshold: number
+) {
   const annualBonus     = ri(ctc * incentivePct / 100)
   const basicMonthly    = ri(ctc * basicPct / 100 / 12)
-  const employerPfInCtc = Math.min(ri(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
-  const grandTotal      = ri((ctc - (hasIncentive ? annualBonus : 0) - employerPfInCtc * 12 - mediclaim) / 12)
   const hraMonthly      = ri(ctc * hraPct / 100 / 12)
+
+  // Both Employer PF and Employer ESI are inside CTC
+  const employerPf      = Math.min(ri(basicMonthly * 0.12), EMPLOYER_PF_CAP)
+  const esiApplies      = basicMonthly < esiThreshold
+  const employerEsi     = esiApplies ? ri(basicMonthly * esiEmployerRate) : 0
+
+  // Grand Monthly = what remains after bonus, mediclaim, employer PF, employer ESI
+  const grandTotal      = ri((ctc - (hasIncentive ? annualBonus : 0) - mediclaim) / 12 - employerPf - employerEsi)
+
   const transport       = ri(grandTotal * 0.02)
   const fbp             = ri(grandTotal * 0.02)
   const hyi             = ri(grandTotal - basicMonthly - hraMonthly - transport - fbp)
-  const employerPf      = ri(basicMonthly * 0.12)
-  return { basic: basicMonthly, hra: hraMonthly, transport, fbp, hyi, grandTotal, employerPfInCtc, employerPf, annualBonus }
+
+  return { basic: basicMonthly, hra: hraMonthly, transport, fbp, hyi, grandTotal, employerPf, employerEsi, annualBonus, esiApplies }
 }
 
 interface Components { basic: number; hra: number; transport: number; fbp: number; hyi: number }
@@ -33,6 +49,7 @@ export default function SalaryCalculatorNewEsicPage() {
   const [initialized,  setInitialized]  = useState(false)
   const [grandTotal,   setGrandTotal]   = useState(0)
   const [components,   setComponents]   = useState<Components>({ basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 })
+  const [computed,     setComputed]     = useState({ employerPf: 0, employerEsi: 0, annualBonus: 0, esiApplies: false })
 
   const { data: sysConfig } = useQuery({
     queryKey: ['system-config'],
@@ -43,27 +60,23 @@ export default function SalaryCalculatorNewEsicPage() {
   const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? 0.0325)
   const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? 21000)
 
-  // NEW ESI LOGIC: based on basic < threshold
-  const esiBase     = components.basic
-  const esiApplies  = initialized && esiBase > 0 && esiBase < esiThreshold
-  const employeeEsi = esiApplies ? ri(esiBase * esiEmployeeRate) : 0
-  const employerEsi = esiApplies ? ri(esiBase * esiEmployerRate) : 0
-
-  const employeePf  = Math.min(ri(components.basic * 0.12), 1800)
-  const employerPf  = Math.min(ri(components.basic * 0.12), 1800)
-  const annualBonus = hasIncentive ? r2(ctc * incentivePct / 100) : 0
-  const netEstimate = r2(grandTotal - employeePf - employeeEsi)
+  const esiApplies   = initialized && computed.esiApplies
+  const employeeEsi  = esiApplies ? ri(components.basic * esiEmployeeRate) : 0
+  const employeePf   = Math.min(ri(components.basic * 0.12), 1800)
+  const netEstimate  = r2(grandTotal - employeePf - employeeEsi)
 
   function applyCtc() {
     if (ctc <= 0) return
-    const c = computeFromCtc(ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim)
+    const c = computeFromCtc(ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim, esiEmployerRate, esiThreshold)
     setComponents({ basic: c.basic, hra: c.hra, transport: c.transport, fbp: c.fbp, hyi: c.hyi })
     setGrandTotal(c.grandTotal)
+    setComputed({ employerPf: c.employerPf, employerEsi: c.employerEsi, annualBonus: c.annualBonus, esiApplies: c.esiApplies })
     setInitialized(true)
   }
 
   function reset() {
     setComponents({ basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 })
+    setComputed({ employerPf: 0, employerEsi: 0, annualBonus: 0, esiApplies: false })
     setGrandTotal(0); setCtc(0); setInitialized(false)
   }
 
@@ -83,24 +96,24 @@ export default function SalaryCalculatorNewEsicPage() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-800">Salary Calculator <span className="text-amber-600">(New ESIC)</span></h1>
-          <p className="text-sm text-slate-500">ESI applies when Basic &lt; &#8377;{esiThreshold.toLocaleString('en-IN')} — new rule</p>
+          <p className="text-sm text-slate-500">PF &amp; ESIC (Employer) both included inside CTC</p>
         </div>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
         <div className="flex items-center gap-2 mb-2">
           <Info size={14} className="text-amber-600 flex-shrink-0"/>
-          <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">New ESIC Rule</p>
+          <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">New Rules</p>
         </div>
         <ul className="space-y-1 text-xs text-amber-700 leading-relaxed">
-          <li>&#8226; ESI applies when <strong>Basic &lt; &#8377;{esiThreshold.toLocaleString('en-IN')}</strong> (not Gross &#8722; HYI)</li>
-          <li>&#8226; Employee ESI = {(esiEmployeeRate * 100).toFixed(2)}% of Basic</li>
-          <li>&#8226; Employer ESI = {(esiEmployerRate * 100).toFixed(2)}% of Basic (outside CTC)</li>
-          <li>&#8226; Basic = CTC &#215; Basic%, HRA = CTC &#215; HRA%</li>
-          <li>&#8226; Grand Monthly = (CTC &#8722; Bonus &#8722; Employer PF &#8722; Mediclaim) &#247; 12</li>
+          <li>&#8226; ESI applies when <strong>Basic &lt; &#8377;{esiThreshold.toLocaleString('en-IN')}</strong></li>
+          <li>&#8226; Employer PF &amp; Employer ESI are <strong>inside CTC</strong></li>
+          <li>&#8226; Grand Monthly = (CTC &#8722; Bonus &#8722; Mediclaim) &#247; 12 &#8722; Employer PF &#8722; Employer ESI</li>
+          <li>&#8226; Employee ESI = {(esiEmployeeRate * 100).toFixed(2)}% of Basic | Employee PF = 12% of Basic (max &#8377;1,800)</li>
         </ul>
       </div>
 
+      {/* Inputs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className="label text-xs">Annual CTC (&#8377;) *</label>
@@ -199,11 +212,26 @@ export default function SalaryCalculatorNewEsicPage() {
                   <td className="py-2 text-right font-mono text-brand-700"><Rupee amount={grandTotal}/></td>
                   <td className="py-2 text-right font-mono text-slate-600"><Rupee amount={r2(grandTotal * 12)}/></td>
                 </tr>
+
+                {/* Employer contributions — inside CTC */}
                 <tr className="text-slate-500 text-xs">
-                  <td className="py-1.5">Employer PF (in CTC)</td>
-                  <td className="py-1.5 text-right font-mono"><Rupee amount={employerPf}/></td>
-                  <td className="py-1.5 text-right font-mono"><Rupee amount={r2(employerPf * 12)}/></td>
+                  <td className="py-1.5">
+                    Employer PF (12% of Basic, max &#8377;1,800)
+                    <span className="ml-1 text-[10px] text-green-600 font-medium">in CTC</span>
+                  </td>
+                  <td className="py-1.5 text-right font-mono"><Rupee amount={computed.employerPf}/></td>
+                  <td className="py-1.5 text-right font-mono"><Rupee amount={r2(computed.employerPf * 12)}/></td>
                 </tr>
+                {esiApplies && (
+                  <tr className="text-slate-500 text-xs">
+                    <td className="py-1.5">
+                      Employer ESI ({(esiEmployerRate * 100).toFixed(2)}% of Basic)
+                      <span className="ml-1 text-[10px] text-green-600 font-medium">in CTC</span>
+                    </td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={computed.employerEsi}/></td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={r2(computed.employerEsi * 12)}/></td>
+                  </tr>
+                )}
                 {mediclaim > 0 && (
                   <tr className="text-slate-500 text-xs">
                     <td className="py-1.5">Mediclaim</td>
@@ -211,26 +239,24 @@ export default function SalaryCalculatorNewEsicPage() {
                     <td className="py-1.5 text-right font-mono"><Rupee amount={mediclaim}/></td>
                   </tr>
                 )}
-                {esiApplies && (
-                  <tr className="text-slate-500 text-xs">
-                    <td className="py-1.5">
-                      Employer ESI ({(esiEmployerRate * 100).toFixed(2)}% of Basic)
-                      <span className="ml-1 text-[10px] text-amber-500 font-medium">outside CTC</span>
-                    </td>
-                    <td className="py-1.5 text-right font-mono"><Rupee amount={employerEsi}/></td>
-                    <td className="py-1.5 text-right font-mono"><Rupee amount={r2(employerEsi * 12)}/></td>
-                  </tr>
-                )}
                 {hasIncentive && (
                   <tr className="text-amber-600 text-xs">
                     <td className="py-1.5">Annual Bonus ({incentivePct}%) — paid March</td>
-                    <td className="py-1.5 text-right font-mono"><Rupee amount={r2(annualBonus / 12)}/></td>
-                    <td className="py-1.5 text-right font-mono"><Rupee amount={annualBonus}/></td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={r2(computed.annualBonus / 12)}/></td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={computed.annualBonus}/></td>
                   </tr>
                 )}
+
+                {/* CTC reconciliation row */}
+                <tr className="font-semibold border-t border-slate-200">
+                  <td className="py-2 text-slate-700 text-xs">Total CTC (reconciled)</td>
+                  <td className="py-2 text-right font-mono text-xs text-slate-500"><Rupee amount={ri(ctc / 12)}/></td>
+                  <td className="py-2 text-right font-mono text-brand-700"><Rupee amount={ctc}/></td>
+                </tr>
               </tbody>
             </table>
 
+            {/* Employee Deductions */}
             <div className="bg-red-50/50 border border-red-100 rounded-xl p-3">
               <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-2">Employee Deductions</p>
               <div className="space-y-1 text-xs text-slate-600">
@@ -240,7 +266,7 @@ export default function SalaryCalculatorNewEsicPage() {
                 </div>
                 {esiApplies ? (
                   <div className="flex justify-between">
-                    <span>Employee ESI ({(esiEmployeeRate * 100).toFixed(2)}% of Basic = <Rupee amount={esiBase}/>)</span>
+                    <span>Employee ESI ({(esiEmployeeRate * 100).toFixed(2)}% of Basic = <Rupee amount={components.basic}/>)</span>
                     <span className="font-mono font-semibold"><Rupee amount={employeeEsi}/>/mo</span>
                   </div>
                 ) : (
