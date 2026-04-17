@@ -18,7 +18,8 @@ function computeFromCtc(
   esiEmployerRate: number,
   esiThreshold: number
 ) {
-  const annualBonus     = ri(ctc * incentivePct / 100)
+  // Incentive is INSIDE CTC — annual lump sum, allocated from CTC
+  const annualBonus     = hasIncentive ? ri(ctc * incentivePct / 100) : 0
   const basicMonthly    = ri(ctc * basicPct / 100 / 12)
   const hraMonthly      = ri(ctc * hraPct / 100 / 12)
 
@@ -27,8 +28,11 @@ function computeFromCtc(
   const esiApplies      = basicMonthly < esiThreshold
   const employerEsi     = esiApplies ? ri(basicMonthly * esiEmployerRate) : 0
 
-  // Grand Monthly = what remains after bonus, mediclaim, employer PF, employer ESI
-  const grandTotal      = ri((ctc - (hasIncentive ? annualBonus : 0) - mediclaim) / 12 - employerPf - employerEsi)
+  // Grand Monthly = (CTC - mediclaim) / 12 - employer PF - employer ESI
+  // Incentive stays inside CTC; it's just paid annually, not monthly
+  // Monthly gross excludes the bonus month allocation (paid in March separately)
+  const annualBonusMonthlyEquiv = hasIncentive ? ri(annualBonus / 12) : 0
+  const grandTotal      = ri((ctc - mediclaim) / 12 - annualBonusMonthlyEquiv - employerPf - employerEsi)
 
   const transport       = ri(grandTotal * 0.02)
   const fbp             = ri(grandTotal * 0.02)
@@ -108,7 +112,8 @@ export default function SalaryCalculatorNewEsicPage() {
         <ul className="space-y-1 text-xs text-amber-700 leading-relaxed">
           <li>&#8226; ESI applies when <strong>Basic &lt; &#8377;{esiThreshold.toLocaleString('en-IN')}</strong></li>
           <li>&#8226; Employer PF &amp; Employer ESI are <strong>inside CTC</strong></li>
-          <li>&#8226; Grand Monthly = (CTC &#8722; Bonus &#8722; Mediclaim) &#247; 12 &#8722; Employer PF &#8722; Employer ESI</li>
+          <li>&#8226; Grand Monthly = (CTC &#8722; Mediclaim) &#247; 12 &#8722; Bonus/12 &#8722; Employer PF &#8722; Employer ESI</li>
+          <li>&#8226; Incentive is <strong>inside CTC</strong> — paid annually in March</li>
           <li>&#8226; Employee ESI = {(esiEmployeeRate * 100).toFixed(2)}% of Basic | Employee PF = 12% of Basic (max &#8377;1,800)</li>
         </ul>
       </div>
