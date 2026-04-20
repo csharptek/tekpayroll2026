@@ -81,7 +81,7 @@ api.interceptors.response.use(
         const accounts = msalInstance.getAllAccounts()
         if (accounts.length === 0) {
           logout()
-          window.location.href = '/login'
+          window.location.href = '/login?expired=1'
         }
         // Otherwise silently fail — user stays logged in, request just fails
         return Promise.reject(refreshErr)

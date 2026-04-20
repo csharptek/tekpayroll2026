@@ -23,6 +23,19 @@ export default function LoginPage() {
   const [selecting, setSelecting] = useState<UserRole | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [sessionExpired, setSessionExpired] = useState(false)
+
+  // Detect ?expired=1 from proactive token refresh failure
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('expired') === '1') {
+      setSessionExpired(true)
+      // Clean URL so banner doesn't stick on refresh
+      const url = new URL(window.location.href)
+      url.searchParams.delete('expired')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [])
 
   // On mount: check if Microsoft just redirected back with a token
   useEffect(() => {
@@ -147,6 +160,12 @@ export default function LoginPage() {
                 )}
                 {loading ? 'Signing in...' : 'Sign in with Microsoft'}
               </button>
+
+              {sessionExpired && !error && (
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 text-center">
+                  Your session expired. Please sign in again.
+                </div>
+              )}
 
               {error && (
                 <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 text-center">

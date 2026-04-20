@@ -55,7 +55,7 @@ export default function SalaryBreakupsPage() {
   const [dept,      setDept]      = useState('')
   const [selected,  setSelected]  = useState<Set<string>>(new Set())
   const [downloading, setDownloading] = useState(false)
-  const [format,    setFormat]    = useState<'long' | 'wide'>('long')
+  const [format,    setFormat]    = useState<'long' | 'wide'>('wide')
 
   const { data, isLoading, isFetching } = useQuery<BreakupsResponse>({
     queryKey: ['salary-breakups', month, year, dept],

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
+import { useTokenRefresh } from './hooks/useTokenRefresh'
 
 // Auth
 import LoginPage from './pages/auth/LoginPage'
@@ -79,6 +80,7 @@ function RoleBasedHome() {
 }
 
 export default function App() {
+  useTokenRefresh()
   return (
     <BrowserRouter>
       <Routes>
