@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import * as XLSX from 'xlsx';
-import { authenticate, requireHR } from '../middleware/auth';
+import { authenticate, requireSuperAdmin } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import { computeSalaryStructure, getEsiConfig, getSalaryInputForDate } from '../services/payrollEngine';
 
 export const salaryBreakupsRouter = Router();
-salaryBreakupsRouter.use(authenticate, requireHR);
+salaryBreakupsRouter.use(authenticate, requireSuperAdmin);
 
 interface BreakupRow {
   employeeId:       string;

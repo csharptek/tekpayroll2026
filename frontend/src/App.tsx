@@ -106,7 +106,7 @@ export default function App() {
           <Route path="notifications" element={<NotificationConfigPage />} />
           <Route path="salary-calculator" element={<SalaryCalculatorPage />} />
           <Route path="salary-calculator-new-esic" element={<SalaryCalculatorNewEsicPage />} />
-          <Route path="salary-breakups" element={<SalaryBreakupsPage />} />
+          <Route path="salary-breakups" element={<RequireAuth roles={['SUPER_ADMIN']}><SalaryBreakupsPage /></RequireAuth>} />
           <Route path="leaves" element={<HRLeavePage />} />
           <Route path="public-holidays" element={<PublicHolidaysPage />} />
           <Route path="leave-config" element={<LeaveConfigPage />} />
