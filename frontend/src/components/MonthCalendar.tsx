@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { leaveApi, calendarApi } from '../services/api'
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
-  getDay, isToday, isSameMonth
+  getDay, isToday, isSameMonth, isSameDay
 } from 'date-fns'
 import { Card } from './ui'
 
@@ -191,19 +191,24 @@ export default function MonthCalendar() {
     get(format(match, 'yyyy-MM-dd')).birthdays.push({ name: b.name, department: b.department })
   })
 
-  // All events in the displayed month, sorted by date
-  const upcoming: { date: Date; icon: string; label: string; color: string }[] = []
+  // All events in the displayed month, grouped by date (sorted ascending)
+  type Event = { icon: string; label: string; color: string }
+  const groups: { date: Date; key: string; events: Event[] }[] = []
   days.forEach(d => {
     const key  = format(d, 'yyyy-MM-dd')
     const meta = metaMap.get(key)
     if (!meta) return
-    meta.holidays.forEach(h => upcoming.push({ date: d, icon: '🏖️', label: h.name, color: 'bg-emerald-50 text-emerald-800 border-emerald-200' }))
-    meta.birthdays.forEach(b => upcoming.push({ date: d, icon: '🎂', label: `${b.name}'s Birthday`, color: 'bg-amber-50 text-amber-800 border-amber-200' }))
-    meta.leaves.slice(0, 3).forEach(l => {
+    const events: Event[] = []
+    meta.holidays.forEach(h => events.push({ icon: '🏖️', label: h.name, color: 'bg-emerald-50 text-emerald-800 border-emerald-200' }))
+    meta.birthdays.forEach(b => events.push({ icon: '🎂', label: `${b.name}'s Birthday`, color: 'bg-amber-50 text-amber-800 border-amber-200' }))
+    meta.leaves.forEach(l => {
       const halfInfo = l.isHalfDay ? ` · half day${l.halfDaySlot === 'FIRST' ? ' (AM)' : l.halfDaySlot === 'SECOND' ? ' (PM)' : ''}` : ''
-      upcoming.push({ date: d, icon: '🌿', label: `${l.name} on leave${halfInfo}`, color: 'bg-blue-50 text-blue-800 border-blue-200' })
+      events.push({ icon: '🌿', label: `${l.name} on leave${halfInfo}`, color: 'bg-blue-50 text-blue-800 border-blue-200' })
     })
+    if (events.length) groups.push({ date: d, key, events })
   })
+
+  const totalEvents = groups.reduce((n, g) => n + g.events.length, 0)
 
   const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -262,28 +267,84 @@ export default function MonthCalendar() {
         <Legend />
       </Card>
 
-      {/* Upcoming sidebar */}
+      {/* Events sidebar — grouped by date, auto-scrolls to today */}
       <Card className="p-4">
-        <h3 className="text-sm font-semibold text-slate-700 mb-3">Upcoming in {format(current, 'MMMM')}</h3>
-        {upcoming.length === 0 ? (
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">
+          Events in {format(current, 'MMMM')}
+        </h3>
+        {totalEvents === 0 ? (
           <div className="py-8 text-center">
             <p className="text-2xl mb-2">📅</p>
-            <p className="text-xs text-slate-400">Nothing upcoming this month</p>
+            <p className="text-xs text-slate-400">No events this month</p>
           </div>
         ) : (
-          <div className="space-y-2 max-h-[380px] overflow-y-auto pr-0.5">
-            {upcoming.map((ev, i) => (
-              <div key={i} className={`flex items-start gap-2.5 p-2 rounded-lg border ${ev.color}`}>
-                <span className="text-base leading-none flex-shrink-0 mt-0.5">{ev.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold truncate">{ev.label}</p>
-                  <p className="text-[10px] opacity-70 mt-0.5">{format(ev.date, 'EEE, dd MMM')}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <EventTimeline groups={groups} viewingCurrentMonth={isSameMonth(current, new Date())} />
         )}
       </Card>
+    </div>
+  )
+}
+
+// ─── EVENT TIMELINE ──────────────────────────────────────────────────────────
+
+function EventTimeline({
+  groups,
+  viewingCurrentMonth,
+}: {
+  groups: { date: Date; key: string; events: { icon: string; label: string; color: string }[] }[]
+  viewingCurrentMonth: boolean
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const todayRef  = useRef<HTMLDivElement>(null)
+
+  // On first render (per group change), scroll today into view if present
+  useEffect(() => {
+    if (!viewingCurrentMonth) return
+    if (!scrollRef.current || !todayRef.current) return
+    const container = scrollRef.current
+    const target    = todayRef.current
+    // Align target near top of the scroll container
+    container.scrollTop = target.offsetTop - container.offsetTop - 4
+  }, [groups, viewingCurrentMonth])
+
+  const today = new Date()
+
+  return (
+    <div ref={scrollRef} className="max-h-[420px] overflow-y-auto pr-1 space-y-3">
+      {groups.map(g => {
+        const isTodayGroup = isSameDay(g.date, today)
+        return (
+          <div
+            key={g.key}
+            ref={isTodayGroup ? todayRef : undefined}
+          >
+            <div className={[
+              'sticky top-0 z-10 -mx-1 px-1 pb-1 pt-0.5 bg-white',
+              'flex items-center gap-2',
+            ].join(' ')}>
+              <span className={[
+                'inline-flex items-center justify-center min-w-[42px] px-1.5 py-0.5 rounded-md text-[10px] font-bold',
+                isTodayGroup ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600',
+              ].join(' ')}>
+                {format(g.date, 'dd MMM')}
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">
+                {isTodayGroup ? 'Today · ' : ''}{format(g.date, 'EEEE')}
+              </span>
+            </div>
+            <div className="space-y-1.5 mt-1.5">
+              {g.events.map((ev, i) => (
+                <div key={i} className={`flex items-start gap-2.5 p-2 rounded-lg border ${ev.color}`}>
+                  <span className="text-base leading-none flex-shrink-0 mt-0.5">{ev.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold truncate">{ev.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
