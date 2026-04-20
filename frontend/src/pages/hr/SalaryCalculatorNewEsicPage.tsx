@@ -218,6 +218,26 @@ export default function SalaryCalculatorNewEsicPage() {
                   <td className="py-2 text-right font-mono text-slate-600"><Rupee amount={r2(grandTotal * 12)}/></td>
                 </tr>
 
+                {/* Employee PF — inside Gross (deducted from Gross later) */}
+                <tr className="text-slate-500 text-xs">
+                  <td className="py-1.5">
+                    Employee PF (12% of Basic, max &#8377;1,800)
+                    <span className="ml-1 text-[10px] text-blue-600 font-medium">in Gross</span>
+                  </td>
+                  <td className="py-1.5 text-right font-mono"><Rupee amount={employeePf}/></td>
+                  <td className="py-1.5 text-right font-mono"><Rupee amount={r2(employeePf * 12)}/></td>
+                </tr>
+                {esiApplies && (
+                  <tr className="text-slate-500 text-xs">
+                    <td className="py-1.5">
+                      Employee ESI ({(esiEmployeeRate * 100).toFixed(2)}% of Basic)
+                      <span className="ml-1 text-[10px] text-blue-600 font-medium">in Gross</span>
+                    </td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={employeeEsi}/></td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={r2(employeeEsi * 12)}/></td>
+                  </tr>
+                )}
+
                 {/* Employer contributions — inside CTC */}
                 <tr className="text-slate-500 text-xs">
                   <td className="py-1.5">
