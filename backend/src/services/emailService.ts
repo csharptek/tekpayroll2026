@@ -70,14 +70,14 @@ export async function sendEmailWithCc(to: string | string[], cc: string[], subje
 
 export function emailWrap(content: string) {
   return `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px">
-      <div style="background:#fff;border-radius:12px;padding:32px;border:1px solid #e2e8f0">
-        <div style="margin-bottom:24px">
-          <span style="font-size:20px;font-weight:700;color:#1e293b">TekPayroll</span>
+    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px;margin:0 auto;background:#f8fafc;padding:16px">
+      <div style="background:#fff;border-radius:10px;padding:20px;border:1px solid #e2e8f0">
+        <div style="margin-bottom:12px">
+          <span style="font-size:15px;font-weight:700;color:#0f172a;letter-spacing:0.3px">TekOne</span>
         </div>
         ${content}
-        <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8">
-          This is an automated message. Please do not reply to this email.
+        <div style="margin-top:18px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8">
+          Automated message — please do not reply.
         </div>
       </div>
     </div>`
@@ -102,7 +102,7 @@ export async function sendResignationSubmittedToHR(
       <tr><td style="padding:8px 0;color:#64748b;width:160px">Resignation Date</td><td style="color:#1e293b;font-weight:600">${resignationDate}</td></tr>
       <tr><td style="padding:8px 0;color:#64748b">Expected Last Working Day</td><td style="color:#1e293b;font-weight:600">${expectedLwd}</td></tr>
     </table>
-    <p style="color:#475569">Please log in to TekPayroll to review and manage the exit process.</p>`)
+    <p style="color:#475569">Please log in to TekOne to review and manage the exit process.</p>`)
   const toList = Array.from(new Set([...cfg.to, ...hrEmails])).filter(Boolean)
   await sendEmailWithCc(toList, cfg.cc, subject, html)
 }
@@ -123,7 +123,7 @@ export async function sendExitInitiatedToEmployee(
       <tr><td style="padding:8px 0;color:#64748b;width:160px">Exit Type</td><td style="color:#1e293b;font-weight:600">${exitType}</td></tr>
       <tr><td style="padding:8px 0;color:#64748b">Expected Last Working Day</td><td style="color:#1e293b;font-weight:600">${expectedLwd}</td></tr>
     </table>
-    <p style="color:#475569">Please log in to TekPayroll for more details and to complete any required steps.</p>`)
+    <p style="color:#475569">Please log in to TekOne for more details and to complete any required steps.</p>`)
   await sendEmail(employeeEmail, subject, html)
 }
 
@@ -135,7 +135,7 @@ export async function sendWithdrawalEnabledToEmployee(
   const html = emailWrap(`
     <h2 style="color:#0284c7;margin:0 0 16px">Withdrawal Option Available</h2>
     <p style="color:#475569">Dear <strong>${employeeName}</strong>,</p>
-    <p style="color:#475569">Your administrator has enabled the option to withdraw your resignation. You can log in to TekPayroll and withdraw your resignation if you wish to continue employment.</p>`)
+    <p style="color:#475569">Your administrator has enabled the option to withdraw your resignation. You can log in to TekOne and withdraw your resignation if you wish to continue employment.</p>`)
   await sendEmail(employeeEmail, subject, html)
 }
 

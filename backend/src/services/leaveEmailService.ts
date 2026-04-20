@@ -3,12 +3,13 @@ import { sendEmailWithCc, emailWrap } from './emailService'
 import { getNotifConfig, renderTemplate } from './notificationService'
 
 function fmtDate(d: Date) {
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })
 }
 function fmtDateTime(d: Date) {
   return d.toLocaleString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: true,
+    timeZone: 'Asia/Kolkata',
   })
 }
 
@@ -70,20 +71,20 @@ export async function sendLeaveAppliedEmail(applicationId: string) {
     : `Leave Application — ${emp.name} (${emp.employeeCode})`
 
   const html = emailWrap(`
-    <h2 style="color:#0284c7;margin:0 0 16px">Leave Application</h2>
-    <p style="color:#475569"><strong>${emp.name}</strong> has applied for leave.</p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px 0;color:#64748b;width:180px">Employee ID</td><td style="color:#1e293b;font-weight:600">${vars.employeeId}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">Full Name</td><td style="color:#1e293b;font-weight:600">${vars.fullName}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">From Date</td><td style="color:#1e293b;font-weight:600">${vars.fromDate}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">To Date</td><td style="color:#1e293b;font-weight:600">${vars.toDate}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">Leave Type</td><td style="color:#1e293b;font-weight:600">${vars.leaveType}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">Leave Reason</td><td style="color:#1e293b;font-weight:600">${vars.leaveReason}</td></tr>
-      ${vars.description ? `<tr><td style="padding:8px 0;color:#64748b;vertical-align:top">Description</td><td style="color:#1e293b">${vars.description}</td></tr>` : ''}
-      <tr><td style="padding:8px 0;color:#64748b">Applied On</td><td style="color:#1e293b;font-weight:600">${vars.appliedDateTime}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">Leave Category</td><td style="color:#1e293b;font-weight:600">${vars.leaveCategory}</td></tr>
+    <h2 style="color:#0f172a;margin:0 0 6px;font-size:17px">Leave Application</h2>
+    <p style="color:#475569;margin:0 0 12px;font-size:13px"><strong>${emp.name}</strong> has applied for leave.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr><td style="padding:4px 0;color:#64748b;width:150px">Employee ID</td><td style="color:#0f172a;font-weight:600">${vars.employeeId}</td></tr>
+      <tr><td style="padding:4px 0;color:#64748b">Full Name</td><td style="color:#0f172a;font-weight:600">${vars.fullName}</td></tr>
+      <tr><td style="padding:4px 0;color:#64748b">From</td><td style="color:#0f172a;font-weight:600">${vars.fromDate}</td></tr>
+      <tr><td style="padding:4px 0;color:#64748b">To</td><td style="color:#0f172a;font-weight:600">${vars.toDate}</td></tr>
+      <tr><td style="padding:4px 0;color:#64748b">Leave Type</td><td style="color:#0f172a;font-weight:600">${vars.leaveType}</td></tr>
+      <tr><td style="padding:4px 0;color:#64748b">Reason</td><td style="color:#0f172a;font-weight:600">${vars.leaveReason}</td></tr>
+      ${vars.description ? `<tr><td style="padding:4px 0;color:#64748b;vertical-align:top">Description</td><td style="color:#0f172a">${vars.description}</td></tr>` : ''}
+      <tr><td style="padding:4px 0;color:#64748b">Applied On</td><td style="color:#0f172a;font-weight:600">${vars.appliedDateTime} IST</td></tr>
+      <tr><td style="padding:4px 0;color:#64748b">Category</td><td style="color:#0f172a;font-weight:600">${vars.leaveCategory}</td></tr>
     </table>
-    <p style="color:#475569">Please log in to TekPayroll to review this application.</p>`)
+    <p style="color:#64748b;margin:14px 0 0;font-size:12px">Please log in to review this application.</p>`)
 
   await sendEmailWithCc(cfg.to, ccList, subject, html)
 }
