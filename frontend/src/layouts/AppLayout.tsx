@@ -9,7 +9,7 @@ import {
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
-  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package
+  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package, Bell
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -129,6 +129,7 @@ const SUPER_ADMIN_NAV = [
       { label: 'Audit Log',        icon: ScrollText, to: '/hr/audit' },
       { label: 'Run Tasks',          icon: Timer,      to: '/hr/run-tasks' },
       { label: 'Configuration',    icon: Settings,   to: '/hr/config' },
+      { label: 'Notifications',    icon: Bell,       to: '/hr/notifications' },
       { label: 'Salary Calculator', icon: Calculator, to: '/hr/salary-calculator' },
       { label: 'Salary Calc (New ESIC)', icon: Calculator, to: '/hr/salary-calculator-new-esic' },
     ]
@@ -480,6 +481,7 @@ function usePageTitle() {
     '/hr/salaries-bulk-edit': 'Bulk Edit Salaries',
     '/hr/audit': 'Audit Log',
     '/hr/config': 'Configuration',
+    '/hr/notifications': 'Notification Configuration',
     '/hr/salary-calculator': 'Salary Calculator',
     '/hr/salary-calculator-new-esic': 'Salary Calculator (New ESIC)',
     '/hr/leaves': 'Leave Management',

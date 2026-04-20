@@ -35,6 +35,7 @@ import BulkEditEmployeePage from './pages/hr/BulkEditEmployeePage'
 import HRLeavePage from './pages/hr/HRLeavePage'
 import PublicHolidaysPage from './pages/hr/PublicHolidaysPage'
 import LeaveConfigPage from './pages/hr/LeaveConfigPage'
+import NotificationConfigPage from './pages/hr/NotificationConfigPage'
 import BulkLeaveEntryPage from './pages/hr/BulkLeaveEntryPage'
 
 // Employee Pages
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="audit" element={<AuditLogPage />} />
           <Route path="run-tasks" element={<RequireAuth roles={['SUPER_ADMIN']}><RunTasksPage /></RequireAuth>} />
           <Route path="config" element={<ConfigPage />} />
+          <Route path="notifications" element={<NotificationConfigPage />} />
           <Route path="salary-calculator" element={<SalaryCalculatorPage />} />
           <Route path="salary-calculator-new-esic" element={<SalaryCalculatorNewEsicPage />} />
           <Route path="leaves" element={<HRLeavePage />} />

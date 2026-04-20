@@ -27,20 +27,32 @@ async function getAccessToken(tenantId: string, clientId: string, clientSecret: 
 }
 
 export async function sendEmail(to: string, subject: string, htmlBody: string) {
+  return sendEmailWithCc(to, [], subject, htmlBody)
+}
+
+export async function sendEmailWithCc(to: string | string[], cc: string[], subject: string, htmlBody: string) {
   try {
     const cfg = await getGraphConfig()
     if (!cfg.tenantId || !cfg.clientId || !cfg.clientSecret || !cfg.senderEmail) {
       console.warn('[EMAIL] Graph API not configured — skipping email')
       return
     }
+    const toList = Array.isArray(to) ? to : [to]
+    if (toList.length === 0) {
+      console.warn('[EMAIL] No TO recipients — skipping')
+      return
+    }
     const token = await getAccessToken(cfg.tenantId, cfg.clientId, cfg.clientSecret)
-    const payload = {
+    const payload: any = {
       message: {
         subject,
         body: { contentType: 'HTML', content: htmlBody },
-        toRecipients: [{ emailAddress: { address: to } }],
+        toRecipients: toList.map(e => ({ emailAddress: { address: e } })),
       },
       saveToSentItems: false,
+    }
+    if (cc.length > 0) {
+      payload.message.ccRecipients = cc.map(e => ({ emailAddress: { address: e } }))
     }
     const res = await fetch(`https://graph.microsoft.com/v1.0/users/${cfg.senderEmail}/sendMail`, {
       method:  'POST',
@@ -56,7 +68,7 @@ export async function sendEmail(to: string, subject: string, htmlBody: string) {
   }
 }
 
-function emailWrap(content: string) {
+export function emailWrap(content: string) {
   return `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px">
       <div style="background:#fff;border-radius:12px;padding:32px;border:1px solid #e2e8f0">
@@ -78,7 +90,11 @@ export async function sendResignationSubmittedToHR(
   resignationDate: string,
   expectedLwd: string
 ) {
-  const subject = `Resignation Submitted — ${employeeName} (${employeeCode})`
+  const { getNotifConfig, renderTemplate } = await import('./notificationService')
+  const cfg = await getNotifConfig('RESIGNATION_SUBMITTED')
+  if (!cfg.enabled) return
+  const vars = { employeeName, employeeCode, resignationDate, expectedLwd }
+  const subject = cfg.subject ? renderTemplate(cfg.subject, vars) : `Resignation Submitted — ${employeeName} (${employeeCode})`
   const html = emailWrap(`
     <h2 style="color:#dc2626;margin:0 0 16px">Resignation Notice</h2>
     <p style="color:#475569"><strong>${employeeName}</strong> (${employeeCode}) has submitted their resignation.</p>
@@ -87,7 +103,8 @@ export async function sendResignationSubmittedToHR(
       <tr><td style="padding:8px 0;color:#64748b">Expected Last Working Day</td><td style="color:#1e293b;font-weight:600">${expectedLwd}</td></tr>
     </table>
     <p style="color:#475569">Please log in to TekPayroll to review and manage the exit process.</p>`)
-  for (const email of hrEmails) await sendEmail(email, subject, html)
+  const toList = Array.from(new Set([...cfg.to, ...hrEmails])).filter(Boolean)
+  await sendEmailWithCc(toList, cfg.cc, subject, html)
 }
 
 export async function sendExitInitiatedToEmployee(
@@ -127,11 +144,16 @@ export async function sendWithdrawalToHR(
   employeeName: string,
   employeeCode: string
 ) {
-  const subject = `Resignation Withdrawn — ${employeeName} (${employeeCode})`
+  const { getNotifConfig, renderTemplate } = await import('./notificationService')
+  const cfg = await getNotifConfig('RESIGNATION_WITHDRAWN')
+  if (!cfg.enabled) return
+  const vars = { employeeName, employeeCode }
+  const subject = cfg.subject ? renderTemplate(cfg.subject, vars) : `Resignation Withdrawn — ${employeeName} (${employeeCode})`
   const html = emailWrap(`
     <h2 style="color:#16a34a;margin:0 0 16px">Resignation Withdrawn</h2>
     <p style="color:#475569"><strong>${employeeName}</strong> (${employeeCode}) has withdrawn their resignation. Their status has been restored to Active.</p>`)
-  for (const email of hrEmails) await sendEmail(email, subject, html)
+  const toList = Array.from(new Set([...cfg.to, ...hrEmails])).filter(Boolean)
+  await sendEmailWithCc(toList, cfg.cc, subject, html)
 }
 
 export async function sendLwdReminderToHR(
@@ -141,12 +163,17 @@ export async function sendLwdReminderToHR(
   lwd: string,
   daysRemaining: number
 ) {
-  const subject = `LWD Reminder — ${employeeName} (${employeeCode}) — ${daysRemaining} days`
+  const { getNotifConfig, renderTemplate } = await import('./notificationService')
+  const cfg = await getNotifConfig('LWD_REMINDER')
+  if (!cfg.enabled) return
+  const vars = { employeeName, employeeCode, lwd, daysRemaining: String(daysRemaining) }
+  const subject = cfg.subject ? renderTemplate(cfg.subject, vars) : `LWD Reminder — ${employeeName} (${employeeCode}) — ${daysRemaining} days`
   const html = emailWrap(`
     <h2 style="color:#d97706;margin:0 0 16px">Last Working Day Reminder</h2>
     <p style="color:#475569"><strong>${employeeName}</strong> (${employeeCode}) has <strong>${daysRemaining} day(s)</strong> remaining before their last working day on <strong>${lwd}</strong>.</p>
     <p style="color:#475569">Please ensure all clearances and F&F processes are completed in time.</p>`)
-  for (const email of hrEmails) await sendEmail(email, subject, html)
+  const toList = Array.from(new Set([...cfg.to, ...hrEmails])).filter(Boolean)
+  await sendEmailWithCc(toList, cfg.cc, subject, html)
 }
 
 export async function sendAllClearanceDoneToSuperAdmin(
@@ -154,11 +181,16 @@ export async function sendAllClearanceDoneToSuperAdmin(
   employeeName: string,
   employeeCode: string
 ) {
-  const subject = `All Clearances Complete — ${employeeName} (${employeeCode})`
+  const { getNotifConfig, renderTemplate } = await import('./notificationService')
+  const cfg = await getNotifConfig('ALL_CLEARANCE_DONE')
+  if (!cfg.enabled) return
+  const vars = { employeeName, employeeCode }
+  const subject = cfg.subject ? renderTemplate(cfg.subject, vars) : `All Clearances Complete — ${employeeName} (${employeeCode})`
   const html = emailWrap(`
     <h2 style="color:#16a34a;margin:0 0 16px">Clearance Complete</h2>
     <p style="color:#475569">All clearances for <strong>${employeeName}</strong> (${employeeCode}) have been marked as complete. You can now unlock F&F and proceed with final separation.</p>`)
-  for (const email of adminEmails) await sendEmail(email, subject, html)
+  const toList = Array.from(new Set([...cfg.to, ...adminEmails])).filter(Boolean)
+  await sendEmailWithCc(toList, cfg.cc, subject, html)
 }
 
 export async function sendSeparatedToEmployee(

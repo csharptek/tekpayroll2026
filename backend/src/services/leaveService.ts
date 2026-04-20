@@ -394,6 +394,14 @@ export async function applyLeave(params: {
     })
   }
 
+  // Fire notification (non-blocking)
+  try {
+    const { sendLeaveAppliedEmail } = await import('./leaveEmailService')
+    sendLeaveAppliedEmail(application.id).catch(e => console.error('[LEAVE EMAIL]', e))
+  } catch (e) {
+    console.error('[LEAVE EMAIL] import failed', e)
+  }
+
   return application
 }
 
