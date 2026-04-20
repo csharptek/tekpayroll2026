@@ -13,10 +13,25 @@ type NotifType =
   | 'LWD_REMINDER'
   | 'ALL_CLEARANCE_DONE'
   | 'RESIGNATION_WITHDRAWN'
+  | 'LEAVE_CANCELLED_BY_EMP'
+  | 'LEAVE_CANCELLATION_REQUEST'
+  | 'LEAVE_APPROVED'
+  | 'LEAVE_DECLINED'
+  | 'LEAVE_AUTO_APPROVED'
+  | 'LEAVE_CANCELLATION_APPROVED'
+  | 'LEAVE_CANCELLATION_DECLINED'
+  | 'RESIGNATION_ACKNOWLEDGED'
+  | 'RESIGNATION_ACCEPTED'
+  | 'WITHDRAWAL_APPROVED'
+  | 'LOAN_CREATED'
+  | 'REIMBURSEMENT_ADDED'
+  | 'ASSET_ASSIGNED'
+  | 'FNF_SETTLEMENT_READY'
 
 interface NotifDef {
   type:         NotifType
   title:        string
+  audience:     'HR' | 'Employee'
   description:  string
   defaultSubject: string
   vars:         string[]
@@ -25,19 +40,41 @@ interface NotifDef {
 }
 
 const NOTIFS: NotifDef[] = [
+  // ── HR / Admin notifications ─────────────────────────────────────────────
   {
     type: 'LEAVE_APPLIED',
     title: 'Leave Application Submitted',
-    description: 'Sent to HR and CC reporting manager when an employee applies for leave.',
+    audience: 'HR',
+    description: 'Sent to HR when an employee applies for leave.',
     defaultSubject: 'Leave Application — {fullName} ({employeeId})',
     vars: ['employeeId', 'fullName', 'fromDate', 'toDate', 'leaveType', 'leaveReason', 'description', 'appliedDateTime', 'leaveCategory'],
     extraNote: 'Reporting manager (if set) is auto-added to CC.',
-    bodyPreview: 'Employee ID, Full Name, From Date, To Date, Leave Type (Full/Half — which half), Leave Reason, Description, Applied On, Leave Category',
+    bodyPreview: 'Employee ID, Full Name, From, To, Leave Type (Full/Half), Reason, Description, Applied On, Category',
+  },
+  {
+    type: 'LEAVE_CANCELLED_BY_EMP',
+    title: 'Leave Cancelled by Employee',
+    audience: 'HR',
+    description: 'Sent to HR when an employee cancels their leave (before it starts).',
+    defaultSubject: 'Leave Cancelled — {employeeName} ({employeeCode})',
+    vars: ['employeeName', 'employeeCode', 'category', 'fromDate', 'toDate', 'reason', 'cancelledOn'],
+    extraNote: 'Reporting manager (if set) is auto-added to CC.',
+    bodyPreview: 'Employee name/code, category, dates, cancellation reason, cancelled on',
+  },
+  {
+    type: 'LEAVE_CANCELLATION_REQUEST',
+    title: 'Leave Cancellation Request',
+    audience: 'HR',
+    description: 'Sent to HR when an employee requests to cancel an ongoing/approved leave.',
+    defaultSubject: 'Leave Cancellation Request — {employeeName}',
+    vars: ['employeeName', 'employeeCode', 'category', 'fromDate', 'toDate', 'reason', 'requestedOn'],
+    bodyPreview: 'Employee name/code, leave details, cancellation reason, action required',
   },
   {
     type: 'RESIGNATION_SUBMITTED',
     title: 'Resignation Submitted',
-    description: 'Sent to HR when an employee submits resignation or HR/SA initiates exit.',
+    audience: 'HR',
+    description: 'Sent to HR when an employee submits resignation.',
     defaultSubject: 'Resignation Submitted — {employeeName} ({employeeCode})',
     vars: ['employeeName', 'employeeCode', 'resignationDate', 'expectedLwd'],
     bodyPreview: 'Employee name/code, Resignation Date, Expected Last Working Day',
@@ -45,7 +82,8 @@ const NOTIFS: NotifDef[] = [
   {
     type: 'LWD_REMINDER',
     title: 'Last Working Day Reminder',
-    description: 'Sent to HR as reminders before an employee\'s last working day.',
+    audience: 'HR',
+    description: 'Sent to HR as reminders before an employee\'s last working day (cron).',
     defaultSubject: 'LWD Reminder — {employeeName} ({employeeCode}) — {daysRemaining} days',
     vars: ['employeeName', 'employeeCode', 'lwd', 'daysRemaining'],
     bodyPreview: 'Employee name/code, LWD date, days remaining',
@@ -53,6 +91,7 @@ const NOTIFS: NotifDef[] = [
   {
     type: 'ALL_CLEARANCE_DONE',
     title: 'All Clearances Complete',
+    audience: 'HR',
     description: 'Sent to Super Admin when all exit clearances are marked complete.',
     defaultSubject: 'All Clearances Complete — {employeeName} ({employeeCode})',
     vars: ['employeeName', 'employeeCode'],
@@ -61,10 +100,120 @@ const NOTIFS: NotifDef[] = [
   {
     type: 'RESIGNATION_WITHDRAWN',
     title: 'Resignation Withdrawn',
+    audience: 'HR',
     description: 'Sent to HR when an employee withdraws their resignation.',
     defaultSubject: 'Resignation Withdrawn — {employeeName} ({employeeCode})',
     vars: ['employeeName', 'employeeCode'],
     bodyPreview: 'Employee name/code, status restored to Active',
+  },
+  // ── Employee notifications ───────────────────────────────────────────────
+  {
+    type: 'LEAVE_APPROVED',
+    title: 'Leave Approved',
+    audience: 'Employee',
+    description: 'Sent to the employee when their leave is approved.',
+    defaultSubject: 'Leave Approved — {fromDate} to {toDate}',
+    vars: ['employeeName', 'employeeCode', 'fromDate', 'toDate', 'totalDays', 'leaveType', 'category', 'approvedBy', 'approvedOn'],
+    bodyPreview: 'Leave dates, type, total days, approved by, approved on',
+  },
+  {
+    type: 'LEAVE_DECLINED',
+    title: 'Leave Declined',
+    audience: 'Employee',
+    description: 'Sent to the employee when their leave is declined.',
+    defaultSubject: 'Leave Declined — {fromDate} to {toDate}',
+    vars: ['employeeName', 'fromDate', 'toDate', 'category', 'declineReason', 'declinedBy', 'declinedOn'],
+    bodyPreview: 'Leave dates, reason for decline, declined by',
+  },
+  {
+    type: 'LEAVE_AUTO_APPROVED',
+    title: 'Sick Leave Auto-Approved',
+    audience: 'Employee',
+    description: 'Sent to the employee when sick leave is automatically approved.',
+    defaultSubject: 'Sick Leave Confirmed — {fromDate} to {toDate}',
+    vars: ['employeeName', 'fromDate', 'toDate', 'totalDays', 'lopDays', 'appliedOn'],
+    bodyPreview: 'Leave dates, total days, LOP days (if any), applied on',
+  },
+  {
+    type: 'LEAVE_CANCELLATION_APPROVED',
+    title: 'Leave Cancellation Approved',
+    audience: 'Employee',
+    description: 'Sent to the employee when their cancellation request is approved.',
+    defaultSubject: 'Leave Cancellation Approved',
+    vars: ['employeeName', 'fromDate', 'toDate', 'approvedBy', 'approvedOn'],
+    bodyPreview: 'Confirmation that cancellation is approved, days restored',
+  },
+  {
+    type: 'LEAVE_CANCELLATION_DECLINED',
+    title: 'Leave Cancellation Declined',
+    audience: 'Employee',
+    description: 'Sent to the employee when their cancellation request is declined.',
+    defaultSubject: 'Leave Cancellation Declined',
+    vars: ['employeeName', 'fromDate', 'toDate', 'declinedBy', 'reason', 'declinedOn'],
+    bodyPreview: 'Cancellation declined, reason, original leave remains active',
+  },
+  {
+    type: 'RESIGNATION_ACKNOWLEDGED',
+    title: 'Resignation Acknowledged',
+    audience: 'Employee',
+    description: 'Sent to the employee confirming receipt of resignation.',
+    defaultSubject: 'Resignation Received — Acknowledgement',
+    vars: ['employeeName', 'resignationDate', 'expectedLwd', 'noticeDays'],
+    bodyPreview: 'Resignation received confirmation, expected LWD, notice period',
+  },
+  {
+    type: 'RESIGNATION_ACCEPTED',
+    title: 'Resignation Accepted',
+    audience: 'Employee',
+    description: 'Sent to the employee when resignation is formally accepted (LWD confirmed).',
+    defaultSubject: 'Resignation Accepted — LWD Confirmed',
+    vars: ['employeeName', 'lwd', 'noticeServed'],
+    bodyPreview: 'Resignation accepted, final LWD, notice served, clearance begins',
+  },
+  {
+    type: 'WITHDRAWAL_APPROVED',
+    title: 'Withdrawal Approved',
+    audience: 'Employee',
+    description: 'Sent to the employee when their resignation withdrawal is confirmed.',
+    defaultSubject: 'Resignation Withdrawal Confirmed',
+    vars: ['employeeName', 'withdrawnOn'],
+    bodyPreview: 'Withdrawal confirmed, status restored to Active',
+  },
+  {
+    type: 'LOAN_CREATED',
+    title: 'Loan Approved',
+    audience: 'Employee',
+    description: 'Sent to the employee when a loan is approved and created.',
+    defaultSubject: 'Loan Approved — {amount}',
+    vars: ['employeeName', 'amount', 'emi', 'tenure', 'disbursedOn', 'purpose'],
+    bodyPreview: 'Loan amount, EMI, tenure, disbursal date, purpose',
+  },
+  {
+    type: 'REIMBURSEMENT_ADDED',
+    title: 'Reimbursement Approved',
+    audience: 'Employee',
+    description: 'Sent to the employee when a reimbursement is added to their payroll.',
+    defaultSubject: 'Reimbursement Approved — {amount}',
+    vars: ['employeeName', 'amount', 'category', 'cycle', 'addedOn'],
+    bodyPreview: 'Amount, category, payroll cycle, added on',
+  },
+  {
+    type: 'ASSET_ASSIGNED',
+    title: 'Asset Assigned',
+    audience: 'Employee',
+    description: 'Sent to the employee when an asset is assigned to them.',
+    defaultSubject: 'Asset Assigned — {assetName}',
+    vars: ['employeeName', 'assetName', 'assetCode', 'category', 'condition', 'assignedOn'],
+    bodyPreview: 'Asset name, code, category, condition, assigned on',
+  },
+  {
+    type: 'FNF_SETTLEMENT_READY',
+    title: 'F&F Settlement Ready',
+    audience: 'Employee',
+    description: 'Sent to the employee when their F&F settlement is calculated and approved.',
+    defaultSubject: 'Full & Final Settlement Ready',
+    vars: ['employeeName', 'lwd', 'amount', 'settlementDate'],
+    bodyPreview: 'Last working day, final amount, settlement date',
   },
 ]
 
@@ -127,20 +276,43 @@ export default function NotificationConfigPage() {
 
       {/* Tabs */}
       <Card>
-        <div className="flex flex-wrap gap-2 p-3 border-b border-slate-100">
-          {NOTIFS.map(n => (
-            <button
-              key={n.type}
-              onClick={() => setActiveTab(n.type)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition ${
-                activeTab === n.type
-                  ? 'bg-brand-50 text-brand-700 border-brand-200'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {n.title}
-            </button>
-          ))}
+        <div className="p-3 border-b border-slate-100 space-y-3">
+          <div>
+            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">HR / Admin</div>
+            <div className="flex flex-wrap gap-2">
+              {NOTIFS.filter(n => n.audience === 'HR').map(n => (
+                <button
+                  key={n.type}
+                  onClick={() => setActiveTab(n.type)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition ${
+                    activeTab === n.type
+                      ? 'bg-brand-50 text-brand-700 border-brand-200'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {n.title}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Employee</div>
+            <div className="flex flex-wrap gap-2">
+              {NOTIFS.filter(n => n.audience === 'Employee').map(n => (
+                <button
+                  key={n.type}
+                  onClick={() => setActiveTab(n.type)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition ${
+                    activeTab === n.type
+                      ? 'bg-brand-50 text-brand-700 border-brand-200'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {n.title}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="p-5 space-y-5">
@@ -150,8 +322,18 @@ export default function NotificationConfigPage() {
               <Bell size={14} className="text-brand-600" />
             </div>
             <h3 className="text-sm font-semibold text-slate-700">{current.title}</h3>
+            <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+              current.audience === 'HR' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+            }`}>
+              {current.audience === 'HR' ? 'Sent to HR' : 'Sent to Employee'}
+            </span>
           </div>
           <p className="text-xs text-slate-500">{current.description}</p>
+          {current.audience === 'Employee' && (
+            <div className="text-xs text-slate-500 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <strong>Recipient:</strong> The employee is automatically set as TO. The TO list below is additive (for extra recipients).
+            </div>
+          )}
           {current.extraNote && (
             <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
               <strong>Note:</strong> {current.extraNote}

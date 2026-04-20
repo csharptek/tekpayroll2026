@@ -124,6 +124,11 @@ fnfRouter.post('/:id/approve', async (req, res) => {
     description: `F&F approved for ${updated.employee.name}`,
   })
 
+  try {
+    const { sendFnfReadyEmail } = await import('../services/employeeNotifications')
+    sendFnfReadyEmail(settlement.employeeId, Number(settlement.netPayable), new Date()).catch(e => console.error('[FNF EMAIL]', e))
+  } catch {}
+
   res.json({ success: true, data: updated })
 })
 

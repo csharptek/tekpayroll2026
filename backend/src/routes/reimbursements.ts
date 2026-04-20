@@ -18,6 +18,10 @@ reimbursementRouter.post('/', async (req, res) => {
   const item = await prisma.reimbursement.create({
     data: { cycleId, employeeId, category, amount, notes, addedBy: req.user!.id, addedByName: req.user!.name },
   });
+  try {
+    const { sendReimbursementAddedEmail } = await import('../services/employeeNotifications')
+    sendReimbursementAddedEmail(item.id).catch(e => console.error('[REIMB EMAIL]', e))
+  } catch {}
   res.json({ success: true, data: item });
 });
 

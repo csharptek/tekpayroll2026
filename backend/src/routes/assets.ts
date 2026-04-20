@@ -306,14 +306,18 @@ assetRouter.post('/:id/assign', requireHR, async (req, res, next) => {
     })
 
     // Send email (non-blocking)
-    sendAssetAssignedEmail(
-      employee.email,
-      employee.name,
-      asset.name,
-      asset.assetCode,
-      asset.categoryId,
-      assignedDateValue
-    ).catch(() => {})
+    try {
+      const { sendAssetAssignedNotif } = await import('../services/employeeNotifications')
+      sendAssetAssignedNotif(
+        employee.email,
+        employee.name,
+        asset.name,
+        asset.assetCode,
+        asset.categoryId,
+        assignedDateValue,
+        condition,
+      ).catch(() => {})
+    } catch {}
 
     res.status(201).json(assignment)
   } catch (e) { next(e) }

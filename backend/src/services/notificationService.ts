@@ -1,11 +1,27 @@
 import { prisma } from '../utils/prisma'
 
 export type NotifType =
+  // HR/Admin notifications
   | 'LEAVE_APPLIED'
   | 'RESIGNATION_SUBMITTED'
   | 'LWD_REMINDER'
   | 'ALL_CLEARANCE_DONE'
   | 'RESIGNATION_WITHDRAWN'
+  | 'LEAVE_CANCELLED_BY_EMP'
+  | 'LEAVE_CANCELLATION_REQUEST'
+  // Employee notifications
+  | 'LEAVE_APPROVED'
+  | 'LEAVE_DECLINED'
+  | 'LEAVE_AUTO_APPROVED'
+  | 'LEAVE_CANCELLATION_APPROVED'
+  | 'LEAVE_CANCELLATION_DECLINED'
+  | 'RESIGNATION_ACKNOWLEDGED'
+  | 'RESIGNATION_ACCEPTED'
+  | 'WITHDRAWAL_APPROVED'
+  | 'LOAN_CREATED'
+  | 'REIMBURSEMENT_ADDED'
+  | 'ASSET_ASSIGNED'
+  | 'FNF_SETTLEMENT_READY'
 
 export async function getNotifConfig(type: NotifType) {
   const keys = [

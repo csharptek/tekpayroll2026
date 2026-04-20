@@ -36,6 +36,12 @@ loanRouter.post('/', requireSuperAdmin, async (req, res) => {
     },
   });
   await createAuditLog({ user: req.user!, action: AuditAction.LOAN_CREATE, recordId: loan.id, targetEmployeeId: employeeId, description: `Created loan of ₹${principalAmount} for employee` });
+
+  try {
+    const { sendLoanCreatedEmail } = await import('../services/employeeNotifications')
+    sendLoanCreatedEmail(loan.id).catch(e => console.error('[LOAN EMAIL]', e))
+  } catch {}
+
   res.status(201).json({ success: true, data: loan });
 });
 

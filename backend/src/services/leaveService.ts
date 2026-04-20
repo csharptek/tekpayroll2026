@@ -396,6 +396,11 @@ export async function applyLeave(params: {
 
   // Fire notification (non-blocking)
   try {
+    if (status === LeaveStatus.AUTO_APPROVED) {
+      const { sendLeaveAutoApprovedEmail } = await import('./employeeNotifications')
+      sendLeaveAutoApprovedEmail(application.id).catch(e => console.error('[LEAVE AUTO EMAIL]', e))
+    }
+    // Always notify HR/manager via leave applied email (even auto-approved)
     const { sendLeaveAppliedEmail } = await import('./leaveEmailService')
     sendLeaveAppliedEmail(application.id).catch(e => console.error('[LEAVE EMAIL]', e))
   } catch (e) {
@@ -441,6 +446,11 @@ export async function approveLeave(
     await createLopFromLeave(app.employeeId, applicationId, Number(app.lopDays))
   }
 
+  try {
+    const { sendLeaveApprovedEmail } = await import('./employeeNotifications')
+    sendLeaveApprovedEmail(applicationId).catch(e => console.error('[LEAVE APPROVED EMAIL]', e))
+  } catch {}
+
   return app
 }
 
@@ -469,6 +479,11 @@ export async function declineLeave(
     data: { pendingDays: { decrement: Number(app.totalDays) } },
   })
 
+  try {
+    const { sendLeaveDeclinedEmail } = await import('./employeeNotifications')
+    sendLeaveDeclinedEmail(applicationId).catch(e => console.error('[LEAVE DECLINED EMAIL]', e))
+  } catch {}
+
   return app
 }
 
@@ -494,6 +509,10 @@ export async function requestCancellation(params: {
   if (notStarted) {
     // Auto-cancel immediately
     await cancelLeaveDirectly(applicationId, requestedById, requestedByName, LeaveStatus.CANCELLED)
+    try {
+      const { sendLeaveCancelledByEmpEmail } = await import('./employeeNotifications')
+      sendLeaveCancelledByEmpEmail(applicationId, reason || '').catch(e => console.error('[LEAVE CANCEL EMAIL]', e))
+    } catch {}
     return { autoCancelled: true }
   }
 
@@ -511,6 +530,10 @@ export async function requestCancellation(params: {
       status: CancellationStatus.PENDING,
     },
   })
+  try {
+    const { sendLeaveCancellationRequestEmail } = await import('./employeeNotifications')
+    sendLeaveCancellationRequestEmail(applicationId, reason || '').catch(e => console.error('[LEAVE CANCEL REQ EMAIL]', e))
+  } catch {}
   return { autoCancelled: false, request: req }
 }
 
@@ -633,6 +656,11 @@ export async function approveCancellationRequest(
     where: { id: requestId },
     data: { status: CancellationStatus.APPROVED, respondedById, respondedByName, respondedAt: new Date() },
   })
+
+  try {
+    const { sendLeaveCancellationApprovedEmail } = await import('./employeeNotifications')
+    sendLeaveCancellationApprovedEmail(req.applicationId, respondedByName).catch(e => console.error('[CANCEL APPROVED EMAIL]', e))
+  } catch {}
 }
 
 // ─── DECLINE CANCELLATION REQUEST ────────────────────────────────────────────
@@ -643,10 +671,16 @@ export async function declineCancellationRequest(
   respondedByName: string,
   declineReason:  string
 ) {
+  const req = await prisma.lvCancellationRequest.findUnique({ where: { id: requestId } })
+  if (!req) throw new AppError('Cancellation request not found', 404)
   await prisma.lvCancellationRequest.update({
     where: { id: requestId },
     data: { status: CancellationStatus.DECLINED, respondedById, respondedByName, respondedAt: new Date(), declineReason },
   })
+  try {
+    const { sendLeaveCancellationDeclinedEmail } = await import('./employeeNotifications')
+    sendLeaveCancellationDeclinedEmail(req.applicationId, respondedByName, declineReason).catch(e => console.error('[CANCEL DECLINED EMAIL]', e))
+  } catch {}
 }
 
 // ─── AUTO-APPROVE PENDING LEAVES ─────────────────────────────────────────────

@@ -135,6 +135,12 @@ exitRouter.post('/:id/resign', async (req, res) => {
   const hrEmails = await getHREmails()
   await sendResignationSubmittedToHR(hrEmails, emp.name, emp.employeeCode, fmtDate(now), fmtDate(expectedLwd))
 
+  // Acknowledge to employee
+  try {
+    const { sendResignationAcknowledgedEmail } = await import('../services/employeeNotifications')
+    sendResignationAcknowledgedEmail(emp.id).catch(e => console.error('[RESIGN ACK]', e))
+  } catch {}
+
   res.json({ success: true, data: { expectedLwd, noticePeriodDays: noticeDays } })
 })
 
@@ -205,6 +211,14 @@ exitRouter.patch('/:id/details', requireHR, async (req, res) => {
 
   await prisma.employee.update({ where: { id: req.params.id }, data })
   await logHistory(emp.id, 'UPDATED', me.id, me.name, me.role, 'Exit details updated')
+
+  // When LWD is explicitly set, treat as formal acceptance
+  if (lastWorkingDay !== undefined) {
+    try {
+      const { sendResignationAcceptedEmail } = await import('../services/employeeNotifications')
+      sendResignationAcceptedEmail(emp.id).catch(e => console.error('[RESIGN ACCEPTED]', e))
+    } catch {}
+  }
 
   res.json({ success: true })
 })
@@ -352,6 +366,11 @@ exitRouter.post('/:id/withdraw', async (req, res) => {
 
   const hrEmails = await getHREmails()
   await sendWithdrawalToHR(hrEmails, emp.name, emp.employeeCode)
+
+  try {
+    const { sendWithdrawalApprovedEmail } = await import('../services/employeeNotifications')
+    sendWithdrawalApprovedEmail(emp.id).catch(e => console.error('[WITHDRAWAL APPROVED]', e))
+  } catch {}
 
   res.json({ success: true })
 })
