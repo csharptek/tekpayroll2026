@@ -24,7 +24,7 @@ const HR_NAV = [
     ]
   },
   {
-    section: 'Employees',
+    section: 'People',
     items: [
       { label: 'All Employees', icon: Users,     to: '/hr/employees' },
       { label: 'Bulk Import',   icon: Upload,    to: '/hr/import' },
@@ -33,12 +33,12 @@ const HR_NAV = [
     ]
   },
   {
-    section: 'Leave',
+    section: 'Leave & Attendance',
     items: [
       { label: 'Leave Applications', icon: CalendarCheck, to: '/hr/leaves' },
+      { label: 'Bulk Leave Entry',   icon: ClipboardList, to: '/hr/bulk-leave-entry' },
       { label: 'Public Holidays',    icon: CalendarDays,  to: '/hr/public-holidays' },
       { label: 'Leave Config',       icon: CalendarClock, to: '/hr/leave-config' },
-      { label: 'Bulk Leave Entry',   icon: ClipboardList, to: '/hr/bulk-leave-entry' },
     ]
   },
   {
@@ -50,30 +50,15 @@ const HR_NAV = [
     ]
   },
   {
-    section: 'Admin',
+    section: 'Me',
     items: [
-      { label: 'Audit Log', icon: ScrollText, to: '/hr/audit' },
-    ]
-  },
-  {
-    section: 'My Payroll',
-    items: [
-      { label: 'My Payslips', icon: FileText,   to: '/my/payslips' },
-      { label: 'My Profile',  icon: UserCircle, to: '/my/profile' },
-      { label: 'My Loans',    icon: Wallet,     to: '/my/loans' },
-    ]
-  },
-  {
-    section: 'My Leave',
-    items: [
-      { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
+      { label: 'My Payslips',    icon: FileText,    to: '/my/payslips' },
+      { label: 'My Profile',     icon: UserCircle,  to: '/my/profile' },
+      { label: 'My Loans',       icon: Wallet,      to: '/my/loans' },
+      { label: 'My Leaves',      icon: Palmtree,    to: '/my/leaves' },
       { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
-    ]
-  },
-  {
-    section: 'My Assets',
-    items: [
-      { label: 'My Assets', icon: Package, to: '/my/assets' },
+      { label: 'My Assets',      icon: Package,     to: '/my/assets' },
+      { label: 'Policies',       icon: BookOpen,    to: '/policies' },
     ]
   },
 ]
@@ -87,32 +72,33 @@ const SUPER_ADMIN_NAV = [
     ]
   },
   {
-    section: 'Employees',
+    section: 'People',
     items: [
-      { label: 'All Employees',      icon: Users,      to: '/hr/employees' },
-      { label: 'Bulk Import',        icon: Upload,     to: '/hr/import' },
-      { label: 'Bulk Edit',          icon: Edit3,      to: '/hr/employees-bulk-edit' },
-      { label: 'Bulk Edit Salaries', icon: Table2,     to: '/hr/salaries-bulk-edit' },
-      { label: 'M365 Sync',          icon: RefreshCw,  to: '/hr/sync' },
+      { label: 'All Employees', icon: Users,     to: '/hr/employees' },
+      { label: 'Bulk Import',   icon: Upload,    to: '/hr/import' },
+      { label: 'Bulk Edit',     icon: Edit3,     to: '/hr/employees-bulk-edit' },
+      { label: 'M365 Sync',     icon: RefreshCw, to: '/hr/sync' },
     ]
   },
   {
     section: 'Payroll',
     items: [
-      { label: 'Payroll Cycles',   icon: CreditCard,     to: '/hr/payroll' },
-      { label: 'Payroll Preview',  icon: FileSearch,     to: '/hr/payroll/preview' },
-      { label: 'Payslips',         icon: FileText,       to: '/hr/payslips' },
-      { label: 'Loans & Advances', icon: Wallet,     to: '/hr/loans' },
-      { label: 'F&F Settlement',   icon: GitMerge,   to: '/hr/fnf' },
+      { label: 'Payroll Cycles',      icon: CreditCard, to: '/hr/payroll' },
+      { label: 'Payroll Preview',     icon: FileSearch, to: '/hr/payroll/preview' },
+      { label: 'Payslips',            icon: FileText,   to: '/hr/payslips' },
+      { label: 'Salary Breakups',     icon: Table2,     to: '/hr/salary-breakups' },
+      { label: 'Bulk Edit Salaries',  icon: Table2,     to: '/hr/salaries-bulk-edit' },
+      { label: 'Loans & Advances',    icon: Wallet,     to: '/hr/loans' },
+      { label: 'F&F Settlement',      icon: GitMerge,   to: '/hr/fnf' },
     ]
   },
   {
-    section: 'Leave',
+    section: 'Leave & Attendance',
     items: [
       { label: 'Leave Applications', icon: CalendarCheck, to: '/hr/leaves' },
+      { label: 'Bulk Leave Entry',   icon: ClipboardList, to: '/hr/bulk-leave-entry' },
       { label: 'Public Holidays',    icon: CalendarDays,  to: '/hr/public-holidays' },
       { label: 'Leave Config',       icon: CalendarClock, to: '/hr/leave-config' },
-      { label: 'Bulk Leave Entry',   icon: ClipboardList, to: '/hr/bulk-leave-entry' },
     ]
   },
   {
@@ -124,43 +110,31 @@ const SUPER_ADMIN_NAV = [
     ]
   },
   {
-    section: 'Admin',
+    section: 'Tools',
     items: [
-      { label: 'Audit Log',        icon: ScrollText, to: '/hr/audit' },
-      { label: 'Run Tasks',          icon: Timer,      to: '/hr/run-tasks' },
-      { label: 'Configuration',    icon: Settings,   to: '/hr/config' },
-      { label: 'Notifications',    icon: Bell,       to: '/hr/notifications' },
-      { label: 'Salary Calculator (Legacy)', icon: Calculator, to: '/hr/salary-calculator' },
-      { label: 'Salary Calc (New ESIC)', icon: Calculator, to: '/hr/salary-calculator-new-esic' },
-      { label: 'Salary Breakups',       icon: Table2,     to: '/hr/salary-breakups' },
+      { label: 'Salary Calculator',         icon: Calculator, to: '/hr/salary-calculator' },
+      { label: 'Salary Calc (New ESIC)',    icon: Calculator, to: '/hr/salary-calculator-new-esic' },
+      { label: 'Run Tasks',                 icon: Timer,      to: '/hr/run-tasks' },
     ]
   },
   {
-    section: 'Company',
+    section: 'System',
     items: [
-      { label: 'Policies', icon: BookOpen, to: '/policies' },
-    ]
-  },
-  // Super Admin is also an employee
-  {
-    section: 'My Payroll',
-    items: [
-      { label: 'My Payslips', icon: FileText,   to: '/my/payslips' },
-      { label: 'My Profile',  icon: UserCircle, to: '/my/profile' },
-      { label: 'My Loans',    icon: Wallet,     to: '/my/loans' },
+      { label: 'Configuration', icon: Settings,   to: '/hr/config' },
+      { label: 'Notifications', icon: Bell,       to: '/hr/notifications' },
+      { label: 'Audit Log',     icon: ScrollText, to: '/hr/audit' },
     ]
   },
   {
-    section: 'My Leave',
+    section: 'Me',
     items: [
-      { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
+      { label: 'My Payslips',    icon: FileText,    to: '/my/payslips' },
+      { label: 'My Profile',     icon: UserCircle,  to: '/my/profile' },
+      { label: 'My Loans',       icon: Wallet,      to: '/my/loans' },
+      { label: 'My Leaves',      icon: Palmtree,    to: '/my/leaves' },
       { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
-    ]
-  },
-  {
-    section: 'My Assets',
-    items: [
-      { label: 'My Assets', icon: Package, to: '/my/assets' },
+      { label: 'My Assets',      icon: Package,     to: '/my/assets' },
+      { label: 'Policies',       icon: BookOpen,    to: '/policies' },
     ]
   },
 ]
@@ -173,30 +147,20 @@ const EMPLOYEE_NAV = [
     ]
   },
   {
+    section: 'Me',
+    items: [
+      { label: 'My Payslips',    icon: FileText,    to: '/my/payslips' },
+      { label: 'My Profile',     icon: UserCircle,  to: '/my/profile' },
+      { label: 'My Loans',       icon: Wallet,      to: '/my/loans' },
+      { label: 'My Leaves',      icon: Palmtree,    to: '/my/leaves' },
+      { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
+      { label: 'My Assets',      icon: Package,     to: '/my/assets' },
+    ]
+  },
+  {
     section: 'Company',
     items: [
       { label: 'Policies', icon: BookOpen, to: '/policies' },
-    ]
-  },
-  {
-    section: 'My Payroll',
-    items: [
-      { label: 'My Payslips',icon: FileText,        to: '/my/payslips' },
-      { label: 'My Loans',   icon: Wallet,          to: '/my/loans' },
-      { label: 'My Profile', icon: UserCircle,      to: '/my/profile' },
-    ]
-  },
-  {
-    section: 'Leave',
-    items: [
-      { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
-      { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
-    ]
-  },
-  {
-    section: 'Assets',
-    items: [
-      { label: 'My Assets', icon: Package, to: '/my/assets' },
     ]
   },
 ]
@@ -211,32 +175,21 @@ const MANAGEMENT_NAV = [
     ]
   },
   {
-    section: 'Company',
-    items: [
-      { label: 'Policies', icon: BookOpen, to: '/policies' },
-    ]
-  },
-  // Management is also an employee
-  {
-    section: 'My Payroll',
-    items: [
-      { label: 'My Payslips', icon: FileText,   to: '/my/payslips' },
-      { label: 'My Profile',  icon: UserCircle, to: '/my/profile' },
-      { label: 'My Loans',    icon: Wallet,     to: '/my/loans' },
-    ]
-  },
-  {
-    section: 'My Leave',
-    items: [
-      { label: 'My Leaves', icon: Palmtree, to: '/my/leaves' },
-      { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
-    ]
-  },
-  {
     section: 'Assets',
     items: [
       { label: 'All Assets', icon: Package, to: '/hr/assets' },
-      { label: 'My Assets',  icon: Package, to: '/my/assets' },
+    ]
+  },
+  {
+    section: 'Me',
+    items: [
+      { label: 'My Payslips',    icon: FileText,    to: '/my/payslips' },
+      { label: 'My Profile',     icon: UserCircle,  to: '/my/profile' },
+      { label: 'My Loans',       icon: Wallet,      to: '/my/loans' },
+      { label: 'My Leaves',      icon: Palmtree,    to: '/my/leaves' },
+      { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
+      { label: 'My Assets',      icon: Package,     to: '/my/assets' },
+      { label: 'Policies',       icon: BookOpen,    to: '/policies' },
     ]
   },
 ]
@@ -328,7 +281,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
                         'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
                         isActive
                           ? 'bg-white/10 text-white'
-                          : 'text-brand-300 hover:text-white hover:bg-white/5'
+                          : 'text-slate-200 hover:text-white hover:bg-white/10'
                       )}
                     >
                       <item.icon size={15} className="flex-shrink-0" />
@@ -373,7 +326,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
                           'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
                           isActive
                             ? 'bg-white/10 text-white'
-                            : 'text-brand-300 hover:text-white hover:bg-white/5'
+                            : 'text-slate-200 hover:text-white hover:bg-white/10'
                         )}
                       >
                         <item.icon size={15} className="flex-shrink-0" />
@@ -398,12 +351,12 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-white truncate">{user?.name}</p>
-              <p className="text-[10px] text-brand-400 truncate">{user?.role?.replace('_', ' ')}</p>
+              <p className="text-[10px] text-slate-400 truncate">{user?.role?.replace('_', ' ')}</p>
             </div>
             <button
               onClick={handleLogout}
               title="Sign out"
-              className="text-brand-500 hover:text-red-400 transition-colors p-1"
+              className="text-slate-400 hover:text-red-400 transition-colors p-1"
             >
               <LogOut size={14} />
             </button>
