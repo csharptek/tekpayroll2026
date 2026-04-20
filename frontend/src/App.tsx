@@ -22,6 +22,7 @@ import PayrollPreviewPage from './pages/hr/PayrollPreviewPage'
 import LopManagementPage from './pages/hr/LopManagementPage'
 import ReimbursementsPage from './pages/hr/ReimbursementsPage'
 import LoansPage from './pages/hr/LoansPage'
+import LoanDetailPage from './pages/hr/LoanDetailPage'
 import PayslipGenerationPage from './pages/hr/PayslipGenerationPage'
 import FnfPage from './pages/hr/FnfPage'
 import AuditLogPage from './pages/hr/AuditLogPage'
@@ -129,6 +130,7 @@ export default function App() {
           <Route path="payroll/:id/reimbursements" element={<RequireAuth roles={['SUPER_ADMIN']}><ReimbursementsPage /></RequireAuth>} />
           <Route path="payslips" element={<RequireAuth roles={['SUPER_ADMIN']}><PayslipGenerationPage /></RequireAuth>} />
           <Route path="loans" element={<RequireAuth roles={['SUPER_ADMIN']}><LoansPage /></RequireAuth>} />
+          <Route path="loans/:id" element={<RequireAuth roles={['SUPER_ADMIN']}><LoanDetailPage /></RequireAuth>} />
           <Route path="fnf" element={<RequireAuth roles={['SUPER_ADMIN']}><FnfPage /></RequireAuth>} />
         </Route>
 

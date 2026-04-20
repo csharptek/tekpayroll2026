@@ -137,10 +137,19 @@ export const payslipApi = {
 }
 
 export const loanApi = {
-  list: () => api.get('/api/loans'),
+  list:        (params?: any) => api.get('/api/loans', { params }),
+  pending:     ()             => api.get('/api/loans/pending'),
+  my:          ()             => api.get('/api/loans/my'),
+  get:         (id: string)   => api.get(`/api/loans/${id}`),
   forEmployee: (employeeId: string) => api.get(`/api/loans/employee/${employeeId}`),
-  create: (data: any) => api.post('/api/loans', data),
-  close: (id: string, note: string) => api.post(`/api/loans/${id}/close`, { note }),
+  request:     (data: any)    => api.post('/api/loans/request', data),
+  create:      (data: any)    => api.post('/api/loans', data),
+  approve:     (id: string, data: any) => api.post(`/api/loans/${id}/approve`, data),
+  reject:      (id: string, reason: string) => api.post(`/api/loans/${id}/reject`, { reason }),
+  update:      (id: string, data: any) => api.patch(`/api/loans/${id}`, data),
+  pauseMonth:  (id: string, sid: string, reason: string) => api.post(`/api/loans/${id}/schedule/${sid}/pause`, { reason }),
+  resumeMonth: (id: string, sid: string) => api.post(`/api/loans/${id}/schedule/${sid}/resume`, {}),
+  close:       (id: string, note: string) => api.post(`/api/loans/${id}/close`, { note }),
 }
 
 export const reportApi = {
