@@ -51,7 +51,7 @@ export default function ConfigPage() {
   useEffect(() => { if (slabs)  setPtSlabs(slabs) }, [slabs])
 
   const saveMut = useMutation({
-    mutationFn: () => configApi.update(configValues),
+    mutationFn: () => configApi.update({ ...(config as any ?? {}), ...configValues }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['system-config'] }); setSaved(true); setTimeout(() => setSaved(false), 3000) },
   })
 
