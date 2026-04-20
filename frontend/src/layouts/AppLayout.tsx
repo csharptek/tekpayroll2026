@@ -130,8 +130,9 @@ const SUPER_ADMIN_NAV = [
       { label: 'Run Tasks',          icon: Timer,      to: '/hr/run-tasks' },
       { label: 'Configuration',    icon: Settings,   to: '/hr/config' },
       { label: 'Notifications',    icon: Bell,       to: '/hr/notifications' },
-      { label: 'Salary Calculator', icon: Calculator, to: '/hr/salary-calculator' },
+      { label: 'Salary Calculator (Legacy)', icon: Calculator, to: '/hr/salary-calculator' },
       { label: 'Salary Calc (New ESIC)', icon: Calculator, to: '/hr/salary-calculator-new-esic' },
+      { label: 'Salary Breakups',       icon: Table2,     to: '/hr/salary-breakups' },
     ]
   },
   {
@@ -482,8 +483,9 @@ function usePageTitle() {
     '/hr/audit': 'Audit Log',
     '/hr/config': 'Configuration',
     '/hr/notifications': 'Notification Configuration',
-    '/hr/salary-calculator': 'Salary Calculator',
+    '/hr/salary-calculator': 'Salary Calculator (Legacy)',
     '/hr/salary-calculator-new-esic': 'Salary Calculator (New ESIC)',
+    '/hr/salary-breakups': 'Salary Breakups',
     '/hr/leaves': 'Leave Management',
     '/hr/public-holidays': 'Public Holidays',
     '/hr/leave-config': 'Leave Configuration',

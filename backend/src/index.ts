@@ -30,6 +30,7 @@ import { policiesRouter } from './routes/policies';
 import { exitRouter } from './routes/exit';
 import { assetRouter } from './routes/assets';
 import { publicRouter } from './routes/public';
+import { salaryBreakupsRouter } from './routes/salaryBreakups';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -86,6 +87,7 @@ app.use('/api/policies', policiesRouter);
 app.use('/api/exit', exitRouter);
 app.use('/api/assets', assetRouter);
 app.use('/api/public', publicRouter);
+app.use('/api/hr/salary-breakups', salaryBreakupsRouter);
 
 // ─── ERROR HANDLER ───────────────────────────────────────────────────────────
 app.use(errorHandler);

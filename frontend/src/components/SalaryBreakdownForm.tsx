@@ -199,7 +199,7 @@ export default function SalaryBreakdownForm({ initialCtc = 0, initialValues, onC
                     </tr>
                   ))}
                   <tr className="border-b border-slate-200 font-semibold bg-slate-50/50">
-                    <td className="py-2 text-slate-800">Grand Total (Gross)</td>
+                    <td className="py-2 text-slate-800">Gross Monthly</td>
                     <td className="py-2 text-right font-mono text-brand-700">
                       <Rupee amount={preview.grossMonthly} />
                     </td>
@@ -207,11 +207,42 @@ export default function SalaryBreakdownForm({ initialCtc = 0, initialValues, onC
                       <Rupee amount={preview.grossMonthly * 12} />
                     </td>
                   </tr>
-                  <tr className="border-b border-slate-100 text-slate-500">
-                    <td className="py-1.5">Employer PF (in CTC)</td>
-                    <td className="py-1.5 text-right font-mono">₹1,800</td>
-                    <td className="py-1.5 text-right font-mono"><Rupee amount={preview.employerPf} /></td>
+                  <tr className="border-b border-slate-100 text-slate-500 text-xs">
+                    <td className="py-1.5">
+                      Employee PF (12% of Basic, max ₹1,800)
+                      <span className="ml-1 text-[10px] text-blue-600 font-medium">in Gross</span>
+                    </td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={preview.employeePf} /></td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={(preview.employeePf || 0) * 12} /></td>
                   </tr>
+                  {preview.esiApplies && (
+                    <tr className="border-b border-slate-100 text-slate-500 text-xs">
+                      <td className="py-1.5">
+                        Employee ESI
+                        <span className="ml-1 text-[10px] text-blue-600 font-medium">in Gross</span>
+                      </td>
+                      <td className="py-1.5 text-right font-mono"><Rupee amount={preview.employeeEsi || 0} /></td>
+                      <td className="py-1.5 text-right font-mono"><Rupee amount={(preview.employeeEsi || 0) * 12} /></td>
+                    </tr>
+                  )}
+                  <tr className="border-b border-slate-100 text-slate-500 text-xs">
+                    <td className="py-1.5">
+                      Employer PF (12% of Basic, max ₹1,800)
+                      <span className="ml-1 text-[10px] text-green-600 font-medium">in CTC</span>
+                    </td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={preview.employerPfMonthly || preview.employerPf} /></td>
+                    <td className="py-1.5 text-right font-mono"><Rupee amount={(preview.employerPfMonthly || preview.employerPf || 0) * 12} /></td>
+                  </tr>
+                  {preview.esiApplies && (
+                    <tr className="border-b border-slate-100 text-slate-500 text-xs">
+                      <td className="py-1.5">
+                        Employer ESI
+                        <span className="ml-1 text-[10px] text-green-600 font-medium">in CTC</span>
+                      </td>
+                      <td className="py-1.5 text-right font-mono"><Rupee amount={preview.employerEsiMonthly || 0} /></td>
+                      <td className="py-1.5 text-right font-mono"><Rupee amount={(preview.employerEsiMonthly || 0) * 12} /></td>
+                    </tr>
+                  )}
                   {hasIncentive && (
                     <tr className="border-b border-slate-100 text-slate-500">
                       <td className="py-1.5">Annual/Joining Bonus ({incentivePct}%) — paid March</td>

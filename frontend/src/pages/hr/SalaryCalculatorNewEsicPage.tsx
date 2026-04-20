@@ -3,43 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Calculator, RotateCcw, Info, AlertTriangle } from 'lucide-react'
 import api from '../../services/api'
 import { Rupee } from '../../components/ui'
-
-const ri = (n: number) => Math.round(n)
-const r2 = (n: number) => Math.round(n * 100) / 100
-const EMPLOYER_PF_CAP = 1800
-
-function computeFromCtc(
-  ctc: number,
-  basicPct: number,
-  hraPct: number,
-  incentivePct: number,
-  hasIncentive: boolean,
-  mediclaim: number,
-  esiEmployerRate: number,
-  esiThreshold: number
-) {
-  // Incentive is INSIDE CTC — annual lump sum, allocated from CTC
-  const annualBonus     = hasIncentive ? ri(ctc * incentivePct / 100) : 0
-  const basicMonthly    = ri(ctc * basicPct / 100 / 12)
-  const hraMonthly      = ri(ctc * hraPct / 100 / 12)
-
-  // Both Employer PF and Employer ESI are inside CTC
-  const employerPf      = Math.min(ri(basicMonthly * 0.12), EMPLOYER_PF_CAP)
-  const esiApplies      = basicMonthly < esiThreshold
-  const employerEsi     = esiApplies ? ri(basicMonthly * esiEmployerRate) : 0
-
-  // Grand Monthly = (CTC - mediclaim) / 12 - employer PF - employer ESI
-  // Incentive stays inside CTC; it's just paid annually, not monthly
-  // Monthly gross excludes the bonus month allocation (paid in March separately)
-  const annualBonusMonthlyEquiv = hasIncentive ? ri(annualBonus / 12) : 0
-  const grandTotal      = ri((ctc - mediclaim) / 12 - annualBonusMonthlyEquiv - employerPf - employerEsi)
-
-  const transport       = ri(grandTotal * 0.02)
-  const fbp             = ri(grandTotal * 0.02)
-  const hyi             = ri(grandTotal - basicMonthly - hraMonthly - transport - fbp)
-
-  return { basic: basicMonthly, hra: hraMonthly, transport, fbp, hyi, grandTotal, employerPf, employerEsi, annualBonus, esiApplies }
-}
+import { computeSalary, ri, r2, DEFAULT_ESI_EMPLOYEE_RATE, DEFAULT_ESI_EMPLOYER_RATE, DEFAULT_ESI_THRESHOLD, SalaryFormulaOutput } from '../../utils/salaryFormula'
 
 interface Components { basic: number; hra: number; transport: number; fbp: number; hyi: number }
 
@@ -53,36 +17,39 @@ export default function SalaryCalculatorNewEsicPage() {
   const [initialized,  setInitialized]  = useState(false)
   const [grandTotal,   setGrandTotal]   = useState(0)
   const [components,   setComponents]   = useState<Components>({ basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 })
-  const [computed,     setComputed]     = useState({ employerPf: 0, employerEsi: 0, annualBonus: 0, esiApplies: false })
+  const [computed,     setComputed]     = useState<Pick<SalaryFormulaOutput, 'employerPf' | 'employerEsi' | 'annualBonus' | 'esiApplies' | 'employeePf' | 'employeeEsi' | 'netEstimate'>>({ employerPf: 0, employerEsi: 0, annualBonus: 0, esiApplies: false, employeePf: 0, employeeEsi: 0, netEstimate: 0 })
 
   const { data: sysConfig } = useQuery({
     queryKey: ['system-config'],
     queryFn: () => api.get('/api/config').then(r => r.data.data),
   })
 
-  const esiEmployeeRate = Number(sysConfig?.ESI_EMPLOYEE_RATE ?? 0.0075)
-  const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? 0.0325)
-  const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? 21000)
+  const esiEmployeeRate = Number(sysConfig?.ESI_EMPLOYEE_RATE ?? DEFAULT_ESI_EMPLOYEE_RATE)
+  const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? DEFAULT_ESI_EMPLOYER_RATE)
+  const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? DEFAULT_ESI_THRESHOLD)
 
   const esiApplies   = initialized && computed.esiApplies
-  const employeeEsi  = esiApplies ? ri(components.basic * esiEmployeeRate) : 0
-  const employeePf   = Math.min(ri(components.basic * 0.12), 1800)
-  const netEstimate  = r2(grandTotal - employeePf - employeeEsi)
+  const employeeEsi  = computed.employeeEsi
+  const employeePf   = computed.employeePf
+  const netEstimate  = computed.netEstimate
 
   function applyCtc() {
     if (ctc <= 0) return
-    const c = computeFromCtc(ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim, esiEmployerRate, esiThreshold)
+    const c = computeSalary({ ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim, esiEmployeeRate, esiEmployerRate, esiThreshold })
     setComponents({ basic: c.basic, hra: c.hra, transport: c.transport, fbp: c.fbp, hyi: c.hyi })
     setGrandTotal(c.grandTotal)
-    setComputed({ employerPf: c.employerPf, employerEsi: c.employerEsi, annualBonus: c.annualBonus, esiApplies: c.esiApplies })
+    setComputed({ employerPf: c.employerPf, employerEsi: c.employerEsi, annualBonus: c.annualBonus, esiApplies: c.esiApplies, employeePf: c.employeePf, employeeEsi: c.employeeEsi, netEstimate: c.netEstimate })
     setInitialized(true)
   }
 
   function reset() {
     setComponents({ basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0 })
-    setComputed({ employerPf: 0, employerEsi: 0, annualBonus: 0, esiApplies: false })
+    setComputed({ employerPf: 0, employerEsi: 0, annualBonus: 0, esiApplies: false, employeePf: 0, employeeEsi: 0, netEstimate: 0 })
     setGrandTotal(0); setCtc(0); setInitialized(false)
   }
+
+  // unused-var safety
+  void ri; void r2; void employeeEsi; void employeePf; void netEstimate
 
   const rows: { label: string; key: keyof Components }[] = [
     { label: 'Basic',          key: 'basic' },

@@ -104,16 +104,23 @@ export function computeSalaryStructure(
   const basicAnnual      = ri(annualCtc * basicPercent / 100)
   const basicMonthly     = ri(basicAnnual / 12)
 
-  // Employer PF inside CTC is capped at ₹1,800/mo (₹21,600/yr) for CTC deduction purposes
+  // ── NEW ESIC RULE: ESI applies when Basic < threshold ────────────────────
+  const esiApplies = basicMonthly > 0 && basicMonthly < esiConfig.threshold
+
+  // Employer PF (inside CTC, capped at ₹1,800/mo)
   const EMPLOYER_PF_CTC_CAP    = 1800
   const employerPfInCtcMonthly = Math.min(ri(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
   const employerPfInCtcAnnual  = employerPfInCtcMonthly * 12
 
-  // Grand Total = CTC - capped Employer PF - Bonus - Mediclaim
-  // Grand Total = CTC - Annual Bonus - Employer PF (capped) - Mediclaim
-  const grandTotalMonthly = ri((annualCtc - annualBonus - employerPfInCtcAnnual - mediclaim) / 12)
+  // Employer ESI (inside CTC, computed from Basic)
+  const employerEsiInCtcMonthly = esiApplies ? ri(basicMonthly * esiConfig.employerRate) : 0
+  const employerEsiInCtcAnnual  = employerEsiInCtcMonthly * 12
 
-  // Actual Employer PF (uncapped) — shown informally outside CTC
+  // Grand Total = (CTC − Mediclaim) / 12 − Bonus/12 − Employer PF − Employer ESI
+  const annualBonusMonthly = hasIncentive ? ri(annualBonus / 12) : 0
+  const grandTotalMonthly = ri((annualCtc - mediclaim) / 12 - annualBonusMonthly - employerPfInCtcMonthly - employerEsiInCtcMonthly)
+
+  // Uncapped actual employer PF (shown informally)
   const employerPfMonthly = ri(basicMonthly * 0.12)
   const employerPfAnnual  = employerPfMonthly * 12
 
@@ -130,15 +137,14 @@ export function computeSalaryStructure(
 
   const hyiMonthly = ri(grandTotalMonthly - basicMonthly - hraMonthly - transportMonthly - fbpMonthly)
 
-  // Employee PF deduction — capped at ₹1,800/mo per EPFO rules
+  // Employee PF deduction — capped at ₹1,800/mo
   const employeePfMonthly = Math.min(ri(basicMonthly * 0.12), 1800)
 
-  // ESI — base = Gross - HYI (HYI excluded per govt rules)
-  const esiBase   = ri(grandTotalMonthly - hyiMonthly)
-  const esiApplies = esiBase <= esiConfig.threshold
-  const employeeEsiMonthly = esiApplies ? ri(esiBase * esiConfig.employeeRate) : 0
-  const employerEsiMonthly = esiApplies ? ri(esiBase * esiConfig.employerRate) : 0
-  const employerEsiAnnual  = employerEsiMonthly * 12
+  // Employee ESI — base = Basic (new rule)
+  const employeeEsiMonthly = esiApplies ? ri(basicMonthly * esiConfig.employeeRate) : 0
+  const employerEsiMonthly = employerEsiInCtcMonthly
+  const employerEsiAnnual  = employerEsiInCtcAnnual
+  const esiBase            = basicMonthly  // retained for backward compat; now represents ESI base = Basic
 
   return {
     annualCtc,

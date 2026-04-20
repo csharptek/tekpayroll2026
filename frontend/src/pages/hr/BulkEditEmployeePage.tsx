@@ -2,33 +2,40 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Save, CheckCircle2, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { employeeApi } from '../../services/api'
+import api from '../../services/api'
 import { PageHeader, Button, Alert } from '../../components/ui'
 import clsx from 'clsx'
+import { computeSalary, DEFAULT_ESI_EMPLOYEE_RATE, DEFAULT_ESI_EMPLOYER_RATE, DEFAULT_ESI_THRESHOLD } from '../../utils/salaryFormula'
 
-// ─── SALARY CALCULATOR ───────────────────────────────────────────────────────
+// ─── SALARY CALCULATOR (uses shared New ESIC formula) ────────────────────────
 
-function calcSalary(ctc: number, hasIncentive: boolean, incentivePct: number,
-  transport: number | null, fbp: number | null, mediclaim: number) {
+interface EsiCfg { emp: number; empr: number; thr: number }
+
+function calcSalary(
+  ctc: number, hasIncentive: boolean, incentivePct: number,
+  transport: number | null, fbp: number | null, mediclaim: number,
+  basicPct: number, hraPct: number, esi: EsiCfg
+) {
   if (!ctc || ctc <= 0) return null
-  const EMPLOYER_PF  = 21600
-  const basicMonthly = (ctc * 0.45) / 12
-  const hraMonthly   = (ctc * 0.35) / 12
-  const annualBonus  = hasIncentive ? ctc * incentivePct / 100 : 0
-  const grandTotalM  = (ctc - annualBonus - EMPLOYER_PF - mediclaim) / 12
-  const transportM   = transport != null ? transport : grandTotalM * 0.02
-  const fbpM         = fbp       != null ? fbp       : grandTotalM * 0.02
-  const hyiMonthly   = grandTotalM - basicMonthly - hraMonthly - transportM - fbpM
-  const empPf        = Math.min(basicMonthly * 0.12, 1800)
+  const c = computeSalary({
+    ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim,
+    transportOverride: transport, fbpOverride: fbp,
+    esiEmployeeRate: esi.emp, esiEmployerRate: esi.empr, esiThreshold: esi.thr,
+  })
   return {
-    basicMonthly:  Math.round(basicMonthly),
-    hraMonthly:    Math.round(hraMonthly),
-    transportM:    Math.round(transportM),
-    fbpM:          Math.round(fbpM),
-    hyiMonthly:    Math.round(hyiMonthly),
-    grandTotalM:   Math.round(grandTotalM),
-    annualBonus:   Math.round(annualBonus),
-    empPf:         Math.round(empPf),
-    netMonthly:    Math.round(grandTotalM - empPf),
+    basicMonthly:  c.basic,
+    hraMonthly:    c.hra,
+    transportM:    c.transport,
+    fbpM:          c.fbp,
+    hyiMonthly:    c.hyi,
+    grandTotalM:   c.grandTotal,
+    annualBonus:   c.annualBonus,
+    empPf:         c.employeePf,
+    empEsi:        c.employeeEsi,
+    employerPf:    c.employerPf,
+    employerEsi:   c.employerEsi,
+    esiApplies:    c.esiApplies,
+    netMonthly:    Math.round(c.netEstimate),
   }
 }
 
@@ -44,6 +51,7 @@ interface Row {
   annualCtc: number; hasIncentive: boolean; incentivePercent: number
   transportMonthly: number | null; fbpMonthly: number | null
   mediclaim: number; tdsMonthly: number
+  basicPercent: number; hraPercent: number
   dirty: boolean; saved: boolean; error: string
 }
 
@@ -80,7 +88,17 @@ export default function BulkEditEmployeePage() {
   const [showBreakdown, setShowBreakdown] = useState(false)
   const [saving, setSaving]         = useState(false)
   const [saveResult, setSaveResult] = useState<{ saved: number; errors: number } | null>(null)
-  const initialised = useRef(false)  // KEY: only populate rows once, never overwrite edits
+  const initialised = useRef(false)
+
+  const { data: sysConfig } = useQuery({
+    queryKey: ['system-config'],
+    queryFn: () => api.get('/api/config').then(r => r.data.data),
+  })
+  const esiCfg: EsiCfg = {
+    emp:  Number(sysConfig?.ESI_EMPLOYEE_RATE ?? DEFAULT_ESI_EMPLOYEE_RATE),
+    empr: Number(sysConfig?.ESI_EMPLOYER_RATE ?? DEFAULT_ESI_EMPLOYER_RATE),
+    thr:  Number(sysConfig?.ESI_THRESHOLD     ?? DEFAULT_ESI_THRESHOLD),
+  }
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ['employees-bulk'],
@@ -109,6 +127,8 @@ export default function BulkEditEmployeePage() {
       fbpMonthly:       e.fbpMonthly != null ? Number(e.fbpMonthly) : null,
       mediclaim:        Number(e.mediclaim) || 0,
       tdsMonthly:       Number(e.tdsMonthly) || 0,
+      basicPercent:     Number(e.basicPercent) || 45,
+      hraPercent:       Number(e.hraPercent) || 35,
       dirty: false, saved: false, error: '',
     })))
   }, [employees])
@@ -232,7 +252,8 @@ export default function BulkEditEmployeePage() {
             <tbody>
               {rows.map((row, idx) => {
                 const calc = calcSalary(row.annualCtc, row.hasIncentive,
-                  row.incentivePercent, row.transportMonthly, row.fbpMonthly, row.mediclaim)
+                  row.incentivePercent, row.transportMonthly, row.fbpMonthly, row.mediclaim,
+                  row.basicPercent, row.hraPercent, esiCfg)
 
                 return (
                   <tr key={row.id} className={clsx(

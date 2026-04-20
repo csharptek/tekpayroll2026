@@ -4,9 +4,11 @@ import { useAuthStore } from '../../store/authStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, RefreshCw, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { employeeApi } from '../../services/api'
+import api from '../../services/api'
 import { PageHeader, Button, Alert, Skeleton, Rupee } from '../../components/ui'
 import { DatePicker } from '../../components/DatePicker'
 import clsx from 'clsx'
+import { computeSalary, DEFAULT_ESI_EMPLOYEE_RATE, DEFAULT_ESI_EMPLOYER_RATE, DEFAULT_ESI_THRESHOLD } from '../../utils/salaryFormula'
 
 const STATES = [
   'Andhra Pradesh','Assam','Bihar','Chandigarh','Chhattisgarh','Delhi',
@@ -48,25 +50,32 @@ interface EmpRow {
 
 function r2(n: number) { return Math.round(n * 100) / 100 }
 
-function computeBreakdown(row: EmpRow) {
+interface EsiCfg { emp: number; empr: number; thr: number }
+
+function computeBreakdown(row: EmpRow, esi: EsiCfg) {
   if (!row.annualCtc || row.annualCtc <= 0) return null
-  const ctc        = row.annualCtc
-  const incentive  = row.hasIncentive ? r2(ctc * row.incentivePercent / 100) : 0
-  const mediclaim  = row.mediclaim || 0
-  const basicA     = r2(ctc * 0.45)
-  const basicM     = r2(basicA / 12)
-  // Employer PF = min(Basic × 12%, 1800/mo) — not hardcoded
-  const emplPfM    = Math.min(r2(basicM * 0.12), 1800)
-  const emplPf     = r2(emplPfM * 12)
-  const hraA       = r2(ctc * 0.35)
-  const hraM       = r2(hraA / 12)
-  const grandTotal = r2((ctc - incentive - emplPf - mediclaim) / 12)
-  const transport  = row.transportMonthly ?? r2(grandTotal * 0.02)
-  const fbp        = row.fbpMonthly       ?? r2(grandTotal * 0.02)
-  // Employee PF = min(Basic × 12%, 1800/mo) — same rule
-  const empPf      = Math.min(r2(basicM * 0.12), 1800)
-  const net        = r2(grandTotal - empPf)
-  return { basicM, hraM, transport, fbp, grandTotal, incentive, empPf, net }
+  const basicPct = (row as any).basicPercent ?? 45
+  const hraPct   = (row as any).hraPercent   ?? 35
+  const c = computeSalary({
+    ctc: row.annualCtc,
+    basicPct, hraPct,
+    incentivePct: row.incentivePercent,
+    hasIncentive: row.hasIncentive,
+    mediclaim: row.mediclaim || 0,
+    transportOverride: row.transportMonthly,
+    fbpOverride: row.fbpMonthly,
+    esiEmployeeRate: esi.emp,
+    esiEmployerRate: esi.empr,
+    esiThreshold: esi.thr,
+  })
+  return {
+    basicM: c.basic, hraM: c.hra, transport: c.transport, fbp: c.fbp,
+    grandTotal: c.grandTotal, incentive: c.annualBonus,
+    empPf: c.employeePf, empEsi: c.employeeEsi,
+    employerPf: c.employerPf, employerEsi: c.employerEsi,
+    esiApplies: c.esiApplies,
+    net: c.netEstimate,
+  }
 }
 
 function fmt(n: number) {
@@ -87,6 +96,16 @@ export default function BulkEditEmployeesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [saveProgress, setSaveProgress] = useState<{ current: number; total: number } | null>(null)
   const initialised = useRef(false)   // only populate rows once — never overwrite edits
+
+  const { data: sysConfig } = useQuery({
+    queryKey: ['system-config'],
+    queryFn: () => api.get('/api/config').then(r => r.data.data),
+  })
+  const esiCfg: EsiCfg = {
+    emp:  Number(sysConfig?.ESI_EMPLOYEE_RATE ?? DEFAULT_ESI_EMPLOYEE_RATE),
+    empr: Number(sysConfig?.ESI_EMPLOYER_RATE ?? DEFAULT_ESI_EMPLOYER_RATE),
+    thr:  Number(sysConfig?.ESI_THRESHOLD     ?? DEFAULT_ESI_THRESHOLD),
+  }
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ['employees-all'],
@@ -355,7 +374,7 @@ export default function BulkEditEmployeesPage() {
           </thead>
           <tbody>
             {rows.map(row => {
-              const bd = computeBreakdown(row)
+              const bd = computeBreakdown(row, esiCfg)
               return (
                 <tr
                   key={row.id}
@@ -519,25 +538,25 @@ export default function BulkEditEmployeesPage() {
           {[
             {
               label: 'Total Monthly Gross',
-              value: rows.reduce((s, r) => s + (computeBreakdown(r)?.grandTotal || 0), 0),
+              value: rows.reduce((s, r) => s + (computeBreakdown(r, esiCfg)?.grandTotal || 0), 0),
               color: 'text-slate-800',
             },
             {
               label: 'Total Annual Bonus',
               value: rows.reduce((s, r) => {
-                const bd = computeBreakdown(r)
+                const bd = computeBreakdown(r, esiCfg)
                 return s + (r.hasIncentive && bd ? bd.incentive : 0)
               }, 0),
               color: 'text-amber-700',
             },
             {
               label: 'Total Employee PF/mo',
-              value: rows.reduce((s, r) => s + (computeBreakdown(r)?.empPf || 0), 0),
+              value: rows.reduce((s, r) => s + (computeBreakdown(r, esiCfg)?.empPf || 0), 0),
               color: 'text-red-600',
             },
             {
               label: 'Total Net Payable/mo',
-              value: rows.reduce((s, r) => s + (computeBreakdown(r)?.net || 0), 0),
+              value: rows.reduce((s, r) => s + (computeBreakdown(r, esiCfg)?.net || 0), 0),
               color: 'text-emerald-700',
             },
           ].map(({ label, value, color }) => (
