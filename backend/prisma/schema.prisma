@@ -62,9 +62,30 @@ enum FnfStatus {
 }
 
 enum LoanStatus {
+  PENDING_APPROVAL
+  REJECTED
   ACTIVE
   CLOSED
   WRITTEN_OFF
+}
+
+enum LoanType {
+  LOAN
+  SALARY_ADVANCE
+}
+
+enum LoanScheduleStatus {
+  PENDING
+  DEDUCTED
+  PAUSED
+  SKIPPED
+}
+
+enum ReimbursementStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
 }
 
 enum AuditAction {
@@ -495,8 +516,9 @@ model Loan {
   employeeId      String
   employee        Employee        @relation(fields: [employeeId], references: [id])
 
+  type            LoanType        @default(LOAN)
   principalAmount Decimal         @db.Decimal(12, 2)
-  disbursedOn     DateTime
+  disbursedOn     DateTime?
   tenureMonths    Int
   emiAmount       Decimal         @db.Decimal(10, 2)
   interestRate    Decimal         @default(0) @db.Decimal(5, 2)
@@ -506,18 +528,54 @@ model Loan {
   outstandingBalance Decimal      @db.Decimal(12, 2)
 
   status          LoanStatus      @default(ACTIVE)
+
+  // Request/approval workflow
+  requestedAt     DateTime?
+  requestedBy     String?
+  approvedAt      DateTime?
+  approvedBy      String?
+  approvedByName  String?
+  rejectedAt      DateTime?
+  rejectedBy      String?
+  rejectionReason String?
+
+  // Closure
   closedAt        DateTime?
   closedBy        String?
   closureNote     String?
 
-  approvedBy      String
-  approvedByName  String
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
   repayments      LoanRepayment[]
+  schedule        LoanSchedule[]
 
   @@index([employeeId])
+  @@index([status])
+}
+
+model LoanSchedule {
+  id             String             @id @default(cuid())
+  loanId         String
+  loan           Loan               @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  sequenceNo     Int                // 1..tenure (updated when paused extends)
+  cycleMonth     String             // "2026-05"
+  plannedAmount  Decimal            @db.Decimal(10, 2)
+  actualAmount   Decimal            @default(0) @db.Decimal(10, 2)
+
+  status         LoanScheduleStatus @default(PENDING)
+  pauseReason    String?
+  pausedBy       String?
+  pausedByName   String?
+  pausedAt       DateTime?
+
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([loanId, cycleMonth])
+  @@index([loanId])
+  @@index([cycleMonth])
   @@index([status])
 }
 

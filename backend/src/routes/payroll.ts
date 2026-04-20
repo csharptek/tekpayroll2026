@@ -363,9 +363,22 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
 // ─── LOCK CYCLE ───────────────────────────────────────────────────────────────
 
 payrollRouter.post('/cycles/:id/lock', requireSuperAdmin, async (req, res) => {
-  const cycle = await prisma.payrollCycle.findUnique({ where: { id: req.params.id } })
+  const cycle = await prisma.payrollCycle.findUnique({
+    where: { id: req.params.id },
+    include: { entries: { select: { id: true, employeeId: true } } },
+  })
   if (!cycle) throw new AppError('Payroll cycle not found', 404)
   if (cycle.status !== PayrollStatus.CALCULATED) throw new AppError('Only calculated cycles can be locked', 400)
+
+  // Apply loan deductions to schedule — idempotent: only PENDING rows for this month are touched
+  const { applyLoanDeductionToSchedule } = await import('../services/payrollEngine')
+  for (const entry of cycle.entries) {
+    await applyLoanDeductionToSchedule({
+      employeeId:   entry.employeeId,
+      payrollMonth: cycle.payrollMonth,
+      entryId:      entry.id,
+    })
+  }
 
   const updated = await prisma.payrollCycle.update({
     where: { id: req.params.id },
@@ -383,12 +396,35 @@ payrollRouter.post('/cycles/:id/unlock', requireSuperAdmin, async (req, res) => 
   if (!cycle) throw new AppError('Payroll cycle not found', 404)
   if (cycle.status !== PayrollStatus.LOCKED) throw new AppError('Only locked cycles can be unlocked', 400)
 
+  // Reverse loan deductions applied on lock — restore balances + mark rows PENDING again
+  const applied = await prisma.loanRepayment.findMany({
+    where: { cycleMonth: cycle.payrollMonth },
+    include: { loan: true },
+  })
+  for (const rep of applied) {
+    await prisma.$transaction(async (tx) => {
+      await tx.loan.update({
+        where: { id: rep.loanId },
+        data: {
+          totalRepaid:        { decrement: rep.amount },
+          outstandingBalance: { increment: rep.amount },
+          ...(rep.loan.status === 'CLOSED' ? { status: 'ACTIVE', closedAt: null, closureNote: null } : {}),
+        },
+      })
+      await tx.loanSchedule.updateMany({
+        where: { loanId: rep.loanId, cycleMonth: cycle.payrollMonth, status: 'DEDUCTED' },
+        data:  { status: 'PENDING', actualAmount: 0 },
+      })
+      await tx.loanRepayment.delete({ where: { id: rep.id } })
+    })
+  }
+
   const updated = await prisma.payrollCycle.update({
     where: { id: req.params.id },
     data: {
-      status: PayrollStatus.CALCULATED,
-      unlockedAt: new Date(),
-      unlockedBy: req.user!.id,
+      status:       PayrollStatus.CALCULATED,
+      unlockedAt:   new Date(),
+      unlockedBy:   req.user!.id,
       unlockReason: req.body.reason,
     },
   })

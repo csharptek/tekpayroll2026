@@ -227,13 +227,88 @@ export async function computePt(grandTotalMonthly: number, state: string): Promi
 
 // ─── LOAN DEDUCTION ──────────────────────────────────────────────────────────
 
-export async function computeLoanDeduction(employeeId: string): Promise<number> {
-  const loans = await prisma.loan.findMany({ where: { employeeId, status: 'ACTIVE' } })
+/**
+ * Returns loan deduction for a specific payroll month based on the schedule
+ * (PENDING entries only). Paused/deducted entries are skipped.
+ */
+export async function computeLoanDeduction(employeeId: string, payrollMonth?: string): Promise<number> {
+  if (!payrollMonth) {
+    // Fallback for callers that don't pass month — legacy behaviour (flat EMI sum for ACTIVE loans)
+    const loans = await prisma.loan.findMany({ where: { employeeId, status: 'ACTIVE' } })
+    let total = 0
+    for (const loan of loans) {
+      total += Math.min(Number(loan.emiAmount), Number(loan.outstandingBalance))
+    }
+    return r2(total)
+  }
+
+  // Schedule-driven: sum PENDING entries for this month across all of the
+  // employee's ACTIVE loans, capped at each loan's outstanding balance.
+  const entries = await prisma.loanSchedule.findMany({
+    where: {
+      cycleMonth: payrollMonth,
+      status:     'PENDING',
+      loan:       { employeeId, status: 'ACTIVE' },
+    },
+    include: { loan: true },
+  })
+
   let total = 0
-  for (const loan of loans) {
-    total += Math.min(Number(loan.emiAmount), Number(loan.outstandingBalance))
+  for (const e of entries) {
+    total += Math.min(Number(e.plannedAmount), Number(e.loan.outstandingBalance))
   }
   return r2(total)
+}
+
+/**
+ * Called after a payroll entry is committed — marks the month's schedule rows
+ * as DEDUCTED, increments loan.totalRepaid, decrements outstandingBalance,
+ * and auto-CLOSES the loan if balance hits zero.
+ */
+export async function applyLoanDeductionToSchedule(opts: {
+  employeeId:   string
+  payrollMonth: string
+  entryId:      string
+}): Promise<void> {
+  const entries = await prisma.loanSchedule.findMany({
+    where: {
+      cycleMonth: opts.payrollMonth,
+      status:     'PENDING',
+      loan:       { employeeId: opts.employeeId, status: 'ACTIVE' },
+    },
+    include: { loan: true },
+  })
+
+  for (const e of entries) {
+    const outstanding = Number(e.loan.outstandingBalance)
+    if (outstanding <= 0) continue
+    const applied = Math.min(Number(e.plannedAmount), outstanding)
+
+    await prisma.$transaction(async (tx) => {
+      await tx.loanSchedule.update({
+        where: { id: e.id },
+        data:  { status: 'DEDUCTED', actualAmount: applied },
+      })
+      const newOutstanding = Math.max(0, outstanding - applied)
+      await tx.loan.update({
+        where: { id: e.loanId },
+        data: {
+          totalRepaid:        { increment: applied },
+          outstandingBalance: newOutstanding,
+          ...(newOutstanding === 0 ? { status: 'CLOSED', closedAt: new Date(), closureNote: 'Auto-closed: fully repaid' } : {}),
+        },
+      })
+      await tx.loanRepayment.create({
+        data: {
+          loanId:     e.loanId,
+          entryId:    opts.entryId,
+          amount:     applied,
+          cycleMonth: opts.payrollMonth,
+          paidOn:     new Date(),
+        },
+      })
+    })
+  }
 }
 
 // ─── IS BONUS MONTH (March = month 3) ────────────────────────────────────────
@@ -364,7 +439,7 @@ export async function calculatePayrollForEmployee(params: {
   const lopAmount       = computeLop(salary.grandTotalMonthly, proration.totalDays, params.lopDays)
   const esi             = salary.employeeEsiMonthly
   const pt              = await computePt(salary.grandTotalMonthly, params.state)
-  const loanDeduction   = await computeLoanDeduction(params.employeeId)
+  const loanDeduction   = await computeLoanDeduction(params.employeeId, params.payrollMonth)
   const bonusMonth      = isBonusMonth(params.payrollMonth)
   const annualBonus     = bonusMonth ? salary.annualBonus : 0
 
