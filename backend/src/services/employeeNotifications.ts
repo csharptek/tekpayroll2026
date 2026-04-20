@@ -393,7 +393,7 @@ export async function sendLoanCreatedEmail(loanId: string) {
     amount: fmtINR(Number(loan.principalAmount)),
     emi: fmtINR(Number(loan.emiAmount)),
     tenure: String(loan.tenureMonths),
-    disbursedOn: fmtDate(loan.disbursedOn),
+    disbursedOn: loan.disbursedOn ? fmtDate(loan.disbursedOn) : '—',
     purpose: loan.purpose || '',
   }
   const body = `
