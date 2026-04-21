@@ -174,11 +174,15 @@ leaveRouter.get('/balance/:employeeId', requireHR, async (req, res) => {
 leaveRouter.post('/apply', async (req, res) => {
   const {
     leaveKind, startDate, endDate, isHalfDay, halfDaySlot,
-    reasonId, reasonLabel, customReason,
+    reasonId, reasonLabel, customReason, description,
   } = req.body
 
   if (!leaveKind || !startDate || !reasonLabel) {
     throw new AppError('leaveKind, startDate, and reasonLabel are required', 400)
+  }
+
+  if (!description || description.trim().split(/\s+/).filter(Boolean).length < 10) {
+    throw new AppError('Description must be at least 10 words', 400)
   }
 
   const toUtcDay = (s: string) => new Date(s.slice(0, 10) + 'T00:00:00.000Z')
@@ -192,7 +196,7 @@ leaveRouter.post('/apply', async (req, res) => {
     endDate:      end,
     isHalfDay:    Boolean(isHalfDay),
     halfDaySlot:  halfDaySlot as HalfDaySlot | undefined,
-    reasonId, reasonLabel, customReason,
+    reasonId, reasonLabel, customReason, description,
   })
 
   res.status(201).json({ success: true, data: application })

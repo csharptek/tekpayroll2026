@@ -72,8 +72,9 @@ export default function MyLeavesPage() {
   const [form, setForm] = useState({
     leaveKind: 'SICK', startDate: '', endDate: '',
     isHalfDay: false, halfDaySlot: 'FIRST',
-    reasonId: '', reasonLabel: '', customReason: '',
+    reasonId: '', reasonLabel: '', customReason: '', description: '',
   })
+  const [plannedSuggestion, setPlannedSuggestion] = useState(false)
 
   const { data: balData }   = useQuery({ queryKey: ['my-leave-balance'], queryFn: () => leaveApi.myBalance().then(r => r.data.data) })
   const { data: reasons }   = useQuery({ queryKey: ['leave-reasons', form.leaveKind], queryFn: () => leaveApi.reasons(form.leaveKind).then(r => r.data.data) })
@@ -85,7 +86,8 @@ export default function MyLeavesPage() {
     onSuccess: () => {
       setSuccess('Leave application submitted successfully.')
       setShowApply(false)
-      setForm({ leaveKind: 'SICK', startDate: '', endDate: '', isHalfDay: false, halfDaySlot: 'FIRST', reasonId: '', reasonLabel: '', customReason: '' })
+      setForm({ leaveKind: 'SICK', startDate: '', endDate: '', isHalfDay: false, halfDaySlot: 'FIRST', reasonId: '', reasonLabel: '', customReason: '', description: '' })
+      setPlannedSuggestion(false)
       qc.invalidateQueries({ queryKey: ['my-leave-balance'] })
       qc.invalidateQueries({ queryKey: ['my-applications'] })
     },
@@ -126,6 +128,10 @@ export default function MyLeavesPage() {
     if (!form.startDate || !form.reasonLabel) { setError('Please fill all required fields'); return }
     if (!form.isHalfDay && !form.endDate) { setError('End date is required'); return }
 
+    // Description min 10 words
+    const wordCount = form.description.trim().split(/\s+/).filter(Boolean).length
+    if (wordCount < 10) { setError('Description must be at least 10 words'); return }
+
     // Client-side weekend check
     if (!form.isHalfDay) {
       const start = new Date(form.startDate)
@@ -154,6 +160,7 @@ export default function MyLeavesPage() {
       reasonId:    form.reasonId || undefined,
       reasonLabel: label,
       customReason: isOther ? form.customReason : undefined,
+      description: form.description,
     })
   }
 
@@ -238,7 +245,7 @@ export default function MyLeavesPage() {
           <div className="grid grid-cols-3 gap-2">
             {['SICK', 'CASUAL', 'PLANNED'].map(k => (
               <button key={k} type="button"
-                onClick={() => setForm(f => ({ ...f, leaveKind: k, reasonId: '', reasonLabel: '' }))}
+                onClick={() => { setForm(f => ({ ...f, leaveKind: k, reasonId: '', reasonLabel: '' })); setPlannedSuggestion(false) }}
                 className={clsx(
                   'py-2 px-3 rounded-xl text-xs font-semibold border transition-colors',
                   form.leaveKind === k
@@ -257,6 +264,20 @@ export default function MyLeavesPage() {
               {form.leaveKind === 'SICK' ? ' Backdated sick leave will be auto-approved.' : ''}
               {form.leaveKind === 'CASUAL' ? ' Backdated casual leave requires manual HR approval.' : ''}
             </p>
+          )}
+
+          {plannedSuggestion && (
+            <div className="bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 flex items-start gap-2">
+              <span className="text-violet-500 mt-0.5">💡</span>
+              <div className="flex-1">
+                <p className="text-xs text-violet-700 font-medium">Switch to Planned Leave?</p>
+                <p className="text-xs text-violet-600 mt-0.5">Your start date is 7+ days away. Planned leave is recommended.</p>
+                <button
+                  className="mt-1.5 text-xs font-semibold text-violet-700 underline"
+                  onClick={() => { setForm(f => ({ ...f, leaveKind: 'PLANNED', reasonId: '', reasonLabel: '' })); setPlannedSuggestion(false) }}
+                >Switch to Planned Leave</button>
+              </div>
+            </div>
           )}
 
           {/* Half Day Toggle */}
@@ -301,7 +322,20 @@ export default function MyLeavesPage() {
               </label>
               <DatePicker
                 value={form.startDate}
-                onChange={v => setForm(f => ({ ...f, startDate: v, endDate: v }))}
+                onChange={v => {
+                  // If ≥7 days ahead and not already PLANNED, suggest
+                  if (v) {
+                    const today2 = new Date(); today2.setHours(0,0,0,0)
+                    const sel = new Date(v + 'T00:00:00')
+                    const diff = Math.round((sel.getTime() - today2.getTime()) / 86400000)
+                    if (diff >= 7 && form.leaveKind !== 'PLANNED') {
+                      setPlannedSuggestion(true)
+                    } else {
+                      setPlannedSuggestion(false)
+                    }
+                  }
+                  setForm(f => ({ ...f, startDate: v, endDate: v }))
+                }}
               />
             </div>
             {!form.isHalfDay && (
@@ -341,6 +375,23 @@ export default function MyLeavesPage() {
               />
             </div>
           )}
+
+          {/* Description — always required, min 10 words */}
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">
+              Description <span className="text-red-400">*</span>
+              <span className="ml-1 text-slate-400 font-normal">(min 10 words)</span>
+            </label>
+            <textarea className="input w-full text-sm" rows={3}
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="Provide details about your leave (minimum 10 words)…"
+            />
+            {form.description.trim().length > 0 && (() => {
+              const wc = form.description.trim().split(/\s+/).filter(Boolean).length
+              return wc < 10 ? <p className="text-xs text-red-500 mt-1">{wc}/10 words</p> : null
+            })()}
+          </div>
 
           <div className="flex gap-3 justify-end pt-1">
             <Button variant="secondary" onClick={() => setShowApply(false)}>Cancel</Button>

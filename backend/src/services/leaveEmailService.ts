@@ -61,7 +61,7 @@ export async function sendLeaveAppliedEmail(applicationId: string) {
     toDate:         fmtDate(app.endDate),
     leaveType:      leaveTypeStr,
     leaveReason:    app.reasonLabel,
-    description:    app.customReason || '',
+    description:    (app as any).description || app.customReason || '',
     appliedDateTime: fmtDateTime(app.createdAt),
     leaveCategory:  category,
   }
@@ -80,7 +80,7 @@ export async function sendLeaveAppliedEmail(applicationId: string) {
       <tr><td style="padding:4px 0;color:#64748b">To</td><td style="color:#0f172a;font-weight:600">${vars.toDate}</td></tr>
       <tr><td style="padding:4px 0;color:#64748b">Leave Type</td><td style="color:#0f172a;font-weight:600">${vars.leaveType}</td></tr>
       <tr><td style="padding:4px 0;color:#64748b">Reason</td><td style="color:#0f172a;font-weight:600">${vars.leaveReason}</td></tr>
-      ${vars.description ? `<tr><td style="padding:4px 0;color:#64748b;vertical-align:top">Description</td><td style="color:#0f172a">${vars.description}</td></tr>` : ''}
+      ${vars.description ? `<tr><td style="padding:4px 0;color:#64748b;vertical-align:top">Description</td><td style="color:#0f172a">${vars.description}</td></tr>` : '<tr><td style="padding:4px 0;color:#64748b;vertical-align:top">Description</td><td style="color:#94a3b8;font-style:italic">Not provided</td></tr>'}
       <tr><td style="padding:4px 0;color:#64748b">Applied On</td><td style="color:#0f172a;font-weight:600">${vars.appliedDateTime} IST</td></tr>
       <tr><td style="padding:4px 0;color:#64748b">Category</td><td style="color:#0f172a;font-weight:600">${vars.leaveCategory}</td></tr>
     </table>

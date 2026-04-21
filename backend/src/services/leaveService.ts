@@ -308,9 +308,10 @@ export async function applyLeave(params: {
   reasonId?:    string
   reasonLabel:  string
   customReason?: string
+  description?:  string
 }) {
   const { employeeId, leaveKind, startDate, endDate, isHalfDay, halfDaySlot,
-          reasonId, reasonLabel, customReason } = params
+          reasonId, reasonLabel, customReason, description } = params
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const isBackdated = startDate < today
@@ -367,7 +368,7 @@ export async function applyLeave(params: {
     data: {
       employeeId, leaveKind, startDate, endDate, totalDays, isHalfDay,
       halfDaySlot: isHalfDay ? halfDaySlot : null,
-      reasonId, reasonLabel, customReason, isBackdated,
+      reasonId, reasonLabel, customReason, description, isBackdated,
       status, isLop, lopDays,
     },
   })

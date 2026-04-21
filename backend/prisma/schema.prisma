@@ -1134,7 +1134,7 @@ model LeavePolicy {
 
   // Advance notice in days (HR editable)
   sickAdvanceDays           Int      @default(0)
-  casualAdvanceDays         Int      @default(2)
+  casualAdvanceDays         Int      @default(1)
   plannedAdvanceDays        Int      @default(7)
 
   // Probation (SUPER_ADMIN only)
@@ -1229,6 +1229,7 @@ model LvApplication {
   reasonId        String?     // from LeaveReason
   reasonLabel     String      // stored as text (in case reason deleted later)
   customReason    String?     // free text when "Other" selected
+  description     String?     // mandatory min-10-word description from applicant
   isBackdated     Boolean     @default(false)
 
   status          LeaveStatus @default(PENDING)
