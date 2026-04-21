@@ -88,6 +88,11 @@ enum ReimbursementStatus {
   PAID
 }
 
+enum ReimbursementRequestSource {
+  EMPLOYEE
+  SUPER_ADMIN
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -424,20 +429,70 @@ model LopEntry {
 // ─── REIMBURSEMENTS ──────────────────────────────────────────────────────────
 
 model Reimbursement {
-  id          String       @id @default(cuid())
-  cycleId     String
-  cycle       PayrollCycle @relation(fields: [cycleId], references: [id])
-  employeeId  String
-  employee    Employee     @relation(fields: [employeeId], references: [id])
+  id            String                     @id @default(cuid())
 
-  category    String
-  amount      Decimal      @db.Decimal(10, 2)
-  notes       String?
-  addedBy     String
-  addedByName String
+  employeeId    String
+  employee      Employee                   @relation(fields: [employeeId], references: [id])
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  // Cycle is set only at approval time by SA.
+  cycleId       String?
+  cycle         PayrollCycle?              @relation(fields: [cycleId], references: [id])
+
+  category      String
+  amount        Decimal                    @db.Decimal(10, 2)
+  expenseDate   DateTime?
+  description   String?
+  notes         String?
+
+  source        ReimbursementRequestSource @default(EMPLOYEE)
+  status        ReimbursementStatus        @default(PENDING)
+
+  // Label shown per-line on payslip (set at approval).
+  payslipLabel  String?
+
+  // Requested by
+  requestedBy   String
+  requestedByName String
+  requestedAt   DateTime                   @default(now())
+
+  // Approval / rejection
+  approvedBy    String?
+  approvedByName String?
+  approvedAt    DateTime?
+  rejectedBy    String?
+  rejectedByName String?
+  rejectedAt    DateTime?
+  rejectionReason String?
+
+  // Legacy — retained for back-compat with existing code paths.
+  addedBy       String
+  addedByName   String
+
+  files         ReimbursementFile[]
+
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  @@index([employeeId, status])
+  @@index([cycleId])
+  @@index([status])
+}
+
+model ReimbursementFile {
+  id              String        @id @default(cuid())
+  reimbursementId String
+  reimbursement   Reimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+
+  fileName        String
+  mimeType        String
+  sizeBytes       Int
+  blobKey         String
+  blobUrl         String        @db.Text
+
+  uploadedBy      String
+  uploadedAt      DateTime      @default(now())
+
+  @@index([reimbursementId])
 }
 
 // ─── PAYSLIPS ────────────────────────────────────────────────────────────────

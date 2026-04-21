@@ -97,7 +97,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
       })
 
       const reimbs = await prisma.reimbursement.aggregate({
-        where: { cycleId: cycle.id, employeeId: emp.id },
+        where: { cycleId: cycle.id, employeeId: emp.id, status: { in: ['APPROVED', 'PAID'] } },
         _sum: { amount: true },
       })
 
@@ -259,7 +259,7 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
       if (override.lopDays === undefined || override.reimbursements === undefined) {
         const [lopEntry, reimbs] = await Promise.all([
           prisma.lopEntry.findFirst({ where: { employeeId: emp.id, cycle: { payrollMonth } } }),
-          prisma.reimbursement.aggregate({ where: { employeeId: emp.id, cycle: { payrollMonth } }, _sum: { amount: true } }),
+          prisma.reimbursement.aggregate({ where: { employeeId: emp.id, cycle: { payrollMonth }, status: { in: ['APPROVED', 'PAID'] } }, _sum: { amount: true } }),
         ])
         if (override.lopDays === undefined)        lopDays     = lopEntry?.lopDays || 0
         if (override.reimbursements === undefined)  reimbAmount = Number(reimbs._sum.amount || 0)
