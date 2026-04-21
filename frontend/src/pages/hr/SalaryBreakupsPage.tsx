@@ -202,7 +202,7 @@ export default function SalaryBreakupsPage() {
               onClick={() => setFormat('slip')}
               className={clsx('px-2 py-1 rounded-md border text-xs transition',
                 format === 'slip' ? 'bg-brand-50 border-brand-200 text-brand-700 font-semibold' : 'border-slate-200 text-slate-500')}>
-              Slip (4-per-row)
+              PF Format (4-per-row)
             </button>
             <button
               onClick={() => setFormat('long')}
