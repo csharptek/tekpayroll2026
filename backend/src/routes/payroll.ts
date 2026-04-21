@@ -448,22 +448,95 @@ payrollRouter.post('/cycles/:id/disburse', requireSuperAdmin, async (req, res) =
   res.json({ success: true, data: updated })
 })
 
-// ─── UPDATE SINGLE ENTRY (TDS override etc) ───────────────────────────────────
+// ─── UPDATE SINGLE ENTRY — recalculate on LOP/TDS/reimbursement change ────────
 
 payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
-  const entry = await prisma.payrollEntry.findUnique({ where: { id: req.params.id } })
+  const entry = await prisma.payrollEntry.findUnique({
+    where: { id: req.params.id },
+    include: { cycle: true },
+  })
   if (!entry) throw new AppError('Entry not found', 404)
+  if (entry.cycle.status === 'LOCKED' || entry.cycle.status === 'DISBURSED') {
+    throw new AppError('Cannot edit a locked or disbursed cycle', 400)
+  }
 
-  const { tdsAmount, adjustmentNote } = req.body
+  const { lopDays, tdsAmount, reimbursements, adjustmentNote } = req.body
+
+  const emp = await prisma.employee.findUnique({ where: { id: entry.employeeId } })
+  if (!emp) throw new AppError('Employee not found', 404)
+
+  const revisionInput = await getSalaryInputForDate(emp.id, entry.cycle.cycleStart)
+
+  // Use overrides if provided, else keep existing entry values
+  const finalLopDays      = lopDays      !== undefined ? Number(lopDays)      : Number(entry.lopDays)
+  const finalTds          = tdsAmount    !== undefined ? Number(tdsAmount)    : Number(entry.tdsAmount)
+  const finalReimb        = reimbursements !== undefined ? Number(reimbursements) : Number(entry.reimbursementTotal)
+
+  const calc = await calculatePayrollForEmployee({
+    employeeId:     emp.id,
+    salaryInput:    revisionInput,
+    state:          emp.state || '',
+    joiningDate:    emp.joiningDate,
+    lastWorkingDay: emp.lastWorkingDay,
+    resignationDate:emp.resignationDate,
+    cycleStart:     entry.cycle.cycleStart,
+    cycleEnd:       entry.cycle.cycleEnd,
+    payrollMonth:   entry.cycle.payrollMonth,
+    lopDays:        finalLopDays,
+    tdsMonthly:     finalTds,
+    reimbursements: finalReimb,
+    employeeStatus: emp.status,
+  })
+
+  const s = calc.salary
+  const bonusThisCycle = isBonusMonth(entry.cycle.payrollMonth)
+
   const updated = await prisma.payrollEntry.update({
     where: { id: req.params.id },
     data: {
-      tdsAmount:     tdsAmount ?? entry.tdsAmount,
-      adjustmentNote,
-      adjustedBy:    req.user!.id,
-      status:        'ADJUSTED',
+      basic:              s.basicMonthly,
+      hra:                s.hraMonthly,
+      transport:          s.transportMonthly,
+      fbp:                s.fbpMonthly,
+      hyi:                s.hyiMonthly,
+      grossSalary:        s.grandTotalMonthly,
+      annualBonus:        bonusThisCycle ? s.annualBonus : 0,
+      isBolusMonth:       bonusThisCycle,
+      totalDays:          calc.proration.totalDays,
+      payableDays:        calc.proration.payableDays,
+      isProrated:         calc.proration.isProrated,
+      proratedGross:      calc.proration.proratedGross,
+      reimbursementTotal: finalReimb,
+      lopDays:            finalLopDays,
+      lopAmount:          calc.deductions.lop,
+      pfAmount:           calc.deductions.pf,
+      esiAmount:          calc.deductions.esi,
+      ptAmount:           calc.deductions.pt,
+      tdsAmount:          finalTds,
+      incentiveRecovery:  calc.deductions.incentiveRecovery,
+      loanDeduction:      calc.deductions.loanDeduction,
+      netSalary:          calc.netSalary,
+      adjustmentNote:     adjustmentNote ?? entry.adjustmentNote,
+      adjustedBy:         req.user!.id,
+      status:             'ADJUSTED',
     },
   })
+
+  // Update cycle totals
+  const allEntries = await prisma.payrollEntry.findMany({
+    where: { cycleId: entry.cycleId },
+    select: { grossSalary: true, netSalary: true, pfAmount: true, esiAmount: true },
+  })
+  await prisma.payrollCycle.update({
+    where: { id: entry.cycleId },
+    data: {
+      totalGross: allEntries.reduce((s, e) => s + Number(e.grossSalary), 0),
+      totalNet:   allEntries.reduce((s, e) => s + Number(e.netSalary),   0),
+      totalPf:    allEntries.reduce((s, e) => s + Number(e.pfAmount),    0),
+      totalEsi:   allEntries.reduce((s, e) => s + Number(e.esiAmount),   0),
+    },
+  })
+
   res.json({ success: true, data: updated })
 })
 

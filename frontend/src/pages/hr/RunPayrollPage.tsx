@@ -3,16 +3,24 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Play, Lock, Unlock, Banknote,
-  CheckCircle2, AlertCircle, RefreshCw, ChevronDown, ChevronUp
+  RefreshCw, ChevronDown, ChevronUp, Pencil, Check, X as XIcon
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { payrollApi } from '../../services/api'
+import api from '../../services/api'
 import {
   PageHeader, Button, Card, StatusBadge, Rupee,
   Table, Th, Td, Tr, Skeleton, Modal, Alert
 } from '../../components/ui'
 import clsx from 'clsx'
 import { useAuthStore } from '../../store/authStore'
+
+interface EditState {
+  lopDays:        string
+  tdsAmount:      string
+  reimbursements: string
+  adjustmentNote: string
+}
 
 function ConfirmModal({ open, onClose, title, message, onConfirm, loading, variant = 'primary' }: any) {
   return (
@@ -35,12 +43,15 @@ export default function RunPayrollPage() {
   const { user } = useAuthStore()
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
 
-  const [runConfirm,     setRunConfirm]     = useState(false)
-  const [lockConfirm,    setLockConfirm]    = useState(false)
-  const [unlockConfirm,  setUnlockConfirm]  = useState(false)
-  const [disburseConfirm,setDisburseConfirm]= useState(false)
-  const [unlockReason,   setUnlockReason]   = useState('')
-  const [expandedRow,    setExpandedRow]    = useState<string | null>(null)
+  const [runConfirm,      setRunConfirm]      = useState(false)
+  const [lockConfirm,     setLockConfirm]     = useState(false)
+  const [unlockConfirm,   setUnlockConfirm]   = useState(false)
+  const [disburseConfirm, setDisburseConfirm] = useState(false)
+  const [unlockReason,    setUnlockReason]    = useState('')
+  const [expandedRow,     setExpandedRow]     = useState<string | null>(null)
+  const [editingRow,      setEditingRow]      = useState<string | null>(null)
+  const [editState,       setEditState]       = useState<EditState>({ lopDays: '', tdsAmount: '', reimbursements: '', adjustmentNote: '' })
+  const [saveError,       setSaveError]       = useState<string | null>(null)
 
   const { data: cycleData, isLoading } = useQuery({
     queryKey: ['payroll-cycle', id],
@@ -53,35 +64,61 @@ export default function RunPayrollPage() {
     mutationFn: () => payrollApi.run(id!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payroll-cycle', id] }); setRunConfirm(false) },
   })
-
   const lockMut = useMutation({
     mutationFn: () => payrollApi.lock(id!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payroll-cycle', id] }); setLockConfirm(false) },
   })
-
   const unlockMut = useMutation({
     mutationFn: () => payrollApi.unlock(id!, unlockReason),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payroll-cycle', id] }); setUnlockConfirm(false); setUnlockReason('') },
   })
-
   const disburseMut = useMutation({
     mutationFn: () => payrollApi.disburse(id!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payroll-cycle', id] }); setDisburseConfirm(false) },
   })
+  const editMut = useMutation({
+    mutationFn: ({ entryId, data }: { entryId: string; data: any }) =>
+      api.put(`/api/payroll/entries/${entryId}`, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payroll-cycle', id] }); setEditingRow(null); setSaveError(null) },
+    onError: (err: any) => setSaveError(err?.response?.data?.error || 'Failed to save'),
+  })
+
+  function startEdit(entry: any) {
+    setEditingRow(entry.id)
+    setExpandedRow(null)
+    setSaveError(null)
+    setEditState({
+      lopDays:        String(Number(entry.lopDays) || 0),
+      tdsAmount:      String(Number(entry.tdsAmount) || 0),
+      reimbursements: String(Number(entry.reimbursementTotal) || 0),
+      adjustmentNote: entry.adjustmentNote || '',
+    })
+  }
+
+  function cancelEdit() { setEditingRow(null); setSaveError(null) }
+
+  function saveEdit(entryId: string) {
+    editMut.mutate({
+      entryId,
+      data: {
+        lopDays:        Number(editState.lopDays),
+        tdsAmount:      Number(editState.tdsAmount),
+        reimbursements: Number(editState.reimbursements),
+        adjustmentNote: editState.adjustmentNote || null,
+      },
+    })
+  }
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-32 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>
 
   const cycle   = cycleData
   const entries = cycle?.entries || []
   const status  = cycle?.status
-
   const canRun      = status === 'DRAFT' || status === 'CALCULATED'
   const canLock     = status === 'CALCULATED'
   const canUnlock   = status === 'LOCKED' && isSuperAdmin
   const canDisburse = status === 'LOCKED'
-
-  // Validation checks
-  const missingBank = entries.filter((e: any) => !e.employee).length
+  const canEdit     = status === 'CALCULATED' && isSuperAdmin
   const errors_count = entries.filter((e: any) => e.status === 'error').length
 
   return (
@@ -89,29 +126,16 @@ export default function RunPayrollPage() {
       <PageHeader
         title={`Payroll — ${cycle?.payrollMonth}`}
         subtitle={`${format(new Date(cycle?.cycleStart), 'dd MMM')} – ${format(new Date(cycle?.cycleEnd), 'dd MMM yyyy')}`}
-        actions={
-          <Button variant="ghost" icon={<ArrowLeft size={14} />} onClick={() => navigate('/hr/payroll')}>
-            Back
-          </Button>
-        }
+        actions={<Button variant="ghost" icon={<ArrowLeft size={14} />} onClick={() => navigate('/hr/payroll')}>Back</Button>}
       />
 
-      {/* Status bar */}
       <Card>
         <div className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <StatusBadge status={status} />
-              {cycle?.runAt && (
-                <span className="text-xs text-slate-400">
-                  Last run: {format(new Date(cycle.runAt), 'dd MMM yyyy, HH:mm')} by {cycle.runBy}
-                </span>
-              )}
-              {cycle?.lockedAt && (
-                <span className="text-xs text-slate-400">
-                  Locked: {format(new Date(cycle.lockedAt), 'dd MMM yyyy, HH:mm')}
-                </span>
-              )}
+              {cycle?.runAt && <span className="text-xs text-slate-400">Last run: {format(new Date(cycle.runAt), 'dd MMM yyyy, HH:mm')}</span>}
+              {cycle?.lockedAt && <span className="text-xs text-slate-400">Locked: {format(new Date(cycle.lockedAt), 'dd MMM yyyy, HH:mm')}</span>}
             </div>
             <div className="flex flex-wrap gap-4">
               {[
@@ -127,52 +151,32 @@ export default function RunPayrollPage() {
               ))}
             </div>
           </div>
-
-          {/* Action buttons */}
           <div className="flex flex-wrap gap-2">
-            {canRun && (
-              <Button icon={<RefreshCw size={14} />} onClick={() => setRunConfirm(true)} loading={runMut.isPending}>
-                {status === 'CALCULATED' ? 'Re-run Payroll' : 'Run Payroll'}
-              </Button>
-            )}
-            {canLock && (
-              <Button variant="secondary" icon={<Lock size={14} />} onClick={() => setLockConfirm(true)}>
-                Lock Cycle
-              </Button>
-            )}
-            {canUnlock && (
-              <Button variant="secondary" icon={<Unlock size={14} />} onClick={() => setUnlockConfirm(true)}>
-                Unlock
-              </Button>
-            )}
-            {canDisburse && (
-              <Button variant="primary" icon={<Banknote size={14} />} onClick={() => setDisburseConfirm(true)}>
-                Mark Disbursed
-              </Button>
-            )}
+            {canRun      && <Button icon={<RefreshCw size={14} />} onClick={() => setRunConfirm(true)} loading={runMut.isPending}>{status === 'CALCULATED' ? 'Re-run Payroll' : 'Run Payroll'}</Button>}
+            {canLock     && <Button variant="secondary" icon={<Lock size={14} />} onClick={() => setLockConfirm(true)}>Lock Cycle</Button>}
+            {canUnlock   && <Button variant="secondary" icon={<Unlock size={14} />} onClick={() => setUnlockConfirm(true)}>Unlock</Button>}
+            {canDisburse && <Button variant="primary" icon={<Banknote size={14} />} onClick={() => setDisburseConfirm(true)}>Mark Disbursed</Button>}
           </div>
         </div>
       </Card>
 
-      {/* Unlock reason notice */}
-      {cycle?.unlockReason && (
-        <Alert type="warning" title="Previously unlocked"
-          message={`Unlocked by ${cycle.unlockedBy} — Reason: ${cycle.unlockReason}`} />
-      )}
+      {cycle?.unlockReason && <Alert type="warning" title="Previously unlocked" message={`Reason: ${cycle.unlockReason}`} />}
 
-      {/* Validation warnings */}
       {status === 'CALCULATED' && (
-        <div className="flex flex-col sm:flex-row gap-3">
-          {errors_count === 0
-            ? <Alert type="success" message={`All ${entries.length} employees calculated successfully. Review below then lock the cycle.`} />
-            : <Alert type="error" message={`${errors_count} employees had calculation errors. Fix before locking.`} />
-          }
-        </div>
+        errors_count === 0
+          ? <Alert type="success" message={`All ${entries.length} employees calculated. Review and edit if needed, then lock.`} />
+          : <Alert type="error" message={`${errors_count} employees had errors. Fix before locking.`} />
       )}
 
-      {/* Payroll preview table */}
       {entries.length > 0 && (
         <Card title={`Employee Breakdown — ${entries.length} employees`}>
+          {canEdit && (
+            <div className="px-5 pt-3 pb-1">
+              <p className="text-xs text-slate-400 flex items-center gap-1">
+                <Pencil size={11} /> Click the pencil icon on any row to adjust LOP, TDS, or Reimbursements before locking.
+              </p>
+            </div>
+          )}
           <Table>
             <thead>
               <tr className="border-b border-slate-100">
@@ -183,78 +187,109 @@ export default function RunPayrollPage() {
                 <Th className="text-right">ESI</Th>
                 <Th className="text-right">PT</Th>
                 <Th className="text-right">TDS</Th>
+                <Th className="text-right">Reimb</Th>
                 <Th className="text-right">Loan</Th>
                 <Th className="text-right font-bold">Net</Th>
                 <Th></Th>
+                {canEdit && <Th></Th>}
               </tr>
             </thead>
             <tbody>
               {entries.map((entry: any) => {
                 const isExpanded = expandedRow === entry.id
+                const isEditing  = editingRow  === entry.id
+                const isAdjusted = entry.status === 'ADJUSTED'
                 return (
                   <>
-                    <Tr key={entry.id} onClick={() => setExpandedRow(isExpanded ? null : entry.id)}>
+                    <Tr key={entry.id}
+                      className={clsx(isEditing && 'bg-amber-50/60 ring-1 ring-inset ring-amber-200')}
+                      onClick={() => !isEditing && setExpandedRow(isExpanded ? null : entry.id)}>
                       <Td>
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs font-semibold text-brand-700">
-                              {entry.employee?.name?.charAt(0)}
-                            </span>
+                            <span className="text-xs font-semibold text-brand-700">{entry.employee?.name?.charAt(0)}</span>
                           </div>
                           <div>
                             <p className="text-sm font-medium text-slate-800">{entry.employee?.name}</p>
                             <p className="text-xs text-slate-400">{entry.employee?.department}</p>
                           </div>
+                          {isAdjusted && <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700">EDITED</span>}
                         </div>
                       </Td>
                       <Td className="text-right"><Rupee amount={entry.proratedGross} className="text-xs" /></Td>
-                      <Td className="text-right">
-                        {Number(entry.lopAmount) > 0
-                          ? <Rupee amount={entry.lopAmount} className="text-xs text-red-500" />
-                          : <span className="text-slate-300 text-xs">—</span>}
-                      </Td>
+                      <Td className="text-right">{Number(entry.lopAmount) > 0 ? <Rupee amount={entry.lopAmount} className="text-xs text-red-500" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
                       <Td className="text-right"><Rupee amount={entry.pfAmount} className="text-xs" /></Td>
-                      <Td className="text-right">
-                        {Number(entry.esiAmount) > 0
-                          ? <Rupee amount={entry.esiAmount} className="text-xs" />
-                          : <span className="text-slate-300 text-xs">—</span>}
-                      </Td>
-                      <Td className="text-right">
-                        {Number(entry.ptAmount) > 0
-                          ? <Rupee amount={entry.ptAmount} className="text-xs" />
-                          : <span className="text-slate-300 text-xs">—</span>}
-                      </Td>
-                      <Td className="text-right">
-                        {Number(entry.tdsAmount) > 0
-                          ? <Rupee amount={entry.tdsAmount} className="text-xs" />
-                          : <span className="text-slate-300 text-xs">—</span>}
-                      </Td>
-                      <Td className="text-right">
-                        {Number(entry.loanDeduction) > 0
-                          ? <Rupee amount={entry.loanDeduction} className="text-xs text-amber-600" />
-                          : <span className="text-slate-300 text-xs">—</span>}
-                      </Td>
-                      <Td className="text-right">
-                        <Rupee amount={entry.netSalary} className="text-sm font-bold text-slate-900" />
-                      </Td>
-                      <Td>
-                        {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
-                      </Td>
+                      <Td className="text-right">{Number(entry.esiAmount) > 0 ? <Rupee amount={entry.esiAmount} className="text-xs" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
+                      <Td className="text-right">{Number(entry.ptAmount) > 0 ? <Rupee amount={entry.ptAmount} className="text-xs" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
+                      <Td className="text-right">{Number(entry.tdsAmount) > 0 ? <Rupee amount={entry.tdsAmount} className="text-xs" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
+                      <Td className="text-right">{Number(entry.reimbursementTotal) > 0 ? <Rupee amount={entry.reimbursementTotal} className="text-xs text-emerald-600" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
+                      <Td className="text-right">{Number(entry.loanDeduction) > 0 ? <Rupee amount={entry.loanDeduction} className="text-xs text-amber-600" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
+                      <Td className="text-right"><Rupee amount={entry.netSalary} className="text-sm font-bold text-slate-900" /></Td>
+                      <Td>{!isEditing && (isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />)}</Td>
+                      {canEdit && (
+                        <Td onClick={e => e.stopPropagation()}>
+                          {!isEditing ? (
+                            <button onClick={() => startEdit(entry)} className="p-1.5 rounded-lg hover:bg-amber-100 text-slate-400 hover:text-amber-700 transition-colors">
+                              <Pencil size={13} />
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => saveEdit(entry.id)} disabled={editMut.isPending} className="p-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition-colors">
+                                <Check size={13} />
+                              </button>
+                              <button onClick={cancelEdit} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                                <XIcon size={13} />
+                              </button>
+                            </div>
+                          )}
+                        </Td>
+                      )}
                     </Tr>
 
-                    {/* Expanded row */}
-                    {isExpanded && (
+                    {isEditing && (
+                      <tr key={`${entry.id}-edit`} className="bg-amber-50/40 border-b border-amber-100">
+                        <td colSpan={canEdit ? 12 : 11} className="px-5 py-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-slate-500">LOP Days</label>
+                              <input type="number" min="0" step="0.5" className="input text-sm" value={editState.lopDays} onChange={e => setEditState(s => ({ ...s, lopDays: e.target.value }))} />
+                              <p className="text-[10px] text-slate-400">Current: {entry.lopDays} days</p>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-slate-500">TDS Amount (₹)</label>
+                              <input type="number" min="0" className="input text-sm" value={editState.tdsAmount} onChange={e => setEditState(s => ({ ...s, tdsAmount: e.target.value }))} />
+                              <p className="text-[10px] text-slate-400">Current: ₹{Number(entry.tdsAmount).toLocaleString('en-IN')}</p>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-slate-500">Reimbursements (₹)</label>
+                              <input type="number" min="0" className="input text-sm" value={editState.reimbursements} onChange={e => setEditState(s => ({ ...s, reimbursements: e.target.value }))} />
+                              <p className="text-[10px] text-slate-400">Current: ₹{Number(entry.reimbursementTotal).toLocaleString('en-IN')}</p>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-slate-500">Adjustment Note</label>
+                              <input type="text" className="input text-sm" placeholder="Reason for change…" value={editState.adjustmentNote} onChange={e => setEditState(s => ({ ...s, adjustmentNote: e.target.value }))} />
+                            </div>
+                          </div>
+                          {saveError && <p className="mt-2 text-xs text-red-600">{saveError}</p>}
+                          <p className="mt-2 text-[10px] text-slate-400">Net salary recalculated automatically on save.</p>
+                        </td>
+                      </tr>
+                    )}
+
+                    {isExpanded && !isEditing && (
                       <tr key={`${entry.id}-expanded`} className="bg-slate-50/80">
-                        <td colSpan={10} className="px-5 py-4">
+                        <td colSpan={canEdit ? 12 : 11} className="px-5 py-4">
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                             <div>
                               <p className="text-slate-400 mb-1 font-semibold uppercase tracking-wide">Salary Structure</p>
                               {[
-                                { label: 'Annual CTC',   value: entry.annualCtc },
-                                { label: 'Monthly CTC',  value: entry.monthlyCtc },
-                                { label: 'Basic',        value: entry.basic },
-                                { label: 'HRA',          value: entry.hra },
-                                { label: 'Allowances',   value: entry.allowances },
+                                { label: 'Annual CTC',  value: entry.annualCtc },
+                                { label: 'Monthly CTC', value: entry.monthlyCtc },
+                                { label: 'Basic',       value: entry.basic },
+                                { label: 'HRA',         value: entry.hra },
+                                { label: 'Transport',   value: entry.transport },
+                                { label: 'FBP',         value: entry.fbp },
+                                { label: 'HYI',         value: entry.hyi },
                               ].map(({ label, value }) => (
                                 <div key={label} className="flex justify-between py-0.5">
                                   <span className="text-slate-500">{label}</span>
@@ -279,9 +314,9 @@ export default function RunPayrollPage() {
                             <div>
                               <p className="text-slate-400 mb-1 font-semibold uppercase tracking-wide">Additions</p>
                               {[
-                                { label: 'Prorated Gross',  value: <Rupee amount={entry.proratedGross} /> },
-                                { label: 'Incentive',       value: <Rupee amount={entry.incentive} /> },
-                                { label: 'Reimbursements',  value: <Rupee amount={entry.reimbursementTotal} /> },
+                                { label: 'Prorated Gross', value: <Rupee amount={entry.proratedGross} /> },
+                                { label: 'Reimbursements', value: <Rupee amount={entry.reimbursementTotal} /> },
+                                { label: 'Incentive',      value: <Rupee amount={entry.incentive} /> },
                               ].map(({ label, value }) => (
                                 <div key={label} className="flex justify-between py-0.5">
                                   <span className="text-slate-500">{label}</span>
@@ -293,11 +328,11 @@ export default function RunPayrollPage() {
                               <p className="text-slate-400 mb-1 font-semibold uppercase tracking-wide">Net Calculation</p>
                               <div className="flex justify-between py-0.5 border-b border-slate-200 mb-1">
                                 <span className="text-slate-500">Gross + Additions</span>
-                                <Rupee amount={Number(entry.proratedGross) + Number(entry.incentive) + Number(entry.reimbursementTotal)} className="text-slate-700" />
+                                <Rupee amount={Number(entry.proratedGross) + Number(entry.reimbursementTotal) + Number(entry.incentive)} className="text-slate-700" />
                               </div>
                               <div className="flex justify-between py-0.5 text-red-500">
                                 <span>Total Deductions</span>
-                                <Rupee amount={[entry.pfAmount,entry.esiAmount,entry.ptAmount,entry.tdsAmount,entry.lopAmount,entry.incentiveRecovery,entry.loanDeduction].reduce((s:number,v:any)=>s+Number(v||0),0)} />
+                                <Rupee amount={[entry.pfAmount, entry.esiAmount, entry.ptAmount, entry.tdsAmount, entry.lopAmount, entry.incentiveRecovery, entry.loanDeduction].reduce((s: number, v: any) => s + Number(v || 0), 0)} />
                               </div>
                               <div className="flex justify-between py-0.5 font-bold border-t border-slate-200 mt-1 text-brand-700">
                                 <span>Net Salary</span>
@@ -321,35 +356,27 @@ export default function RunPayrollPage() {
         </Card>
       )}
 
-      {/* Confirm modals */}
       <ConfirmModal open={runConfirm} onClose={() => setRunConfirm(false)} title="Run Payroll"
-        message={`This will calculate net salaries for all active employees in the ${cycle?.payrollMonth} cycle. Any existing calculations will be overwritten.`}
+        message={`This will calculate salaries for all active employees in ${cycle?.payrollMonth}. Existing calculations will be overwritten.`}
         onConfirm={() => runMut.mutate()} loading={runMut.isPending} />
-
       <ConfirmModal open={lockConfirm} onClose={() => setLockConfirm(false)} title="Lock Cycle"
-        message="Locking this cycle will prevent any further edits. Only a Super Admin can unlock it. Proceed?"
+        message="Locking prevents further edits. Only a Super Admin can unlock. Proceed?"
         onConfirm={() => lockMut.mutate()} loading={lockMut.isPending} variant="primary" />
-
       <ConfirmModal open={disburseConfirm} onClose={() => setDisburseConfirm(false)} title="Mark Disbursed"
-        message="Confirm that salaries have been transferred to all employee bank accounts. This action cannot be undone."
+        message="Confirm salaries have been transferred to all employees. This cannot be undone."
         onConfirm={() => disburseMut.mutate()} loading={disburseMut.isPending} variant="primary" />
-
       <Modal open={unlockConfirm} onClose={() => setUnlockConfirm(false)} title="Unlock Cycle"
         footer={
           <>
             <Button variant="secondary" onClick={() => setUnlockConfirm(false)}>Cancel</Button>
-            <Button variant="danger" loading={unlockMut.isPending}
-              onClick={() => unlockMut.mutate()} disabled={!unlockReason.trim()}>
-              Unlock Cycle
-            </Button>
+            <Button variant="danger" loading={unlockMut.isPending} onClick={() => unlockMut.mutate()} disabled={!unlockReason.trim()}>Unlock Cycle</Button>
           </>
         }>
         <div className="space-y-3">
-          <Alert type="warning" message="This action is restricted to Super Admins. Unlocking will allow edits to a locked cycle. This will be logged." />
+          <Alert type="warning" message="Unlocking will allow edits to a locked cycle. This will be logged." />
           <div className="flex flex-col gap-1">
             <label className="label">Reason for unlocking *</label>
-            <textarea value={unlockReason} onChange={e => setUnlockReason(e.target.value)}
-              className="input resize-none" rows={3} placeholder="Describe why this cycle needs to be unlocked…" />
+            <textarea value={unlockReason} onChange={e => setUnlockReason(e.target.value)} className="input resize-none" rows={3} placeholder="Describe why this cycle needs to be unlocked…" />
           </div>
         </div>
       </Modal>
