@@ -9,7 +9,7 @@ import {
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
-  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package, Bell
+  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package, Bell, Percent
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -92,6 +92,7 @@ const SUPER_ADMIN_NAV = [
       { label: 'Loans & Advances',    icon: Wallet,     to: '/hr/loans' },
       { label: 'Reimbursements',      icon: Receipt,    to: '/hr/reimbursements' },
       { label: 'F&F Settlement',      icon: GitMerge,   to: '/hr/fnf' },
+      { label: 'TDS Management',       icon: Percent,    to: '/hr/tds' },
     ]
   },
   {
@@ -435,6 +436,7 @@ function usePageTitle() {
     '/hr/loans': 'Loans & Advances',
     '/hr/reimbursements': 'Reimbursements',
     '/hr/fnf': 'Full & Final Settlement',
+    '/hr/tds': 'TDS Management',
     '/hr/import': 'Bulk Import',
     '/hr/sync': 'M365 Sync',
     '/hr/employees-bulk-edit': 'Bulk Edit Employees',

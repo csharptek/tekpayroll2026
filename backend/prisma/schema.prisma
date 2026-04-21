@@ -199,6 +199,7 @@ model Employee {
 
   // TDS (manual per employee)
   tdsMonthly          Decimal  @default(0) @db.Decimal(10, 2)
+  tdsConfigs          TdsConfig[]
 
   // Compliance
   panNumber      String?
@@ -686,6 +687,25 @@ model SyncDomainConfig {
 }
 
 // ─── AUDIT LOG ───────────────────────────────────────────────────────────────
+
+// ─── TDS CONFIGURATION ───────────────────────────────────────────────────────
+
+model TdsConfig {
+  id              String   @id @default(cuid())
+  employeeId      String
+  employee        Employee @relation(fields: [employeeId], references: [id])
+  financialYear   String   // e.g. "2025-26"
+  annualTax       Decimal  @db.Decimal(12, 2)
+  monthlyTds      Decimal  @db.Decimal(10, 2)  // computed: (annualTax - ytdPaid) / remainingMonths
+  effectiveFrom   String   // payrollMonth e.g. "2025-11"
+  ytdPaidAtChange Decimal  @default(0) @db.Decimal(12, 2)  // snapshot of YTD paid when this was set
+  remainingMonths Int      // months left in FY when set
+  setBy           String
+  note            String?
+  createdAt       DateTime @default(now())
+
+  @@index([employeeId, financialYear])
+}
 
 model AuditLog {
   id            String      @id @default(cuid())

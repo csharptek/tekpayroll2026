@@ -62,6 +62,7 @@ import MyAssetsPage from './pages/employee/MyAssetsPage'
 import ManagementDashboard from './pages/management/ManagementDashboard'
 import PayrollReportsPage from './pages/management/PayrollReportsPage'
 import CostReportPage from './pages/management/CostReportPage'
+import TdsManagementPage from './pages/hr/TdsManagementPage'
 
 // Guard
 function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
@@ -133,6 +134,7 @@ export default function App() {
           <Route path="loans" element={<RequireAuth roles={['SUPER_ADMIN']}><LoansPage /></RequireAuth>} />
           <Route path="loans/:id" element={<RequireAuth roles={['SUPER_ADMIN']}><LoanDetailPage /></RequireAuth>} />
           <Route path="fnf" element={<RequireAuth roles={['SUPER_ADMIN']}><FnfPage /></RequireAuth>} />
+          <Route path="tds" element={<RequireAuth roles={['SUPER_ADMIN']}><TdsManagementPage /></RequireAuth>} />
         </Route>
 
         {/* Employee self-service */}
