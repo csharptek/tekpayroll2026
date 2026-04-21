@@ -60,7 +60,7 @@ reimbursementRouter.post('/request', upload.array('files', MAX_FILES), async (re
   const amt = Number(amount)
   if (!amt || amt <= 0) throw new AppError('Amount must be > 0', 400)
 
-  const files = (req.files as Express.Multer.File[]) || []
+  const files = (req.files as any[]) || []
   if (files.length > MAX_FILES) throw new AppError(`Maximum ${MAX_FILES} files allowed`, 400)
 
   const emp = await prisma.employee.findUnique({
@@ -255,7 +255,7 @@ reimbursementRouter.post('/sa/add', requireSuperAdmin, upload.array('files', MAX
     },
   })
 
-  const files = (req.files as Express.Multer.File[]) || []
+  const files = (req.files as any[]) || []
   for (const f of files) {
     const up = await uploadReimbursementFile(f.buffer, f.originalname, emp.employeeCode, emp.name)
     await prisma.reimbursementFile.create({
@@ -444,7 +444,7 @@ reimbursementRouter.post('/:id/files', upload.array('files', MAX_FILES), async (
   if (!isSA(req) && r.employeeId !== req.user!.id) throw new AppError('Forbidden', 403)
   if (r.status === 'PAID') throw new AppError('Cannot modify paid reimbursement', 400)
 
-  const files = (req.files as Express.Multer.File[]) || []
+  const files = (req.files as any[]) || []
   if (!files.length) throw new AppError('No files uploaded', 400)
   if (r.files.length + files.length > MAX_FILES) {
     throw new AppError(`Total files cannot exceed ${MAX_FILES}`, 400)

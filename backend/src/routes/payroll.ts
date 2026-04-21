@@ -87,7 +87,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
     where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
   })
 
-  const results = []
+  const results: any[] = []
   let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0
 
   for (const emp of employees) {
