@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { authenticate, requireSuperAdmin } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import { computeSalaryStructure, getEsiConfig, getSalaryInputForDate } from '../services/payrollEngine';
@@ -140,11 +141,11 @@ salaryBreakupsRouter.get('/', async (req, res) => {
 });
 
 // ─── POST /api/hr/salary-breakups/export ─────────────────────────────────────
-// Body: { employeeIds?: string[], month, year, format?: 'long' | 'wide' }
-// Default format = 'long' (row per component)
+// Body: { employeeIds?: string[], month, year, format?: 'slip' | 'long' | 'wide' }
+// Default format = 'slip'
 
 salaryBreakupsRouter.post('/export', async (req, res) => {
-  const { employeeIds, month, year, format = 'long' } = req.body || {};
+  const { employeeIds, month, year, format = 'slip' } = req.body || {};
 
   const m = parseInt(String(month));
   const y = parseInt(String(year));
@@ -170,6 +171,177 @@ salaryBreakupsRouter.post('/export', async (req, res) => {
 
   const monthLabel = new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
+  const filename = `salary-breakups-${y}-${String(m).padStart(2, '0')}.xlsx`;
+
+  // ── SLIP FORMAT (default) ────────────────────────────────────────────────
+  if (format === 'slip') {
+    const wbSlip = new ExcelJS.Workbook();
+    const ws = wbSlip.addWorksheet('Salary Breakup');
+
+    const COLS_PER_EMP = 5; // earningLabel | earningAmt | dedLabel | dedAmt | gap
+    const EMPS_PER_ROW = 4;
+
+    // Column widths
+    for (let c = 1; c <= EMPS_PER_ROW * COLS_PER_EMP; c++) {
+      const pos = (c - 1) % COLS_PER_EMP;
+      const col = ws.getColumn(c);
+      if (pos === 0)      col.width = 28;
+      else if (pos === 1) col.width = 13;
+      else if (pos === 2) col.width = 22;
+      else if (pos === 3) col.width = 13;
+      else                col.width = 3;
+    }
+
+    const headerFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+    const totalFill:  ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+    const netFill:    ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
+    const thinBorder: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin' }, left: { style: 'thin' },
+      bottom: { style: 'thin' }, right: { style: 'thin' },
+    };
+
+    function colFor(empIdx: number, field: number) {
+      return empIdx * COLS_PER_EMP + field + 1;
+    }
+    function sc(cell: ExcelJS.Cell, opts: {
+      fill?: ExcelJS.Fill; bold?: boolean; border?: Partial<ExcelJS.Borders>;
+      align?: Partial<ExcelJS.Alignment>; numFmt?: string; italic?: boolean;
+    }) {
+      if (opts.fill)   cell.fill   = opts.fill;
+      if (opts.border) cell.border = opts.border;
+      if (opts.align)  cell.alignment = opts.align;
+      if (opts.numFmt) cell.numFmt = opts.numFmt;
+      if (opts.bold || opts.italic) cell.font = { bold: !!opts.bold, italic: !!opts.italic, size: 10 };
+    }
+
+    function writeBlock(startRow: number, emps: BreakupRow[]) {
+      // ── Name row
+      emps.forEach((emp, i) => {
+        const c1 = colFor(i, 0), c4 = colFor(i, 3);
+        ws.mergeCells(startRow, c1, startRow, c4);
+        const cell = ws.getCell(startRow, c1);
+        cell.value = emp.name;
+        sc(cell, { fill: headerFill, bold: true, border: thinBorder, align: { horizontal: 'center', vertical: 'middle' } });
+        ws.getRow(startRow).height = 18;
+      });
+
+      // ── Column header row
+      const hdRow = startRow + 1;
+      emps.forEach((emp, i) => {
+        [
+          [colFor(i,0), 'Earnings'],
+          [colFor(i,1), 'Amount'],
+          [colFor(i,2), 'Deductions'],
+          [colFor(i,3), 'Amount'],
+        ].forEach(([c, label]) => {
+          const cell = ws.getCell(hdRow, c as number);
+          cell.value = label;
+          sc(cell, { fill: headerFill, bold: true, border: thinBorder, align: { horizontal: 'center' } });
+        });
+      });
+
+      // ── Earning/deduction rows
+      const earningLabels = ['Basic Salary', 'HRA', 'Transportation Allowance', 'FBP', 'Incentive Half Yearly'];
+      const earningKeys:  (keyof BreakupRow)[] = ['basic', 'hra', 'transport', 'fbp', 'hyi'];
+
+      earningLabels.forEach((label, ri) => {
+        const row = startRow + 2 + ri;
+        emps.forEach((emp, i) => {
+          const lCell = ws.getCell(row, colFor(i, 0));
+          lCell.value = label;
+          sc(lCell, { border: thinBorder });
+
+          const aCell = ws.getCell(row, colFor(i, 1));
+          aCell.value = emp[earningKeys[ri]] as number;
+          sc(aCell, { border: thinBorder, numFmt: '#,##0' });
+
+          const dlCell = ws.getCell(row, colFor(i, 2));
+          const daCell = ws.getCell(row, colFor(i, 3));
+
+          if (ri === 0) {
+            dlCell.value = 'Employee PF';
+            sc(dlCell, { border: thinBorder });
+            daCell.value = emp.employeePf;
+            sc(daCell, { border: thinBorder, numFmt: '#,##0' });
+          } else if (ri === 1 && emp.employeeEsi > 0) {
+            dlCell.value = 'Employee ESI';
+            sc(dlCell, { border: thinBorder });
+            daCell.value = emp.employeeEsi;
+            sc(daCell, { border: thinBorder, numFmt: '#,##0' });
+          } else {
+            sc(dlCell, { border: thinBorder });
+            sc(daCell, { border: thinBorder });
+          }
+        });
+      });
+
+      // ── Totals row
+      const totRow = startRow + 2 + earningLabels.length;
+      emps.forEach((emp, i) => {
+        const gross    = emp.basic + emp.hra + emp.transport + emp.fbp + emp.hyi;
+        const totalDed = emp.employeePf + emp.employeeEsi;
+
+        const tlCell = ws.getCell(totRow, colFor(i, 0));
+        tlCell.value = 'Total Earnings';
+        sc(tlCell, { fill: totalFill, bold: true, border: thinBorder });
+
+        const taCell = ws.getCell(totRow, colFor(i, 1));
+        taCell.value = gross;
+        sc(taCell, { fill: totalFill, bold: true, border: thinBorder, numFmt: '#,##0' });
+
+        const tdlCell = ws.getCell(totRow, colFor(i, 2));
+        tdlCell.value = 'Total Deductions';
+        sc(tdlCell, { fill: totalFill, bold: true, border: thinBorder });
+
+        const tdaCell = ws.getCell(totRow, colFor(i, 3));
+        tdaCell.value = totalDed;
+        sc(tdaCell, { fill: totalFill, bold: true, border: thinBorder, numFmt: '#,##0' });
+      });
+
+      // ── Net salary row
+      const netRow = totRow + 1;
+      emps.forEach((emp, i) => {
+        const gross = emp.basic + emp.hra + emp.transport + emp.fbp + emp.hyi;
+        const net   = gross - emp.employeePf - emp.employeeEsi;
+
+        sc(ws.getCell(netRow, colFor(i, 0)), { border: thinBorder });
+        sc(ws.getCell(netRow, colFor(i, 1)), { border: thinBorder });
+
+        const nlCell = ws.getCell(netRow, colFor(i, 2));
+        nlCell.value = 'Net Salary';
+        sc(nlCell, { fill: netFill, bold: true, border: thinBorder });
+
+        const naCell = ws.getCell(netRow, colFor(i, 3));
+        naCell.value = net;
+        sc(naCell, { fill: netFill, bold: true, border: thinBorder, numFmt: '#,##0' });
+      });
+
+      return netRow + 2; // gap of 2 rows before next block
+    }
+
+    // ── Pad rows to groups of 4 and write
+    const EMPTY_ROW: BreakupRow = {
+      employeeId: '', employeeCode: '', name: '', jobTitle: '', department: '',
+      state: '', status: '', annualCtc: 0, basic: 0, hra: 0, transport: 0,
+      fbp: 0, hyi: 0, grossMonthly: 0, employeePf: 0, employeeEsi: 0,
+      employerPf: 0, employerEsi: 0, netMonthly: 0, esiApplies: false,
+      mediclaim: 0, annualBonus: 0, hasIncentive: false,
+    };
+
+    let currentRow = 1;
+    for (let i = 0; i < rows.length; i += EMPS_PER_ROW) {
+      const group = rows.slice(i, i + EMPS_PER_ROW);
+      while (group.length < EMPS_PER_ROW) group.push({ ...EMPTY_ROW });
+      currentRow = writeBlock(currentRow, group);
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const buf = await wbSlip.xlsx.writeBuffer();
+    return res.send(buf);
+  }
+
+  // ── WIDE / LONG (existing) ───────────────────────────────────────────────
   const wb = XLSX.utils.book_new();
 
   if (format === 'wide') {
@@ -239,10 +411,9 @@ salaryBreakupsRouter.post('/export', async (req, res) => {
     XLSX.utils.book_append_sheet(wb, ws, `Breakups ${monthLabel}`);
   }
 
-  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  const buf2 = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as any;
 
-  const filename = `salary-breakups-${y}-${String(m).padStart(2, '0')}.xlsx`;
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.send(buf);
+  res.send(buf2);
 });

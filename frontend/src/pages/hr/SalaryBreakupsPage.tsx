@@ -55,7 +55,7 @@ export default function SalaryBreakupsPage() {
   const [dept,      setDept]      = useState('')
   const [selected,  setSelected]  = useState<Set<string>>(new Set())
   const [downloading, setDownloading] = useState(false)
-  const [format,    setFormat]    = useState<'long' | 'wide'>('wide')
+  const [format,    setFormat]    = useState<'slip' | 'long' | 'wide'>('slip')
 
   const { data, isLoading, isFetching } = useQuery<BreakupsResponse>({
     queryKey: ['salary-breakups', month, year, dept],
@@ -199,16 +199,22 @@ export default function SalaryBreakupsPage() {
           <div className="flex items-center gap-2">
             <span className="text-slate-400">Export format:</span>
             <button
+              onClick={() => setFormat('slip')}
+              className={clsx('px-2 py-1 rounded-md border text-xs transition',
+                format === 'slip' ? 'bg-brand-50 border-brand-200 text-brand-700 font-semibold' : 'border-slate-200 text-slate-500')}>
+              Slip (4-per-row)
+            </button>
+            <button
               onClick={() => setFormat('long')}
               className={clsx('px-2 py-1 rounded-md border text-xs transition',
                 format === 'long' ? 'bg-brand-50 border-brand-200 text-brand-700 font-semibold' : 'border-slate-200 text-slate-500')}>
-              Long (row per component)
+              Long
             </button>
             <button
               onClick={() => setFormat('wide')}
               className={clsx('px-2 py-1 rounded-md border text-xs transition',
                 format === 'wide' ? 'bg-brand-50 border-brand-200 text-brand-700 font-semibold' : 'border-slate-200 text-slate-500')}>
-              Wide (row per employee)
+              Wide
             </button>
           </div>
         </div>
