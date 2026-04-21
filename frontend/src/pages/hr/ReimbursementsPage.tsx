@@ -7,10 +7,10 @@ import {
 import { reimbursementApi, employeeApi } from '../../services/api'
 import {
   PageHeader, Card, Rupee, EmptyState, Skeleton, StatusBadge,
-  Button, Input, Select, Alert, Table, Th, Td, Tr, SearchBar,
+  Button, Input, Alert, Table, Th, Td, Tr, SearchBar,
 } from '../../components/ui'
 import { format } from 'date-fns'
-import DatePicker from '../../components/DatePicker'
+import { DatePicker } from '../../components/DatePicker'
 import ReimbursementFileUploader from '../../components/ReimbursementFileUploader'
 
 const CATEGORIES = ['Travel', 'Medical', 'Internet/Phone', 'Food', 'Equipment', 'Training', 'Other']
@@ -86,14 +86,14 @@ function ApproveModal({ reimb, onClose }: { reimb: any; onClose: () => void }) {
 
         <div>
           <label className="text-xs font-medium text-slate-500 mb-1 block">Payroll cycle <span className="text-rose-500">*</span></label>
-          <Select value={cycleId} onChange={e => setCycleId(e.target.value)}>
+          <select className="input" value={cycleId} onChange={e => setCycleId(e.target.value)}>
             <option value="">Select a cycle…</option>
             {(cycles || []).map((c: any) => (
               <option key={c.id} value={c.id}>
                 {c.payrollMonth} — {c.status}
               </option>
             ))}
-          </Select>
+          </select>
         </div>
 
         <div>
@@ -218,20 +218,20 @@ function DirectAddModal({ onClose }: { onClose: () => void }) {
       <div className="space-y-3">
         <div>
           <label className="text-xs font-medium text-slate-500 mb-1 block">Employee <span className="text-rose-500">*</span></label>
-          <Select value={employeeId} onChange={e => setEmployeeId(e.target.value)}>
+          <select className="input" value={employeeId} onChange={e => setEmployeeId(e.target.value)}>
             <option value="">Select employee…</option>
             {(employees || []).map((e: any) => (
               <option key={e.id} value={e.id}>{e.name} · {e.employeeCode}</option>
             ))}
-          </Select>
+          </select>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium text-slate-500 mb-1 block">Category</label>
-            <Select value={category} onChange={e => setCategory(e.target.value)}>
+            <select className="input" value={category} onChange={e => setCategory(e.target.value)}>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </Select>
+            </select>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-500 mb-1 block">Amount (₹) <span className="text-rose-500">*</span></label>
@@ -258,12 +258,12 @@ function DirectAddModal({ onClose }: { onClose: () => void }) {
           <div className="space-y-3 pl-4 border-l-2 border-blue-200">
             <div>
               <label className="text-xs font-medium text-slate-500 mb-1 block">Cycle <span className="text-rose-500">*</span></label>
-              <Select value={cycleId} onChange={e => setCycleId(e.target.value)}>
+              <select className="input" value={cycleId} onChange={e => setCycleId(e.target.value)}>
                 <option value="">Select cycle…</option>
                 {(cycles || []).map((c: any) => (
                   <option key={c.id} value={c.id}>{c.payrollMonth} — {c.status}</option>
                 ))}
-              </Select>
+              </select>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500 mb-1 block">Payslip label <span className="text-rose-500">*</span></label>
@@ -326,12 +326,12 @@ function EditModal({ reimb, onClose }: { reimb: any; onClose: () => void }) {
       <div className="space-y-3">
         <div>
           <label className="text-xs font-medium text-slate-500 mb-1 block">Cycle</label>
-          <Select value={cycleId} onChange={e => setCycleId(e.target.value)}>
+          <select className="input" value={cycleId} onChange={e => setCycleId(e.target.value)}>
             <option value="">(unassigned)</option>
             {(cycles || []).map((c: any) => (
               <option key={c.id} value={c.id}>{c.payrollMonth} — {c.status}</option>
             ))}
-          </Select>
+          </select>
         </div>
         <div>
           <label className="text-xs font-medium text-slate-500 mb-1 block">Amount (₹)</label>
@@ -547,19 +547,19 @@ export default function ReimbursementsPage() {
           <div className="flex-1 min-w-[200px]">
             <SearchBar value={search} onChange={setSearch} placeholder="Search by name, code, category…" />
           </div>
-          <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-auto">
+          <select className="input w-auto" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="ALL">All statuses</option>
             <option value="PENDING">Pending</option>
             <option value="APPROVED">Approved</option>
             <option value="REJECTED">Rejected</option>
             <option value="PAID">Paid</option>
-          </Select>
-          <Select value={cycleFilter} onChange={e => setCycleFilter(e.target.value)} className="w-auto">
+          </select>
+          <select className="input w-auto" value={cycleFilter} onChange={e => setCycleFilter(e.target.value)}>
             <option value="">All cycles</option>
             {(cycles || []).map((c: any) => (
               <option key={c.id} value={c.id}>{c.payrollMonth}</option>
             ))}
-          </Select>
+          </select>
         </div>
 
         {isLoading && <Skeleton className="h-40 m-3" />}

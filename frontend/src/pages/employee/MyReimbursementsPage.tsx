@@ -4,10 +4,10 @@ import { Receipt, Plus, X, Paperclip, Trash2, ImageIcon, FileText } from 'lucide
 import { reimbursementApi } from '../../services/api'
 import {
   PageHeader, Card, Rupee, EmptyState, Skeleton, StatusBadge,
-  Button, Input, Select, Alert,
+  Button, Input, Alert,
 } from '../../components/ui'
 import { format } from 'date-fns'
-import DatePicker from '../../components/DatePicker'
+import { DatePicker } from '../../components/DatePicker'
 import ReimbursementFileUploader from '../../components/ReimbursementFileUploader'
 
 const CATEGORIES = ['Travel', 'Medical', 'Internet/Phone', 'Food', 'Equipment', 'Training', 'Other']
@@ -55,9 +55,9 @@ function RequestModal({ onClose }: { onClose: () => void }) {
           <div className="space-y-3">
             <div>
               <label className="text-xs font-medium text-slate-500 mb-1 block">Category</label>
-              <Select value={category} onChange={e => setCategory(e.target.value)}>
+              <select className="input" value={category} onChange={e => setCategory(e.target.value)}>
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </Select>
+              </select>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
