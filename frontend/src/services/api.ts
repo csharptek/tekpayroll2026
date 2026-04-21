@@ -126,9 +126,29 @@ export const lopApi = {
 }
 
 export const reimbursementApi = {
-  list: (cycleId: string) => api.get(`/api/reimbursements/${cycleId}`),
-  create: (data: any) => api.post('/api/reimbursements', data),
-  delete: (id: string) => api.delete(`/api/reimbursements/${id}`),
+  // Employee self-service
+  my:        ()                                   => api.get('/api/reimbursements/my'),
+  request:   (fd: FormData)                       => api.post('/api/reimbursements/request', fd),
+  withdraw:  (id: string)                         => api.post(`/api/reimbursements/${id}/withdraw`),
+
+  // Shared list + detail (SA/HR/Emp-own)
+  listAll:   (params?: any)                       => api.get('/api/reimbursements', { params }),
+  get:       (id: string)                         => api.get(`/api/reimbursements/${id}`),
+
+  // SA actions
+  openCycles:()                                   => api.get('/api/reimbursements/cycles/open'),
+  saAdd:     (fd: FormData)                       => api.post('/api/reimbursements/sa/add', fd),
+  approve:   (id: string, data: any)              => api.post(`/api/reimbursements/${id}/approve`, data),
+  reject:    (id: string, reason: string)         => api.post(`/api/reimbursements/${id}/reject`, { reason }),
+  patch:     (id: string, data: any)              => api.patch(`/api/reimbursements/${id}`, data),
+  delete:    (id: string)                         => api.delete(`/api/reimbursements/${id}`),
+
+  // Files
+  addFiles:   (id: string, fd: FormData)          => api.post(`/api/reimbursements/${id}/files`, fd),
+  deleteFile: (id: string, fileId: string)        => api.delete(`/api/reimbursements/${id}/files/${fileId}`),
+
+  // Legacy (cycle summary) — kept for any old callers
+  listForCycle: (cycleId: string)                 => api.get(`/api/reimbursements/cycle/${cycleId}`),
 }
 
 export const payslipApi = {

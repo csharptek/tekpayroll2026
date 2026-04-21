@@ -13,7 +13,7 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
   sick?:    { total: number; used: number; remaining: number }
   casual?:  { total: number; used: number; remaining: number }
   planned?: { total: number; used: number; remaining: number; carryForward: number }
-}): string {
+}, reimbLines?: { label: string; amount: number }[]): string {
   const emp    = entry.employee
   const cycle  = entry.cycle
   const bank   = emp.bankDetail
@@ -47,7 +47,11 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
     { label: 'FBP', amount: fbp },
     { label: 'HYI / Special Allowance', amount: hyi },
     ...(incentive > 0 ? [{ label: 'Monthly Incentive', amount: incentive }] : []),
-    ...(reimb > 0     ? [{ label: 'Reimbursements',    amount: reimb     }] : []),
+    // Per-line reimbursements (using the SA-set payslipLabel). Falls back to an aggregated row
+    // if no line-level data is passed but the legacy total is non-zero.
+    ...(reimbLines && reimbLines.length
+      ? reimbLines.map(l => ({ label: l.label, amount: l.amount }))
+      : (reimb > 0 ? [{ label: 'Reimbursements', amount: reimb }] : [])),
   ]
 
   const deductionRows = [

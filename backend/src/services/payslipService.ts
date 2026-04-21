@@ -154,7 +154,18 @@ export async function generateAndDeliverPayslips(
         }
       } catch { /* leave module not yet set up — skip */ }
 
-      const html      = generatePayslipHTML(entry as any, leaveBalance)
+      // Fetch approved reimbursements for this entry's cycle+employee (for per-line rendering).
+      const reimbItems = await prisma.reimbursement.findMany({
+        where:  { cycleId: entry.cycleId, employeeId: entry.employeeId, status: { in: ['APPROVED', 'PAID'] } },
+        select: { payslipLabel: true, category: true, amount: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      const reimbLines = reimbItems.map(r => ({
+        label:  (r.payslipLabel && r.payslipLabel.trim()) || `${r.category} reimbursement`,
+        amount: Number(r.amount),
+      }))
+
+      const html      = generatePayslipHTML(entry as any, leaveBalance, reimbLines)
       const pdfBuffer = await generatePDF(html)
 
       // Blob path: payslips/2025-04/CST-001/payslip-CST-001-2025-04.pdf

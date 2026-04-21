@@ -48,6 +48,7 @@ import MyProfilePage from './pages/employee/MyProfilePage'
 import MyLoansPage from './pages/employee/MyLoansPage'
 import MyLeavesPage from './pages/employee/MyLeavesPage'
 import MyResignationPage from './pages/employee/MyResignationPage'
+import MyReimbursementsPage from './pages/employee/MyReimbursementsPage'
 
 // Shared Pages
 import PoliciesPage from './pages/shared/PoliciesPage'
@@ -127,7 +128,7 @@ export default function App() {
           <Route path="payroll/:id/run" element={<RequireAuth roles={['SUPER_ADMIN']}><RunPayrollPage /></RequireAuth>} />
           <Route path="payroll/:id/detail" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollRunDetailPage /></RequireAuth>} />
           <Route path="payroll/:id/lop" element={<RequireAuth roles={['SUPER_ADMIN']}><LopManagementPage /></RequireAuth>} />
-          <Route path="payroll/:id/reimbursements" element={<RequireAuth roles={['SUPER_ADMIN']}><ReimbursementsPage /></RequireAuth>} />
+          <Route path="reimbursements" element={<RequireAuth roles={['SUPER_ADMIN']}><ReimbursementsPage /></RequireAuth>} />
           <Route path="payslips" element={<RequireAuth roles={['SUPER_ADMIN']}><PayslipGenerationPage /></RequireAuth>} />
           <Route path="loans" element={<RequireAuth roles={['SUPER_ADMIN']}><LoansPage /></RequireAuth>} />
           <Route path="loans/:id" element={<RequireAuth roles={['SUPER_ADMIN']}><LoanDetailPage /></RequireAuth>} />
@@ -141,6 +142,7 @@ export default function App() {
           <Route path="profile" element={<MyProfilePage />} />
           <Route path="loans" element={<MyLoansPage />} />
           <Route path="leaves" element={<MyLeavesPage />} />
+          <Route path="reimbursements" element={<MyReimbursementsPage />} />
           <Route path="resignation" element={<MyResignationPage />} />
           <Route path="assets" element={<MyAssetsPage />} />
         </Route>
