@@ -24,6 +24,7 @@ interface BreakupRow {
   employeeEsi:  number
   employerPf:   number
   employerEsi:  number
+  pt:           number
   netMonthly:   number
   esiApplies:   boolean
   mediclaim:    number
@@ -253,6 +254,7 @@ export default function SalaryBreakupsPage() {
                   <th className="px-3 py-2.5 font-semibold text-red-600 text-right bg-red-50">Emp ESI</th>
                   <th className="px-3 py-2.5 font-semibold text-green-700 text-right bg-green-50 border-l border-green-100">Emplr PF</th>
                   <th className="px-3 py-2.5 font-semibold text-green-700 text-right bg-green-50">Emplr ESI</th>
+                  <th className="px-3 py-2.5 font-semibold text-orange-600 text-right bg-orange-50 border-l border-orange-100">PT</th>
                   <th className="px-3 py-2.5 font-semibold text-emerald-700 text-right bg-emerald-50 border-l border-emerald-100">Net/mo</th>
                 </tr>
               </thead>
@@ -295,6 +297,7 @@ export default function SalaryBreakupsPage() {
                       <td className="px-3 py-2 text-right font-mono text-red-600 bg-red-50/40"><Rupee amount={r.employeeEsi}/></td>
                       <td className="px-3 py-2 text-right font-mono text-green-700 bg-green-50/40 border-l border-green-100"><Rupee amount={r.employerPf}/></td>
                       <td className="px-3 py-2 text-right font-mono text-green-700 bg-green-50/40"><Rupee amount={r.employerEsi}/></td>
+                      <td className="px-3 py-2 text-right font-mono text-orange-600 bg-orange-50/40 border-l border-orange-100"><Rupee amount={r.pt}/></td>
                       <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700 bg-emerald-50/40 border-l border-emerald-100"><Rupee amount={r.netMonthly}/></td>
                     </tr>
                   )
@@ -306,7 +309,7 @@ export default function SalaryBreakupsPage() {
       </div>
 
       <p className="text-xs text-slate-400 px-1">
-        Salary shown is as-of last day of selected month (respects effective-dated salary revisions). Employer PF &amp; ESI are inside CTC. Employee PF &amp; ESI are deducted from Gross.
+        Salary shown is as-of last day of selected month (respects effective-dated salary revisions). Employer PF &amp; ESI are inside CTC. Net/mo = Gross − Employee PF − Employee ESI − Professional Tax. TDS excluded (computed at payroll time).
       </p>
     </div>
   )

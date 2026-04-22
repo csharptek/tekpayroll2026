@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { authenticate, requireSuperAdmin } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
-import { computeSalaryStructure, getEsiConfig, getSalaryInputForDate } from '../services/payrollEngine';
+import { computeSalaryStructure, getEsiConfig, getSalaryInputForDate, computePt } from '../services/payrollEngine';
 
 export const salaryBreakupsRouter = Router();
 salaryBreakupsRouter.use(authenticate, requireSuperAdmin);
@@ -27,6 +27,7 @@ interface BreakupRow {
   employeeEsi:      number;
   employerPf:       number;
   employerEsi:      number;
+  pt:               number;
   netMonthly:       number;
   esiApplies:       boolean;
   mediclaim:        number;
@@ -58,6 +59,8 @@ async function buildBreakups(
       incentivePercent: Number(input.incentivePercent),
     }, esiConfig);
 
+    const pt = await computePt(s.grandTotalMonthly, emp.state || '');
+
     rows.push({
       employeeId:   emp.id,
       employeeCode: emp.employeeCode,
@@ -77,7 +80,8 @@ async function buildBreakups(
       employeeEsi:  s.employeeEsiMonthly,
       employerPf:   Math.min(s.employerPfMonthly, 1800),
       employerEsi:  s.employerEsiMonthly,
-      netMonthly:   s.grandTotalMonthly - s.employeePfMonthly - s.employeeEsiMonthly,
+      pt,
+      netMonthly:   s.grandTotalMonthly - s.employeePfMonthly - s.employeeEsiMonthly - pt,
       esiApplies:   s.esiApplies,
       mediclaim:    Number(input.mediclaim),
       annualBonus:  s.annualBonus,
@@ -268,6 +272,11 @@ salaryBreakupsRouter.post('/export', async (req, res) => {
             sc(dlCell, { border: thinBorder });
             daCell.value = emp.employeeEsi;
             sc(daCell, { border: thinBorder, numFmt: '#,##0' });
+          } else if (ri === 2 && emp.pt > 0) {
+            dlCell.value = 'Professional Tax';
+            sc(dlCell, { border: thinBorder });
+            daCell.value = emp.pt;
+            sc(daCell, { border: thinBorder, numFmt: '#,##0' });
           } else {
             sc(dlCell, { border: thinBorder });
             sc(daCell, { border: thinBorder });
@@ -278,15 +287,14 @@ salaryBreakupsRouter.post('/export', async (req, res) => {
       // ── Totals row
       const totRow = startRow + 2 + earningLabels.length;
       emps.forEach((emp, i) => {
-        const gross    = emp.basic + emp.hra + emp.transport + emp.fbp + emp.hyi;
-        const totalDed = emp.employeePf + emp.employeeEsi;
+        const totalDed = emp.employeePf + emp.employeeEsi + emp.pt;
 
         const tlCell = ws.getCell(totRow, colFor(i, 0));
         tlCell.value = 'Total Earnings';
         sc(tlCell, { fill: totalFill, bold: true, border: thinBorder });
 
         const taCell = ws.getCell(totRow, colFor(i, 1));
-        taCell.value = gross;
+        taCell.value = emp.grossMonthly;
         sc(taCell, { fill: totalFill, bold: true, border: thinBorder, numFmt: '#,##0' });
 
         const tdlCell = ws.getCell(totRow, colFor(i, 2));
@@ -301,9 +309,6 @@ salaryBreakupsRouter.post('/export', async (req, res) => {
       // ── Net salary row
       const netRow = totRow + 1;
       emps.forEach((emp, i) => {
-        const gross = emp.basic + emp.hra + emp.transport + emp.fbp + emp.hyi;
-        const net   = gross - emp.employeePf - emp.employeeEsi;
-
         sc(ws.getCell(netRow, colFor(i, 0)), { border: thinBorder });
         sc(ws.getCell(netRow, colFor(i, 1)), { border: thinBorder });
 
@@ -312,7 +317,7 @@ salaryBreakupsRouter.post('/export', async (req, res) => {
         sc(nlCell, { fill: netFill, bold: true, border: thinBorder });
 
         const naCell = ws.getCell(netRow, colFor(i, 3));
-        naCell.value = net;
+        naCell.value = emp.netMonthly;
         sc(naCell, { fill: netFill, bold: true, border: thinBorder, numFmt: '#,##0' });
       });
 
@@ -324,7 +329,7 @@ salaryBreakupsRouter.post('/export', async (req, res) => {
       employeeId: '', employeeCode: '', name: '', jobTitle: '', department: '',
       state: '', status: '', annualCtc: 0, basic: 0, hra: 0, transport: 0,
       fbp: 0, hyi: 0, grossMonthly: 0, employeePf: 0, employeeEsi: 0,
-      employerPf: 0, employerEsi: 0, netMonthly: 0, esiApplies: false,
+      employerPf: 0, employerEsi: 0, pt: 0, netMonthly: 0, esiApplies: false,
       mediclaim: 0, annualBonus: 0, hasIncentive: false,
     };
 
@@ -362,6 +367,7 @@ salaryBreakupsRouter.post('/export', async (req, res) => {
       'Gross Monthly': r.grossMonthly,
       'Employee PF':   r.employeePf,
       'Employee ESI':  r.employeeEsi,
+      'Professional Tax': r.pt,
       'Employer PF':   r.employerPf,
       'Employer ESI':  r.employerEsi,
       'Net Monthly':   r.netMonthly,
@@ -391,9 +397,10 @@ salaryBreakupsRouter.post('/export', async (req, res) => {
         ['FBP',           'Earning (in Gross)',   r.fbp],
         ['HYI',           'Earning (in Gross)',   r.hyi],
         ['Gross Monthly', 'Gross',                r.grossMonthly],
-        ['Employee PF',   'Deduction (in Gross)', r.employeePf],
-        ['Employee ESI',  'Deduction (in Gross)', r.employeeEsi],
-        ['Employer PF',   'Employer (in CTC)',    r.employerPf],
+        ['Employee PF',        'Deduction (in Gross)', r.employeePf],
+        ['Employee ESI',       'Deduction (in Gross)', r.employeeEsi],
+        ['Professional Tax',   'Deduction (in Gross)', r.pt],
+        ['Employer PF',        'Employer (in CTC)',    r.employerPf],
         ['Employer ESI',  'Employer (in CTC)',    r.employerEsi],
         ['Net Monthly',   'Net Take Home',        r.netMonthly],
       ];

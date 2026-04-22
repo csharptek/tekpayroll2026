@@ -324,6 +324,9 @@ export function isBonusMonth(payrollMonth: string): boolean {
 // Queries SalaryRevision table first; falls back to employee fields.
 
 export async function getSalaryInputForDate(employeeId: string, asOf: Date): Promise<SalaryInput & { tdsMonthly: number }> {
+  const emp = await prisma.employee.findUnique({ where: { id: employeeId } })
+  if (!emp) throw new Error(`Employee ${employeeId} not found`)
+
   const revision = await prisma.salaryRevision.findFirst({
     where: {
       employeeId,
@@ -332,25 +335,8 @@ export async function getSalaryInputForDate(employeeId: string, asOf: Date): Pro
     orderBy: { effectiveFrom: 'desc' },
   })
 
-  if (revision) {
-    return {
-      annualCtc:        Number(revision.newCtc),
-      basicPercent:     Number(revision.newBasicPct),
-      hraPercent:       Number(revision.newHraPct),
-      transportMonthly: revision.newTransport != null ? Number(revision.newTransport) : null,
-      fbpMonthly:       revision.newFbp       != null ? Number(revision.newFbp)       : null,
-      mediclaim:        Number(revision.newMediclaim),
-      hasIncentive:     revision.newHasIncentive,
-      incentivePercent: Number(revision.newIncentivePct),
-      tdsMonthly:       Number(revision.newTds),
-    }
-  }
-
-  // Fallback: read from employee record
-  const emp = await prisma.employee.findUnique({ where: { id: employeeId } })
-  if (!emp) throw new Error(`Employee ${employeeId} not found`)
-
-  return {
+  // Base values from employee record
+  const base = {
     annualCtc:        Number(emp.annualCtc),
     basicPercent:     Number((emp as any).basicPercent    ?? 45),
     hraPercent:       Number((emp as any).hraPercent      ?? 35),
@@ -360,6 +346,17 @@ export async function getSalaryInputForDate(employeeId: string, asOf: Date): Pro
     hasIncentive:     Boolean((emp as any).hasIncentive),
     incentivePercent: Number((emp as any).incentivePercent ?? 12),
     tdsMonthly:       Number((emp as any).tdsMonthly       ?? 0),
+  }
+
+  if (!revision) return base
+
+  // Revision only overrides CTC — historically, partial revisions stored
+  // schema-default values for other fields (basicPct=45, mediclaim=0, etc.),
+  // which wiped real employee settings. We only trust newCtc from the revision
+  // and read everything else from the current employee record.
+  return {
+    ...base,
+    annualCtc: Number(revision.newCtc),
   }
 }
 
