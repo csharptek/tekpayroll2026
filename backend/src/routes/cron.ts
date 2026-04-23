@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings } from '../services/cronJobs'
 import { prisma } from '../utils/prisma'
 import { authenticate, requireSuperAdmin } from '../middleware/auth'
+import { migrateAllSalarySnapshots } from '../services/salarySnapshot'
 
 export const cronRouter = Router()
 
@@ -61,6 +62,18 @@ cronRouter.post('/manual/sync-entra', requireSuperAdmin, async (_req, res) => {
 cronRouter.post('/manual/holiday-greetings', requireSuperAdmin, async (_req, res) => {
   await cronSendHolidayGreetings('manual')
   res.json({ success: true })
+})
+
+// ─── SALARY STRUCTURE MIGRATION ──────────────────────────────────────────────
+
+cronRouter.post('/manual/migrate-salary-snapshots', requireSuperAdmin, async (req: any, res) => {
+  try {
+    const computedBy = req.employee?.id || 'system'
+    const result = await migrateAllSalarySnapshots(computedBy)
+    res.json({ success: true, data: result })
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message })
+  }
 })
 
 // ─── CRON LOGS ────────────────────────────────────────────────────────────────

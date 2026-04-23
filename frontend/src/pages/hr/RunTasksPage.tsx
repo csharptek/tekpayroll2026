@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
   Play, Loader2, CheckCircle, XCircle, AlertCircle,
-  CreditCard, FileText, RefreshCw, CalendarDays, Terminal
+  CreditCard, FileText, RefreshCw, CalendarDays, Terminal, Database
 } from 'lucide-react'
 import { cronApi } from '../../services/api'
 import { PageHeader, Card } from '../../components/ui'
@@ -38,6 +38,13 @@ const JOBS = [
     icon: CalendarDays,
     color: 'amber',
   },
+  {
+    key: 'migrate-salary-snapshots',
+    label: 'Save Salary Structures',
+    description: 'Compute & store salary breakup for all active employees. Run once after any bulk CTC update.',
+    icon: Database,
+    color: 'teal',
+  },
 ]
 
 const COLOR_MAP: Record<string, string> = {
@@ -45,6 +52,7 @@ const COLOR_MAP: Record<string, string> = {
   purple: 'border-purple-200 bg-purple-50 text-purple-700',
   green:  'border-green-200 bg-green-50 text-green-700',
   amber:  'border-amber-200 bg-amber-50 text-amber-700',
+  teal:   'border-teal-200 bg-teal-50 text-teal-700',
 }
 
 const ICON_COLOR: Record<string, string> = {
@@ -52,6 +60,7 @@ const ICON_COLOR: Record<string, string> = {
   purple: 'text-purple-500',
   green:  'text-green-500',
   amber:  'text-amber-500',
+  teal:   'text-teal-500',
 }
 
 type RunState = {
@@ -121,7 +130,21 @@ export default function RunTasksPage() {
       stopPoller(key)
       updateState(key, { status: 'running', startedAt: new Date(), completedAt: undefined, message: undefined, errorMessage: undefined, meta: undefined, pollCount: 0 })
     },
-    onSuccess: (_, { key }) => {
+    onSuccess: (data: any, { key }) => {
+      // For salary migration — direct response, no cron log
+      if (key === 'migrate-salary-snapshots') {
+        const d = data?.data?.data
+        if (d) {
+          const msg = `Done: ${d.success} saved, ${d.failed} failed out of ${d.total} employees.`
+          updateState(key, {
+            status: d.failed === 0 ? 'success' : 'partial',
+            completedAt: new Date(),
+            message: msg,
+            meta: { total: d.total, success: d.success, failed: d.failed },
+          })
+          return
+        }
+      }
       // Job done — do one final poll
       pollLogs(key, states[key].startedAt || new Date())
     },

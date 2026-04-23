@@ -243,6 +243,7 @@ model Employee {
   resignationHistory  ResignationHistory[]
   assetAssignments    AssetAssignment[]
   assetRequests       AssetRequest[]
+  salarySnapshots     SalaryStructureSnapshot[]
 
   @@index([status])
   @@index([department])
@@ -1562,4 +1563,49 @@ model AssetRequest {
 
   @@index([employeeId])
   @@index([status])
+}
+
+// ─── SALARY STRUCTURE SNAPSHOT ───────────────────────────────────────────────
+// Computed once when CTC is saved. Read everywhere salary breakup is needed.
+
+model SalaryStructureSnapshot {
+  id              String   @id @default(cuid())
+  employeeId      String
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  effectiveDate   DateTime // date snapshot was computed
+  annualCtc       Decimal  @db.Decimal(12, 2)
+
+  // Monthly components
+  basicMonthly    Decimal  @db.Decimal(10, 2)
+  hraMonthly      Decimal  @db.Decimal(10, 2)
+  transportMonthly Decimal @db.Decimal(10, 2)
+  fbpMonthly      Decimal  @db.Decimal(10, 2)
+  hyiMonthly      Decimal  @db.Decimal(10, 2)
+  grandTotalMonthly Decimal @db.Decimal(10, 2)
+
+  // Deductions
+  employeePfMonthly  Decimal @db.Decimal(10, 2)
+  employeeEsiMonthly Decimal @db.Decimal(10, 2)
+  employerPfMonthly  Decimal @db.Decimal(10, 2)
+  employerEsiMonthly Decimal @db.Decimal(10, 2)
+  ptMonthly          Decimal @db.Decimal(10, 2)
+  tdsMonthly         Decimal @db.Decimal(10, 2)
+
+  // Net
+  netMonthly      Decimal  @db.Decimal(10, 2)
+
+  // Flags
+  esiApplies      Boolean  @default(false)
+  mediclaim       Decimal  @db.Decimal(10, 2)
+  annualBonus     Decimal  @db.Decimal(12, 2)
+  hasIncentive    Boolean  @default(false)
+
+  isActive        Boolean  @default(true)
+
+  computedBy      String?  // userId who triggered
+  computedAt      DateTime @default(now())
+
+  @@index([employeeId, isActive])
+  @@index([employeeId, effectiveDate])
 }
