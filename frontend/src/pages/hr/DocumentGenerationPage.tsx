@@ -33,6 +33,7 @@ interface CompanyProfile {
   COMPANY_PHONE?: string
   COMPANY_EMAIL?: string
   COMPANY_LOGO_URL?: string
+  COMPANY_SIGN_URL?: string
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -202,6 +203,7 @@ function buildIncrementLetterHtml(
 
   <!-- SIGNATURE -->
   <div style="margin-top:40px;">
+    ${company.COMPANY_SIGN_URL ? `<img src="${company.COMPANY_SIGN_URL}" alt="sign" style="height:60px;width:auto;margin-bottom:4px;" />` : ''}
     <p style="margin:0;font-size:11pt;">For <strong>${company.COMPANY_NAME || 'Cloudgarner Solutions Pvt. Ltd.'}</strong></p>
     <br/><br/>
     <p style="margin:0;font-size:11pt;font-weight:700;">${signerName}</p>
@@ -256,6 +258,7 @@ export default function DocumentGenerationPage() {
   const [htmlContent, setHtmlContent] = useState('')
   const [showPreview, setShowPreview] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [signFile, setSignFile] = useState<File | null>(null)
   const [companyForm, setCompanyForm] = useState<CompanyProfile>({})
   const [companySaved, setCompanySaved] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -283,6 +286,7 @@ export default function DocumentGenerationPage() {
       COMPANY_PHONE:    d.COMPANY_PHONE    || '',
       COMPANY_EMAIL:    d.COMPANY_EMAIL    || '',
       COMPANY_LOGO_URL: d.COMPANY_LOGO_URL || '',
+      COMPANY_SIGN_URL:  d.COMPANY_SIGN_URL  || '',
     })
   }, [configData])
 
@@ -331,6 +335,12 @@ export default function DocumentGenerationPage() {
         const fd = new FormData()
         fd.append('logo', logoFile)
         await documentsApi.uploadLogo(fd)
+      }
+      if (signFile) {
+        const fd = new FormData()
+        fd.append('logo', signFile)
+        const r = await documentsApi.uploadSign(fd)
+        setCompanyForm(p => ({ ...p, COMPANY_SIGN_URL: r.data?.data?.url || '' }))
       }
       await configApi.update(companyForm)
       await refetchConfig()
@@ -426,6 +436,18 @@ export default function DocumentGenerationPage() {
                 <Upload size={14} />
                 {logoFile ? logoFile.name : 'Upload Logo'}
                 <input type="file" accept="image/*" className="hidden" onChange={e => setLogoFile(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+          </Field>
+          <Field label="Signature / Stamp">
+            <div className="flex items-center gap-3">
+              {(company.COMPANY_SIGN_URL) && (
+                <img src={company.COMPANY_SIGN_URL} alt="sign" className="h-10 w-auto border rounded" />
+              )}
+              <label className="cursor-pointer flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                <Upload size={14} />
+                {signFile ? signFile.name : 'Upload Sign/Stamp'}
+                <input type="file" accept="image/*" className="hidden" onChange={e => setSignFile(e.target.files?.[0] || null)} />
               </label>
             </div>
           </Field>
@@ -621,31 +643,39 @@ export default function DocumentGenerationPage() {
 const IframeEditor = forwardRef<HTMLIFrameElement, { html: string; onChange: (h: string) => void }>(
   ({ html, onChange }, ref) => {
     const localRef = useRef<HTMLIFrameElement>(null)
+    const initialHtml = useRef(html)
+    const initialized = useRef(false)
+
     const combinedRef = (el: HTMLIFrameElement | null) => {
       localRef.current = el
       if (typeof ref === 'function') ref(el)
       else if (ref) (ref as any).current = el
     }
 
-    const onLoad = () => {
-      const doc = localRef.current?.contentDocument
+    // Write content once on mount via blank src + useEffect
+    useEffect(() => {
+      if (initialized.current) return
+      const iframe = localRef.current
+      if (!iframe) return
+      const doc = iframe.contentDocument
       if (!doc) return
+      initialized.current = true
       doc.open()
-      doc.write(html)
+      doc.write(initialHtml.current)
       doc.close()
       doc.designMode = 'on'
       doc.addEventListener('input', () => {
         onChange(doc.documentElement.outerHTML)
       })
-    }
+    }, [onChange])
 
+    // Never pass srcDoc - use blank src so React never reloads the iframe
     return (
       <iframe
         ref={combinedRef}
-        onLoad={onLoad}
+        src="about:blank"
         style={{ width: '100%', minHeight: 700, border: 'none' }}
         title="letter-editor"
-        srcDoc={html}
       />
     )
   }

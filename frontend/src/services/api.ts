@@ -313,6 +313,7 @@ export const assetApi = {
 
 export const documentsApi = {
   uploadLogo:      (formData: FormData) => api.post('/api/documents/company-logo', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  uploadSign:      (formData: FormData) => api.post('/api/documents/company-sign', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getSalarySnapshot: (employeeId: string) => api.get(`/api/documents/salary-snapshot/${employeeId}`),
   computeSalary:   (data: { employeeId: string; annualCtc: number }) => api.post('/api/documents/compute-salary', data),
   generate:        (data: any) => api.post('/api/documents/generate', data),

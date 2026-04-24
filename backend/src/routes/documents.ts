@@ -70,6 +70,20 @@ documentsRouter.post('/company-logo', requireHR, upload.single('logo'), async (r
   res.json({ success: true, data: { url } })
 })
 
+// ─── COMPANY SIGN UPLOAD ─────────────────────────────────────────────────────
+
+documentsRouter.post('/company-sign', requireHR, upload.single('logo'), async (req: any, res) => {
+  if (!req.file) throw new AppError('No file uploaded', 400)
+  const key = `company/sign-${randomUUID()}.png`
+  const url = await uploadBlob(req.file.buffer, key, req.file.mimetype)
+  await prisma.systemConfig.upsert({
+    where:  { key: 'COMPANY_SIGN_URL' },
+    create: { key: 'COMPANY_SIGN_URL', value: url, updatedBy: req.user!.id },
+    update: { value: url, updatedBy: req.user!.id },
+  })
+  res.json({ success: true, data: { url } })
+})
+
 // ─── GET SALARY SNAPSHOT FOR EMPLOYEE ─────────────────────────────────────────
 
 documentsRouter.get('/salary-snapshot/:employeeId', requireHR, async (req: any, res) => {
