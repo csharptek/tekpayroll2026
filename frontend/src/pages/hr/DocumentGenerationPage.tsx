@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, forwardRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { employeeApi, configApi, documentsApi } from '../../services/api'
 import { Upload, RefreshCw, Send, Save } from 'lucide-react'
@@ -48,6 +48,8 @@ function buildIncrementLetterHtml(
   isPromotion: boolean,
   newDesignation: string,
   company: CompanyProfile,
+  signerName: string,
+  signerDesignation: string,
 ): string {
   const logoHtml = company.COMPANY_LOGO_URL
     ? `<img src="${company.COMPANY_LOGO_URL}" alt="logo" style="height:55px;width:auto;" />`
@@ -202,8 +204,8 @@ function buildIncrementLetterHtml(
   <div style="margin-top:40px;">
     <p style="margin:0;font-size:11pt;">For <strong>${company.COMPANY_NAME || 'Cloudgarner Solutions Pvt. Ltd.'}</strong></p>
     <br/><br/>
-    <p style="margin:0;font-size:11pt;font-weight:700;">Bhanu Pratap Gupta</p>
-    <p style="margin:0;font-size:10pt;">CEO</p>
+    <p style="margin:0;font-size:11pt;font-weight:700;">${signerName}</p>
+    <p style="margin:0;font-size:10pt;">${signerDesignation}</p>
   </div>
 
   <!-- FOOTER -->
@@ -249,12 +251,14 @@ export default function DocumentGenerationPage() {
   const [isPromotion, setIsPromotion] = useState(false)
   const [newDesignation, setNewDesignation] = useState('')
   const [salary, setSalary] = useState<SalaryData | null>(null)
+  const [signerName, setSignerName] = useState('Bhanu Pratap Gupta')
+  const [signerDesignation, setSignerDesignation] = useState('CEO')
   const [htmlContent, setHtmlContent] = useState('')
   const [showPreview, setShowPreview] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [companyForm, setCompanyForm] = useState<CompanyProfile>({})
   const [companySaved, setCompanySaved] = useState(false)
-  const previewRef = useRef<HTMLDivElement>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
 
   // Employees list
   const { data: empData } = useQuery({
@@ -341,6 +345,7 @@ export default function DocumentGenerationPage() {
         selectedEmp, salary!, letterDate, effectiveDate,
         isPromotion, newDesignation,
         { ...companyForm, COMPANY_LOGO_URL: configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL },
+        signerName, signerDesignation,
       )
       setHtmlContent(html)
       setShowPreview(true)
@@ -376,11 +381,15 @@ export default function DocumentGenerationPage() {
   }
 
   const handlePrint = () => {
-    const win = window.open('', '_blank')
-    if (!win) return
-    win.document.write(htmlContent)
-    win.document.close()
-    win.print()
+    if (iframeRef.current) {
+      iframeRef.current.contentWindow?.print()
+    } else {
+      const win = window.open('', '_blank')
+      if (!win) return
+      win.document.write(htmlContent)
+      win.document.close()
+      win.print()
+    }
   }
 
   const company = companyForm
@@ -512,6 +521,13 @@ export default function DocumentGenerationPage() {
               <input className={inp} placeholder="e.g. Senior Developer" value={newDesignation} onChange={e => setNewDesignation(e.target.value)} />
             </Field>
           )}
+          {/* Signer */}
+          <Field label="Signed By">
+            <input className={inp} value={signerName} onChange={e => setSignerName(e.target.value)} placeholder="e.g. Bhanu Pratap Gupta" />
+          </Field>
+          <Field label="Signer Designation">
+            <input className={inp} value={signerDesignation} onChange={e => setSignerDesignation(e.target.value)} placeholder="e.g. CEO" />
+          </Field>
         </div>
 
         {/* Salary Breakup Preview */}
@@ -547,6 +563,7 @@ export default function DocumentGenerationPage() {
                 selectedEmp, salary!, letterDate, effectiveDate,
                 isPromotion, newDesignation,
                 { ...companyForm, COMPANY_LOGO_URL: configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL },
+                signerName, signerDesignation,
               )
               setHtmlContent(html)
               setShowPreview(true)
@@ -585,19 +602,55 @@ export default function DocumentGenerationPage() {
               Print / Download PDF
             </button>
           </div>
-          <div
-            ref={previewRef}
-            contentEditable
-            suppressContentEditableWarning
-            onInput={e => setHtmlContent((e.currentTarget as HTMLDivElement).innerHTML)}
-            className="p-6 min-h-[600px] outline-none"
-            dangerouslySetInnerHTML={{ __html: htmlContent }}
+          <IframeEditor
+            ref={iframeRef}
+            html={htmlContent}
+            onChange={setHtmlContent}
           />
         </section>
       )}
     </div>
   )
 }
+
+// ─── IFRAME EDITOR ───────────────────────────────────────────────────────────
+// Using iframe avoids the contentEditable + dangerouslySetInnerHTML focus bug.
+// The iframe document is made editable via designMode; no React re-render on keypress.
+
+
+const IframeEditor = forwardRef<HTMLIFrameElement, { html: string; onChange: (h: string) => void }>(
+  ({ html, onChange }, ref) => {
+    const localRef = useRef<HTMLIFrameElement>(null)
+    const combinedRef = (el: HTMLIFrameElement | null) => {
+      localRef.current = el
+      if (typeof ref === 'function') ref(el)
+      else if (ref) (ref as any).current = el
+    }
+
+    const onLoad = () => {
+      const doc = localRef.current?.contentDocument
+      if (!doc) return
+      doc.open()
+      doc.write(html)
+      doc.close()
+      doc.designMode = 'on'
+      doc.addEventListener('input', () => {
+        onChange(doc.documentElement.outerHTML)
+      })
+    }
+
+    return (
+      <iframe
+        ref={combinedRef}
+        onLoad={onLoad}
+        style={{ width: '100%', minHeight: 700, border: 'none' }}
+        title="letter-editor"
+        srcDoc={html}
+      />
+    )
+  }
+)
+IframeEditor.displayName = 'IframeEditor'
 
 // ─── TINY COMPONENTS ─────────────────────────────────────────────────────────
 
