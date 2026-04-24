@@ -368,7 +368,7 @@ assetRouter.get('/bulk/template', requireHR, async (_req, res, next) => {
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.aoa_to_sheet([
       ['Asset Name*', 'Asset Code*', 'Category Name*', 'Sub Category', 'Brand', 'Model', 'Serial Number', 'Purchase Date (YYYY-MM-DD)', 'Warranty Expiry (YYYY-MM-DD)', 'Notes'],
-      ['Dell Laptop', 'ASSET-001', 'IT', 'Laptop', 'Dell', 'Inspiron 15', 'SN123456', '2024-01-01', '2027-01-01', ''],
+      ['Dell Laptop', 'CT-LAP-001', 'IT Assets', 'Laptop', 'Dell', 'Inspiron 15', 'SN123456', '2024-01-01', '2027-01-01', ''],
     ])
     XLSX.utils.book_append_sheet(wb, ws, 'Assets')
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
@@ -386,6 +386,16 @@ assetRouter.post('/bulk/upload', requireHR, upload.single('file'), async (req, r
     const ws = wb.Sheets[wb.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json<any>(ws, { defval: '' })
 
+    // Flexible header resolver
+    const pick = (row: any, keys: string[]) => {
+      for (const k of keys) {
+        if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') {
+          return String(row[k]).trim()
+        }
+      }
+      return ''
+    }
+
     const results: { row: number; status: string; error?: string }[] = []
     let imported = 0
 
@@ -393,10 +403,10 @@ assetRouter.post('/bulk/upload', requireHR, upload.single('file'), async (req, r
       const row = rows[i]
       const rowNum = i + 2
       try {
-        const name = String(row['Asset Name*'] || '').trim()
-        const assetCode = String(row['Asset Code*'] || '').trim()
-        const categoryName = String(row['Category Name*'] || '').trim()
-        const subCategoryName = String(row['Sub Category'] || '').trim()
+        const name = pick(row, ['Asset Name*', 'Asset Name', 'Assets Name', 'Assets Name*'])
+        const assetCode = pick(row, ['Asset Code*', 'Asset Code'])
+        const categoryName = pick(row, ['Category Name*', 'Category Name', 'Category'])
+        const subCategoryName = pick(row, ['Sub Category', 'Sub-Category', 'SubCategory'])
 
         if (!name || !assetCode || !categoryName) {
           results.push({ row: rowNum, status: 'error', error: 'Missing required fields' })
@@ -409,7 +419,6 @@ assetRouter.post('/bulk/upload', requireHR, upload.single('file'), async (req, r
           continue
         }
 
-        // Find or skip category
         const category = await prisma.assetCategoryConfig.findFirst({
           where: { name: { equals: categoryName, mode: 'insensitive' }, isActive: true },
         })
@@ -423,11 +432,19 @@ assetRouter.post('/bulk/upload', requireHR, upload.single('file'), async (req, r
           const sub = await prisma.assetSubCategoryConfig.findFirst({
             where: { name: { equals: subCategoryName, mode: 'insensitive' }, categoryId: category.id, isActive: true },
           })
-          if (sub) subCategoryId = sub.id
+          if (!sub) {
+            results.push({ row: rowNum, status: 'error', error: `Sub-category "${subCategoryName}" not found under "${categoryName}"` })
+            continue
+          }
+          subCategoryId = sub.id
         }
 
-        const purchaseDateStr = String(row['Purchase Date (YYYY-MM-DD)'] || '').trim()
-        const warrantyStr = String(row['Warranty Expiry (YYYY-MM-DD)'] || '').trim()
+        const purchaseDateStr = pick(row, ['Purchase Date (YYYY-MM-DD)', 'Purchase Date'])
+        const warrantyStr = pick(row, ['Warranty Expiry (YYYY-MM-DD)', 'Warranty Expiry'])
+        const brand = pick(row, ['Brand'])
+        const model = pick(row, ['Model', 'Model No.', 'Model Number'])
+        const serial = pick(row, ['Serial Number', 'Serial No.', 'Serial'])
+        const notes = pick(row, ['Notes', 'Remarks'])
 
         await prisma.asset.create({
           data: {
@@ -435,12 +452,12 @@ assetRouter.post('/bulk/upload', requireHR, upload.single('file'), async (req, r
             assetCode,
             categoryId: category.id,
             subCategoryId,
-            brand: String(row['Brand'] || '').trim() || null,
-            model: String(row['Model'] || '').trim() || null,
-            serialNumber: String(row['Serial Number'] || '').trim() || null,
+            brand: brand || null,
+            model: model || null,
+            serialNumber: serial || null,
             purchaseDate: purchaseDateStr ? new Date(purchaseDateStr) : null,
             warrantyExpiry: warrantyStr ? new Date(warrantyStr) : null,
-            notes: String(row['Notes'] || '').trim() || null,
+            notes: notes || null,
             status: AssetStatus.AVAILABLE,
           },
         })

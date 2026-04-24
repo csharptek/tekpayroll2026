@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
   Play, Loader2, CheckCircle, XCircle, AlertCircle,
-  CreditCard, FileText, RefreshCw, CalendarDays, Terminal, Database
+  CreditCard, FileText, RefreshCw, CalendarDays, Terminal, Database, Package
 } from 'lucide-react'
 import { cronApi } from '../../services/api'
 import { PageHeader, Card } from '../../components/ui'
@@ -45,6 +45,13 @@ const JOBS = [
     icon: Database,
     color: 'teal',
   },
+  {
+    key: 'seed-asset-categories',
+    label: 'Seed Asset Categories',
+    description: 'Create standard asset categories & sub-categories. Idempotent — safe to re-run.',
+    icon: Package,
+    color: 'indigo',
+  },
 ]
 
 const COLOR_MAP: Record<string, string> = {
@@ -53,6 +60,7 @@ const COLOR_MAP: Record<string, string> = {
   green:  'border-green-200 bg-green-50 text-green-700',
   amber:  'border-amber-200 bg-amber-50 text-amber-700',
   teal:   'border-teal-200 bg-teal-50 text-teal-700',
+  indigo: 'border-indigo-200 bg-indigo-50 text-indigo-700',
 }
 
 const ICON_COLOR: Record<string, string> = {
@@ -61,6 +69,7 @@ const ICON_COLOR: Record<string, string> = {
   green:  'text-green-500',
   amber:  'text-amber-500',
   teal:   'text-teal-500',
+  indigo: 'text-indigo-500',
 }
 
 type RunState = {
@@ -145,6 +154,20 @@ export default function RunTasksPage() {
           return
         }
       }
+      // For seed asset categories — direct response, no cron log
+      if (key === 'seed-asset-categories') {
+        const d = data?.data?.data
+        if (d) {
+          const msg = `Categories: ${d.catCreated} created, ${d.catSkipped} existed. Sub-categories: ${d.subCreated} created, ${d.subSkipped} existed.`
+          updateState(key, {
+            status: 'success',
+            completedAt: new Date(),
+            message: msg,
+            meta: { catCreated: d.catCreated, catSkipped: d.catSkipped, subCreated: d.subCreated, subSkipped: d.subSkipped },
+          })
+          return
+        }
+      }
       // Job done — do one final poll
       pollLogs(key, states[key].startedAt || new Date())
     },
@@ -159,8 +182,11 @@ export default function RunTasksPage() {
     stopPoller(key)
     updateState(key, { status: 'running', startedAt, completedAt: undefined, message: undefined, errorMessage: undefined, meta: undefined, pollCount: 0 })
 
-    // Start polling immediately
-    pollers.current[key] = setInterval(() => pollLogs(key, startedAt), 2000)
+    // Direct-response tasks: no cron log polling
+    const DIRECT = ['migrate-salary-snapshots', 'seed-asset-categories']
+    if (!DIRECT.includes(key)) {
+      pollers.current[key] = setInterval(() => pollLogs(key, startedAt), 2000)
+    }
 
     trigger.mutate({ key })
   }
