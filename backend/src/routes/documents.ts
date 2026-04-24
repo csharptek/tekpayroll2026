@@ -147,7 +147,7 @@ documentsRouter.post('/generate', requireHR, async (req: any, res) => {
   const doc = await prisma.employeeDocument.create({
     data: {
       employeeId,
-      documentType:   'OTHER',
+      documentType:   (documentType as any) || 'OTHER',
       fileName:       `${documentType}-${dateStr}.html`,
       fileUrl:        url,
       fileKey:        key,
