@@ -52,7 +52,7 @@ const HR_NAV = [
   {
     section: 'Documents',
     items: [
-      { label: 'Generate Document', icon: FileOutput, to: '/hr/documents' },
+      { label: 'Increment Letter', icon: FileOutput, to: '/hr/documents' },
     ]
   },
   {
@@ -137,7 +137,7 @@ const SUPER_ADMIN_NAV = [
   {
     section: 'Documents',
     items: [
-      { label: 'Generate Document', icon: FileOutput, to: '/hr/documents' },
+      { label: 'Increment Letter', icon: FileOutput, to: '/hr/documents' },
     ]
   },
   {

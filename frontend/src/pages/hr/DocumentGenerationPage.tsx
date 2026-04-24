@@ -406,7 +406,7 @@ export default function DocumentGenerationPage() {
 
   return (
     <div className="p-4 max-w-6xl mx-auto space-y-6">
-      <h1 className="text-xl font-bold text-gray-800">Document Generation</h1>
+      <h1 className="text-xl font-bold text-gray-800">Increment Letter</h1>
 
       {/* ── COMPANY PROFILE ── */}
       <section className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
