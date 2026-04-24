@@ -311,13 +311,14 @@ assetRouter.post('/', requireHR, async (req, res, next) => {
 assetRouter.put('/:id', requireHR, async (req, res, next) => {
   try {
     const data = assetSchema.partial().parse(req.body)
+    const updateData: any = { ...data }
+    if (data.purchaseDate !== undefined) updateData.purchaseDate = data.purchaseDate ? new Date(data.purchaseDate) : null
+    if (data.warrantyExpiry !== undefined) updateData.warrantyExpiry = data.warrantyExpiry ? new Date(data.warrantyExpiry) : null
+    if (updateData.assetCode === null || updateData.assetCode === '') delete updateData.assetCode
+
     const asset = await prisma.asset.update({
       where: { id: req.params.id },
-      data: {
-        ...data,
-        purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : undefined,
-        warrantyExpiry: data.warrantyExpiry ? new Date(data.warrantyExpiry) : undefined,
-      },
+      data: updateData,
       include: { category: true, subCategory: true },
     })
     res.json(asset)
