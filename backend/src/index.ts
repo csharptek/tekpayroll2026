@@ -24,6 +24,7 @@ import { syncRouter } from './routes/sync'
 import { leaveRouter } from './routes/leave'
 import { employeeProfileRouter } from './routes/employeeProfile'
 import { cronRouter } from './routes/cron';
+import { documentsRouter } from './routes/documents';
 import cron from 'node-cron';
 import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from './services/cronJobs';
 import { policiesRouter } from './routes/policies';
@@ -84,6 +85,7 @@ app.use('/api/sync', syncRouter)
 app.use('/api/leave', leaveRouter)
 app.use('/api/employees', employeeProfileRouter)
 app.use('/api/cron', cronRouter);
+app.use('/api/documents', documentsRouter);
 app.use('/api/policies', policiesRouter);
 app.use('/api/exit', exitRouter);
 app.use('/api/assets', assetRouter);

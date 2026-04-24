@@ -1,0 +1,608 @@
+import { useState, useRef, useCallback } from 'react'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { employeeApi, configApi, documentsApi } from '../../services/api'
+import { Upload, RefreshCw, Send, Save, ChevronDown } from 'lucide-react'
+import { format } from 'date-fns'
+
+// ─── TYPES ────────────────────────────────────────────────────────────────────
+
+interface SalaryData {
+  annualCtc: number
+  basicMonthly: number
+  hraMonthly: number
+  transportMonthly: number
+  fbpMonthly: number
+  hyiMonthly: number
+  grandTotalMonthly: number
+  employeePfMonthly: number
+  employeeEsiMonthly: number
+  employerPfMonthly: number
+  employerEsiMonthly: number
+  ptMonthly: number
+  netMonthly: number
+  esiApplies: boolean
+  annualBonus: number
+  mediclaim: number
+}
+
+interface CompanyProfile {
+  COMPANY_NAME?: string
+  COMPANY_ADDRESS?: string
+  COMPANY_WEBSITE?: string
+  COMPANY_PHONE?: string
+  COMPANY_EMAIL?: string
+  COMPANY_LOGO_URL?: string
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+
+function buildIncrementLetterHtml(
+  emp: any,
+  salary: SalaryData,
+  letterDate: string,
+  effectiveDate: string,
+  isPromotion: boolean,
+  newDesignation: string,
+  company: CompanyProfile,
+): string {
+  const logoHtml = company.COMPANY_LOGO_URL
+    ? `<img src="${company.COMPANY_LOGO_URL}" alt="logo" style="height:55px;width:auto;" />`
+    : `<span style="font-size:20px;font-weight:700;color:#1a237e;">${company.COMPANY_NAME || 'CSharpTek'}</span>`
+
+  const formattedLetterDate = letterDate
+    ? format(new Date(letterDate), 'dd MMMM yyyy')
+    : ''
+  const formattedEffDate = effectiveDate
+    ? format(new Date(effectiveDate), 'dd MMMM yyyy')
+    : ''
+
+  const promotionPara = isPromotion && newDesignation
+    ? `<p style="margin:10px 0;font-size:11pt;">We are also pleased to inform you that you have been promoted to the position of <strong>${newDesignation}</strong>, effective the same date.</p>`
+    : ''
+
+  // Annual CTC breakup table
+  const annualBasic     = salary.basicMonthly * 12
+  const annualHra       = salary.hraMonthly * 12
+  const annualTransport = salary.transportMonthly * 12
+  const annualFbp       = salary.fbpMonthly * 12
+  const annualHyi       = salary.hyiMonthly * 12
+  const annualEmpPf     = salary.employerPfMonthly * 12
+  const annualMediclaim = salary.mediclaim * 12
+
+  const tableStyle = 'width:100%;border-collapse:collapse;font-size:10pt;margin:10px 0;'
+  const thStyle    = 'border:1px solid #ccc;padding:6px 8px;background:#f5f5f5;text-align:left;font-weight:600;'
+  const tdStyle    = 'border:1px solid #ccc;padding:5px 8px;'
+  const tdRStyle   = 'border:1px solid #ccc;padding:5px 8px;text-align:right;'
+  const tfStyle    = 'border:1px solid #ccc;padding:5px 8px;background:#eeeeee;font-weight:700;'
+  const tfRStyle   = 'border:1px solid #ccc;padding:5px 8px;background:#eeeeee;font-weight:700;text-align:right;'
+
+  const annualTable = `
+    <table style="${tableStyle}">
+      <thead>
+        <tr><th style="${thStyle}">Component</th><th style="${thStyle}" align="right">Annual (₹)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td style="${tdStyle}">Basic Salary</td><td style="${tdRStyle}">${fmt(annualBasic)}</td></tr>
+        <tr><td style="${tdStyle}">House Rent Allowance (HRA)</td><td style="${tdRStyle}">${fmt(annualHra)}</td></tr>
+        <tr><td style="${tdStyle}">Transport Allowance</td><td style="${tdRStyle}">${fmt(annualTransport)}</td></tr>
+        <tr><td style="${tdStyle}">Flexible Benefit Plan (FBP)</td><td style="${tdRStyle}">${fmt(annualFbp)}</td></tr>
+        <tr><td style="${tdStyle}">Half Yearly Incentive (HYI)</td><td style="${tdRStyle}">${fmt(annualHyi)}</td></tr>
+        <tr><td style="${tdStyle}">Annual Bonus</td><td style="${tdRStyle}">${fmt(salary.annualBonus)}</td></tr>
+        <tr><td style="${tdStyle}">Employer PF Contribution</td><td style="${tdRStyle}">${fmt(annualEmpPf)}</td></tr>
+        <tr><td style="${tdStyle}">Mediclaim</td><td style="${tdRStyle}">${fmt(annualMediclaim)}</td></tr>
+        <tr><td style="${tfStyle}">Total CTC</td><td style="${tfRStyle}">${fmt(salary.annualCtc)}</td></tr>
+      </tbody>
+    </table>`
+
+  const monthlyTable = `
+    <table style="${tableStyle}">
+      <thead>
+        <tr>
+          <th style="${thStyle}">Earnings</th>
+          <th style="${thStyle}" align="right">Amount (₹)</th>
+          <th style="${thStyle}">Deductions</th>
+          <th style="${thStyle}" align="right">Amount (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="${tdStyle}">Basic Salary</td><td style="${tdRStyle}">${fmt(salary.basicMonthly)}</td>
+          <td style="${tdStyle}">Employee PF</td><td style="${tdRStyle}">${fmt(salary.employeePfMonthly)}</td>
+        </tr>
+        <tr>
+          <td style="${tdStyle}">HRA</td><td style="${tdRStyle}">${fmt(salary.hraMonthly)}</td>
+          <td style="${tdStyle}">${salary.esiApplies ? 'Employee ESI' : 'Professional Tax'}</td>
+          <td style="${tdRStyle}">${fmt(salary.esiApplies ? salary.employeeEsiMonthly : salary.ptMonthly)}</td>
+        </tr>
+        <tr>
+          <td style="${tdStyle}">Transport Allowance</td><td style="${tdRStyle}">${fmt(salary.transportMonthly)}</td>
+          <td style="${tdStyle}"></td><td style="${tdRStyle}"></td>
+        </tr>
+        <tr>
+          <td style="${tdStyle}">FBP</td><td style="${tdRStyle}">${fmt(salary.fbpMonthly)}</td>
+          <td style="${tdStyle}"></td><td style="${tdRStyle}"></td>
+        </tr>
+        <tr>
+          <td style="${tdStyle}">Half Yearly Incentive</td><td style="${tdRStyle}">${fmt(salary.hyiMonthly)}</td>
+          <td style="${tdStyle}"></td><td style="${tdRStyle}"></td>
+        </tr>
+        <tr>
+          <td style="${tfStyle}">Total Earnings</td><td style="${tfRStyle}">${fmt(salary.grandTotalMonthly)}</td>
+          <td style="${tfStyle}">Total Deductions</td>
+          <td style="${tfRStyle}">${fmt(salary.employeePfMonthly + (salary.esiApplies ? salary.employeeEsiMonthly : salary.ptMonthly))}</td>
+        </tr>
+        <tr>
+          <td style="${tfStyle}" colspan="2">Net Monthly Salary</td>
+          <td style="${tfRStyle}" colspan="2">${fmt(salary.netMonthly)}</td>
+        </tr>
+      </tbody>
+    </table>`
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/>
+<style>
+  @page { margin: 15mm 20mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #222; margin: 0; padding: 0; }
+  .page { max-width: 800px; margin: 0 auto; padding: 20px 30px; }
+  .header-table { width: 100%; border-collapse: collapse; border-bottom: 2px solid #823b0b; padding-bottom: 8px; margin-bottom: 16px; }
+  .footer { border-top: 3px double #823b0b; text-align: center; font-size: 9pt; font-weight: 700; margin-top: 30px; padding-top: 6px; color: #222; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <table class="header-table">
+    <tr>
+      <td style="width:50%;vertical-align:middle;">${logoHtml}</td>
+      <td style="width:50%;vertical-align:top;text-align:right;font-size:9pt;color:#333;">
+        ${company.COMPANY_ADDRESS || '199/A Mandaliya Nagar, Near Panchwati Garden Lane, Bariatu, Ranchi, Jharkhand'}<br/>
+        Website: ${company.COMPANY_WEBSITE || 'www.csharptek.com'}<br/>
+        Phone: ${company.COMPANY_PHONE || '+91-9334646668'}
+      </td>
+    </tr>
+  </table>
+
+  <!-- TITLE -->
+  <p style="text-align:center;font-size:14pt;font-weight:700;text-decoration:underline;margin:16px 0;">Increment Letter</p>
+
+  <!-- DATE & GREETING -->
+  <table style="width:100%;margin-bottom:12px;">
+    <tr>
+      <td><strong>Dear ${emp.name?.split(' ')[0] || emp.name},</strong></td>
+      <td style="text-align:right;"><strong>Date: ${formattedLetterDate}</strong></td>
+    </tr>
+  </table>
+
+  <!-- BODY -->
+  <p style="margin:10px 0;font-size:11pt;">
+    We are pleased to inform you that your Annual CTC has been revised to
+    <strong>Rs. ${fmt(salary.annualCtc)}</strong> (Rupees ${numberToWords(salary.annualCtc)} Only),
+    effective from <strong>${formattedEffDate}</strong>.
+  </p>
+
+  ${promotionPara}
+
+  <p style="margin:14px 0 6px;font-size:11pt;font-weight:600;">Annual CTC Breakup:</p>
+  ${annualTable}
+
+  <p style="margin:14px 0 6px;font-size:11pt;font-weight:600;">Monthly Salary Breakup:</p>
+  ${monthlyTable}
+
+  <p style="margin:16px 0 4px;font-size:11pt;">
+    We appreciate your contributions and look forward to your continued association with the organisation.
+  </p>
+
+  <!-- SIGNATURE -->
+  <div style="margin-top:40px;">
+    <p style="margin:0;font-size:11pt;">For <strong>${company.COMPANY_NAME || 'Cloudgarner Solutions Pvt. Ltd.'}</strong></p>
+    <br/><br/>
+    <p style="margin:0;font-size:11pt;font-weight:700;">Bhanu Pratap Gupta</p>
+    <p style="margin:0;font-size:10pt;">CEO</p>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div>${company.COMPANY_NAME || 'Cloudgarner Solutions Pvt. Ltd.'}</div>
+    <div>${company.COMPANY_ADDRESS || '199/A, Mandaliya Nagar, Panchwati Garden Lane, Bariatu, Ranchi, Jharkhand – 834009'}</div>
+    <div>Website: ${company.COMPANY_WEBSITE || 'www.cloudgarner.com'} | Email: ${company.COMPANY_EMAIL || 'support@cloudgarner.com'} | Phone: ${company.COMPANY_PHONE || '9334646668'}</div>
+  </div>
+
+</div>
+</body>
+</html>`
+}
+
+// Simple number to words for Indian amounts
+function numberToWords(n: number): string {
+  const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine',
+    'Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen']
+  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety']
+  function convert(num: number): string {
+    if (num === 0) return ''
+    if (num < 20) return ones[num] + ' '
+    if (num < 100) return tens[Math.floor(num/10)] + ' ' + (num%10 ? ones[num%10] + ' ' : '')
+    if (num < 1000) return ones[Math.floor(num/100)] + ' Hundred ' + convert(num%100)
+    if (num < 100000) return convert(Math.floor(num/1000)) + 'Thousand ' + convert(num%1000)
+    if (num < 10000000) return convert(Math.floor(num/100000)) + 'Lakh ' + convert(num%100000)
+    return convert(Math.floor(num/10000000)) + 'Crore ' + convert(num%10000000)
+  }
+  const amt = Math.round(n)
+  return convert(amt).trim() || 'Zero'
+}
+
+// ─── PAGE ─────────────────────────────────────────────────────────────────────
+
+export default function DocumentGenerationPage() {
+  const [empSearch, setEmpSearch] = useState('')
+  const [empDropOpen, setEmpDropOpen] = useState(false)
+  const [selectedEmp, setSelectedEmp] = useState<any>(null)
+  const [docType, setDocType] = useState('INCREMENT_LETTER')
+  const [letterDate, setLetterDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [effectiveDate, setEffectiveDate] = useState('')
+  const [ctcOverride, setCtcOverride] = useState('')
+  const [isPromotion, setIsPromotion] = useState(false)
+  const [newDesignation, setNewDesignation] = useState('')
+  const [salary, setSalary] = useState<SalaryData | null>(null)
+  const [htmlContent, setHtmlContent] = useState('')
+  const [showPreview, setShowPreview] = useState(false)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [companyForm, setCompanyForm] = useState<CompanyProfile>({})
+  const [companySaved, setCompanySaved] = useState(false)
+  const previewRef = useRef<HTMLDivElement>(null)
+
+  // Employees list
+  const { data: empData } = useQuery({
+    queryKey: ['employees-list'],
+    queryFn:  () => employeeApi.list({ limit: 500, status: 'ACTIVE' }),
+    select:   (r) => r.data?.data?.employees || [],
+  })
+
+  // Config (company profile)
+  const { data: configData, refetch: refetchConfig } = useQuery({
+    queryKey: ['system-config'],
+    queryFn:  () => configApi.get(),
+    select:   (r) => r.data?.data || {},
+    onSuccess: (d: any) => setCompanyForm({
+      COMPANY_NAME:     d.COMPANY_NAME     || '',
+      COMPANY_ADDRESS:  d.COMPANY_ADDRESS  || '',
+      COMPANY_WEBSITE:  d.COMPANY_WEBSITE  || '',
+      COMPANY_PHONE:    d.COMPANY_PHONE    || '',
+      COMPANY_EMAIL:    d.COMPANY_EMAIL    || '',
+      COMPANY_LOGO_URL: d.COMPANY_LOGO_URL || '',
+    }),
+  })
+
+  // Snapshot load when employee selected
+  const { mutate: loadSnapshot, isLoading: snapshotLoading } = useMutation({
+    mutationFn: (id: string) => documentsApi.getSalarySnapshot(id),
+    onSuccess: (r) => {
+      const s = r.data?.data
+      if (s) {
+        setSalary({
+          annualCtc:          Number(s.annualCtc),
+          basicMonthly:       Number(s.basicMonthly),
+          hraMonthly:         Number(s.hraMonthly),
+          transportMonthly:   Number(s.transportMonthly),
+          fbpMonthly:         Number(s.fbpMonthly),
+          hyiMonthly:         Number(s.hyiMonthly),
+          grandTotalMonthly:  Number(s.grandTotalMonthly),
+          employeePfMonthly:  Number(s.employeePfMonthly),
+          employeeEsiMonthly: Number(s.employeeEsiMonthly),
+          employerPfMonthly:  Number(s.employerPfMonthly),
+          employerEsiMonthly: Number(s.employerEsiMonthly),
+          ptMonthly:          Number(s.ptMonthly),
+          netMonthly:         Number(s.netMonthly),
+          esiApplies:         s.esiApplies,
+          annualBonus:        Number(s.annualBonus),
+          mediclaim:          Number(s.mediclaim),
+        })
+        setCtcOverride(String(Number(s.annualCtc)))
+      }
+    },
+  })
+
+  // Compute salary on CTC override
+  const { mutate: computeSalary, isLoading: computing } = useMutation({
+    mutationFn: (ctc: number) => documentsApi.computeSalary({ employeeId: selectedEmp.id, annualCtc: ctc }),
+    onSuccess: (r) => {
+      const s = r.data?.data
+      if (s) setSalary(s)
+    },
+  })
+
+  // Save company profile
+  const { mutate: saveCompany, isLoading: savingCompany } = useMutation({
+    mutationFn: async () => {
+      if (logoFile) {
+        const fd = new FormData()
+        fd.append('logo', logoFile)
+        await documentsApi.uploadLogo(fd)
+      }
+      await configApi.update(companyForm)
+      await refetchConfig()
+    },
+    onSuccess: () => setCompanySaved(true),
+  })
+
+  // Generate document
+  const { mutate: generateDoc, isLoading: generating } = useMutation({
+    mutationFn: (sendEmailFlag: boolean) => {
+      const html = buildIncrementLetterHtml(
+        selectedEmp, salary!, letterDate, effectiveDate,
+        isPromotion, newDesignation,
+        { ...companyForm, COMPANY_LOGO_URL: configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL },
+      )
+      setHtmlContent(html)
+      setShowPreview(true)
+      return documentsApi.generate({
+        employeeId: selectedEmp.id,
+        documentType: docType,
+        letterDate, effectiveDate,
+        isPromotion, newDesignation,
+        salaryData: salary,
+        htmlContent: html,
+        sendEmailFlag,
+      })
+    },
+  })
+
+  const filteredEmps = (empData || []).filter((e: any) =>
+    e.name?.toLowerCase().includes(empSearch.toLowerCase()) ||
+    e.employeeCode?.toLowerCase().includes(empSearch.toLowerCase())
+  )
+
+  const handleSelectEmp = (emp: any) => {
+    setSelectedEmp(emp)
+    setEmpSearch(emp.name)
+    setEmpDropOpen(false)
+    setSalary(null)
+    setCtcOverride('')
+    loadSnapshot(emp.id)
+  }
+
+  const handleCtcBlur = () => {
+    const val = parseFloat(ctcOverride)
+    if (!isNaN(val) && val > 0 && selectedEmp) computeSalary(val)
+  }
+
+  const handlePrint = () => {
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(htmlContent)
+    win.document.close()
+    win.print()
+  }
+
+  const company = companyForm
+
+  return (
+    <div className="p-4 max-w-6xl mx-auto space-y-6">
+      <h1 className="text-xl font-bold text-gray-800">Document Generation</h1>
+
+      {/* ── COMPANY PROFILE ── */}
+      <section className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">Company Profile</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Company Name">
+            <input className={inp} value={company.COMPANY_NAME || ''} onChange={e => setCompanyForm(p => ({ ...p, COMPANY_NAME: e.target.value }))} />
+          </Field>
+          <Field label="Website">
+            <input className={inp} value={company.COMPANY_WEBSITE || ''} onChange={e => setCompanyForm(p => ({ ...p, COMPANY_WEBSITE: e.target.value }))} />
+          </Field>
+          <Field label="Address">
+            <input className={inp} value={company.COMPANY_ADDRESS || ''} onChange={e => setCompanyForm(p => ({ ...p, COMPANY_ADDRESS: e.target.value }))} />
+          </Field>
+          <Field label="Phone">
+            <input className={inp} value={company.COMPANY_PHONE || ''} onChange={e => setCompanyForm(p => ({ ...p, COMPANY_PHONE: e.target.value }))} />
+          </Field>
+          <Field label="Email">
+            <input className={inp} value={company.COMPANY_EMAIL || ''} onChange={e => setCompanyForm(p => ({ ...p, COMPANY_EMAIL: e.target.value }))} />
+          </Field>
+          <Field label="Logo">
+            <div className="flex items-center gap-3">
+              {(company.COMPANY_LOGO_URL) && (
+                <img src={company.COMPANY_LOGO_URL} alt="logo" className="h-10 w-auto border rounded" />
+              )}
+              <label className="cursor-pointer flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                <Upload size={14} />
+                {logoFile ? logoFile.name : 'Upload Logo'}
+                <input type="file" accept="image/*" className="hidden" onChange={e => setLogoFile(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+          </Field>
+        </div>
+        <button
+          onClick={() => saveCompany()}
+          disabled={savingCompany}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {savingCompany ? 'Saving…' : companySaved ? '✓ Saved' : 'Save Company Profile'}
+        </button>
+      </section>
+
+      {/* ── GENERATION FORM ── */}
+      <section className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">Generate Document</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Employee Search */}
+          <Field label="Employee" className="relative">
+            <div className="relative">
+              <input
+                className={inp}
+                placeholder="Search by name or code…"
+                value={empSearch}
+                onChange={e => { setEmpSearch(e.target.value); setEmpDropOpen(true) }}
+                onFocus={() => setEmpDropOpen(true)}
+              />
+              {empDropOpen && filteredEmps.length > 0 && (
+                <ul className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto text-sm">
+                  {filteredEmps.slice(0, 20).map((e: any) => (
+                    <li
+                      key={e.id}
+                      className="px-3 py-2 hover:bg-blue-50 cursor-pointer"
+                      onMouseDown={() => handleSelectEmp(e)}
+                    >
+                      <span className="font-medium">{e.name}</span>
+                      <span className="text-gray-400 ml-2">{e.employeeCode}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Field>
+
+          {/* Document Type */}
+          <Field label="Document Type">
+            <select className={inp} value={docType} onChange={e => setDocType(e.target.value)}>
+              <option value="INCREMENT_LETTER">Increment Letter</option>
+            </select>
+          </Field>
+
+          {/* Letter Date */}
+          <Field label="Letter Date">
+            <input type="date" className={inp} value={letterDate} onChange={e => setLetterDate(e.target.value)} />
+          </Field>
+
+          {/* Effective Date */}
+          <Field label="Effective Date">
+            <input type="date" className={inp} value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} />
+          </Field>
+
+          {/* CTC */}
+          <Field label="Annual CTC (₹)">
+            <div className="flex gap-2">
+              <input
+                type="number"
+                className={inp}
+                value={ctcOverride}
+                onChange={e => setCtcOverride(e.target.value)}
+                onBlur={handleCtcBlur}
+                placeholder={snapshotLoading ? 'Loading…' : 'Enter CTC'}
+              />
+              {computing && <RefreshCw size={16} className="self-center animate-spin text-blue-500" />}
+            </div>
+          </Field>
+
+          {/* Promotion */}
+          <Field label="Promotion">
+            <div className="flex items-center gap-4 h-10">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" checked={!isPromotion} onChange={() => setIsPromotion(false)} /> No
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" checked={isPromotion} onChange={() => setIsPromotion(true)} /> Yes
+              </label>
+            </div>
+          </Field>
+
+          {/* New Designation */}
+          {isPromotion && (
+            <Field label="New Designation">
+              <input className={inp} placeholder="e.g. Senior Developer" value={newDesignation} onChange={e => setNewDesignation(e.target.value)} />
+            </Field>
+          )}
+        </div>
+
+        {/* Salary Breakup Preview */}
+        {salary && (
+          <div className="mt-5 border border-gray-100 rounded-lg p-4 bg-gray-50">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Salary Breakup Preview</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              {[
+                ['Basic', salary.basicMonthly],
+                ['HRA', salary.hraMonthly],
+                ['Transport', salary.transportMonthly],
+                ['FBP', salary.fbpMonthly],
+                ['HYI', salary.hyiMonthly],
+                ['Gross Monthly', salary.grandTotalMonthly],
+                ['Employee PF', salary.employeePfMonthly],
+                [salary.esiApplies ? 'ESI' : 'Prof. Tax', salary.esiApplies ? salary.employeeEsiMonthly : salary.ptMonthly],
+                ['Net Monthly', salary.netMonthly],
+              ].map(([label, val]) => (
+                <div key={String(label)} className="bg-white rounded p-2 border border-gray-200">
+                  <p className="text-xs text-gray-500">{label}</p>
+                  <p className="font-semibold text-gray-800">₹{fmt(Number(val))}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 mt-5">
+          <button
+            onClick={() => {
+              const html = buildIncrementLetterHtml(
+                selectedEmp, salary!, letterDate, effectiveDate,
+                isPromotion, newDesignation,
+                { ...companyForm, COMPANY_LOGO_URL: configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL },
+              )
+              setHtmlContent(html)
+              setShowPreview(true)
+            }}
+            disabled={!selectedEmp || !salary || !effectiveDate}
+            className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+          >
+            Preview Letter
+          </button>
+          <button
+            onClick={() => generateDoc(false)}
+            disabled={!selectedEmp || !salary || !effectiveDate || generating}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-40"
+          >
+            <Save size={14} /> {generating ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            onClick={() => generateDoc(true)}
+            disabled={!selectedEmp || !salary || !effectiveDate || generating}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40"
+          >
+            <Send size={14} /> Save & Email
+          </button>
+        </div>
+      </section>
+
+      {/* ── LETTER PREVIEW ── */}
+      {showPreview && htmlContent && (
+        <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Letter Preview</h2>
+            <button
+              onClick={handlePrint}
+              className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded hover:bg-gray-800"
+            >
+              Print / Download PDF
+            </button>
+          </div>
+          <div
+            ref={previewRef}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={e => setHtmlContent((e.currentTarget as HTMLDivElement).innerHTML)}
+            className="p-6 min-h-[600px] outline-none"
+            dangerouslySetInnerHTML={{ __html: htmlContent }}
+          />
+        </section>
+      )}
+    </div>
+  )
+}
+
+// ─── TINY COMPONENTS ─────────────────────────────────────────────────────────
+
+const inp = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+
+function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+      {children}
+    </div>
+  )
+}

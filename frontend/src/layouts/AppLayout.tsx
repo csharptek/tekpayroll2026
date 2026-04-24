@@ -4,7 +4,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { signOut } from '../services/msal'
 import {
-  LayoutDashboard, Users, CreditCard, FileText, Settings, Calculator,
+  LayoutDashboard, Users, CreditCard, FileText, Settings, Calculator, FileOutput,
   LogOut, ChevronDown, Menu, X, Building2, Shield, FileWarning,
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
@@ -47,6 +47,12 @@ const HR_NAV = [
       { label: 'Asset List',        icon: Package,     to: '/hr/assets' },
       { label: 'Asset Requests',    icon: Package,     to: '/hr/asset-requests' },
       { label: 'Asset Configurator',icon: Settings,    to: '/hr/asset-configurator' },
+    ]
+  },
+  {
+    section: 'Documents',
+    items: [
+      { label: 'Generate Document', icon: FileOutput, to: '/hr/documents' },
     ]
   },
   {
@@ -126,6 +132,12 @@ const SUPER_ADMIN_NAV = [
       { label: 'Configuration', icon: Settings,   to: '/hr/config' },
       { label: 'Notifications', icon: Bell,       to: '/hr/notifications' },
       { label: 'Audit Log',     icon: ScrollText, to: '/hr/audit' },
+    ]
+  },
+  {
+    section: 'Documents',
+    items: [
+      { label: 'Generate Document', icon: FileOutput, to: '/hr/documents' },
     ]
   },
   {
