@@ -86,7 +86,12 @@ export default function AssetListPage() {
       {error && <Alert type="error" message={error} />}
       <div className="grid grid-cols-2 gap-4">
         <Input label="Asset Name *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-        <Input label="Asset Code *" value={form.assetCode} onChange={e => setForm(f => ({ ...f, assetCode: e.target.value }))} />
+        <Input
+          label="Asset Code"
+          placeholder={editTarget ? '' : 'Auto-generated if blank'}
+          value={form.assetCode}
+          onChange={e => setForm(f => ({ ...f, assetCode: e.target.value }))}
+        />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>

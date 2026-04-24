@@ -129,7 +129,7 @@ assetRouter.delete('/config/subcategories/:id', requireHR, async (req, res, next
 // ─── ASSETS ───────────────────────────────────────────────────────────────────
 
 const assetSchema = z.object({
-  assetCode: z.string().min(1),
+  assetCode: z.string().optional().nullable(),
   name: z.string().min(1),
   categoryId: z.string().min(1),
   subCategoryId: z.string().optional().nullable(),
@@ -140,6 +140,56 @@ const assetSchema = z.object({
   warrantyExpiry: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 })
+
+// Derive 3-letter prefix from sub-category (or category) name
+function derivePrefix(name: string): string {
+  const overrides: Record<string, string> = {
+    'laptop': 'LAP', 'desktop': 'DSK', 'monitor': 'MON', 'keyboard': 'KBD',
+    'mouse': 'MSE', 'headphone': 'HPH', 'webcam': 'WCM', 'cpu': 'CPU',
+    'hard disk': 'HDD', 'ssd': 'SSD', 'usb cable': 'USB', 'usb wifi dongle': 'UWD',
+    'printer': 'PRN', 'scanner': 'SCN', 'router': 'RTR', 'switch': 'SWH',
+    'server': 'SRV', 'ups': 'UPS', 'projector': 'PRJ', 'phone': 'PHN',
+    'tablet': 'TAB', 'ipod': 'IPD', 'sim card': 'SIM', 'power bank': 'PWB',
+    'os license': 'OSL', 'office suite': 'OFF', 'antivirus': 'AV', 'ide license': 'IDE',
+    'chair': 'CHR', 'desk': 'DSK', 'cabinet': 'CAB', 'locker': 'LKR',
+    'sofa': 'SOF', 'whiteboard': 'WBD', 'telephone': 'TEL', 'stapler': 'STP',
+    'shredder': 'SHR', 'calculator': 'CAL', 'ac': 'AC', 'refrigerator': 'RFR',
+    'microwave': 'MW', 'water dispenser': 'WTR', 'notebook': 'NTB', 'pen set': 'PEN',
+    'file organizer': 'FLO', 'car': 'CAR', 'bike': 'BIK', 'scooter': 'SCT',
+    'id card': 'IDC', 'access card': 'ACC', 'key': 'KEY', 'cctv camera': 'CCT',
+  }
+  const key = name.trim().toLowerCase()
+  if (overrides[key]) return overrides[key]
+  // Fallback: first letters of words, capped at 3
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length >= 2) return (words[0][0] + words[1][0] + (words[2]?.[0] || '')).toUpperCase().slice(0, 3)
+  return name.trim().replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 3) || 'AST'
+}
+
+// Generate next unique asset code for a given prefix
+async function nextAssetCode(prefix: string): Promise<string> {
+  const pattern = `CT-${prefix}-`
+  const existing = await prisma.asset.findMany({
+    where: { assetCode: { startsWith: pattern } },
+    select: { assetCode: true },
+  })
+  let maxNum = 0
+  for (const a of existing) {
+    const m = a.assetCode.match(new RegExp(`^CT-${prefix}-(\\d+)([A-Z]?)$`))
+    if (m) {
+      const n = parseInt(m[1], 10)
+      if (n > maxNum) maxNum = n
+    }
+  }
+  let next = maxNum + 1
+  // Collision guard
+  while (true) {
+    const code = `CT-${prefix}-${String(next).padStart(3, '0')}`
+    const hit = await prisma.asset.findUnique({ where: { assetCode: code } })
+    if (!hit) return code
+    next++
+  }
+}
 
 // GET /api/assets
 assetRouter.get('/', requireManagement, async (req, res, next) => {
@@ -221,12 +271,32 @@ assetRouter.get('/:id', requireManagement, async (req, res, next) => {
 assetRouter.post('/', requireHR, async (req, res, next) => {
   try {
     const data = assetSchema.parse(req.body)
-    const exists = await prisma.asset.findUnique({ where: { assetCode: data.assetCode } })
-    if (exists) throw new AppError('Asset code already exists', 400)
+    let assetCode = (data.assetCode || '').trim()
 
+    if (!assetCode) {
+      // Auto-generate from sub-category (preferred) or category
+      let sourceName = ''
+      if (data.subCategoryId) {
+        const sub = await prisma.assetSubCategoryConfig.findUnique({ where: { id: data.subCategoryId } })
+        if (sub) sourceName = sub.name
+      }
+      if (!sourceName) {
+        const cat = await prisma.assetCategoryConfig.findUnique({ where: { id: data.categoryId } })
+        if (cat) sourceName = cat.name
+      }
+      if (!sourceName) throw new AppError('Cannot auto-generate code — category/sub-category missing', 400)
+      const prefix = derivePrefix(sourceName)
+      assetCode = await nextAssetCode(prefix)
+    } else {
+      const exists = await prisma.asset.findUnique({ where: { assetCode } })
+      if (exists) throw new AppError('Asset code already exists', 400)
+    }
+
+    const { assetCode: _omit, ...rest } = data
     const asset = await prisma.asset.create({
       data: {
-        ...data,
+        ...rest,
+        assetCode,
         purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
         warrantyExpiry: data.warrantyExpiry ? new Date(data.warrantyExpiry) : null,
         status: AssetStatus.AVAILABLE,
@@ -408,14 +478,8 @@ assetRouter.post('/bulk/upload', requireHR, upload.single('file'), async (req, r
         const categoryName = pick(row, ['Category Name*', 'Category Name', 'Category'])
         const subCategoryName = pick(row, ['Sub Category', 'Sub-Category', 'SubCategory'])
 
-        if (!name || !assetCode || !categoryName) {
-          results.push({ row: rowNum, status: 'error', error: 'Missing required fields' })
-          continue
-        }
-
-        const existing = await prisma.asset.findUnique({ where: { assetCode } })
-        if (existing) {
-          results.push({ row: rowNum, status: 'error', error: `Asset code "${assetCode}" already exists` })
+        if (!name || !categoryName) {
+          results.push({ row: rowNum, status: 'error', error: 'Missing required fields (Asset Name / Category)' })
           continue
         }
 
@@ -428,6 +492,7 @@ assetRouter.post('/bulk/upload', requireHR, upload.single('file'), async (req, r
         }
 
         let subCategoryId: string | null = null
+        let subCategoryName2 = ''
         if (subCategoryName) {
           const sub = await prisma.assetSubCategoryConfig.findFirst({
             where: { name: { equals: subCategoryName, mode: 'insensitive' }, categoryId: category.id, isActive: true },
@@ -437,6 +502,20 @@ assetRouter.post('/bulk/upload', requireHR, upload.single('file'), async (req, r
             continue
           }
           subCategoryId = sub.id
+          subCategoryName2 = sub.name
+        }
+
+        // Auto-generate code if blank
+        let finalCode = assetCode
+        if (!finalCode) {
+          const prefix = derivePrefix(subCategoryName2 || category.name)
+          finalCode = await nextAssetCode(prefix)
+        } else {
+          const existing = await prisma.asset.findUnique({ where: { assetCode: finalCode } })
+          if (existing) {
+            results.push({ row: rowNum, status: 'error', error: `Asset code "${finalCode}" already exists` })
+            continue
+          }
         }
 
         const purchaseDateStr = pick(row, ['Purchase Date (YYYY-MM-DD)', 'Purchase Date'])
@@ -449,7 +528,7 @@ assetRouter.post('/bulk/upload', requireHR, upload.single('file'), async (req, r
         await prisma.asset.create({
           data: {
             name,
-            assetCode,
+            assetCode: finalCode,
             categoryId: category.id,
             subCategoryId,
             brand: brand || null,
