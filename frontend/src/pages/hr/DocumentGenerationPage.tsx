@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { employeeApi, configApi, documentsApi } from '../../services/api'
-import { Upload, RefreshCw, Send, Save, ChevronDown } from 'lucide-react'
+import { Upload, RefreshCw, Send, Save } from 'lucide-react'
+import { DatePicker } from '../../components/DatePicker'
 import { format } from 'date-fns'
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -258,24 +259,28 @@ export default function DocumentGenerationPage() {
   // Employees list
   const { data: empData } = useQuery({
     queryKey: ['employees-list'],
-    queryFn:  () => employeeApi.list({ limit: 500, status: 'ACTIVE' }),
-    select:   (r) => r.data?.data?.employees || [],
+    queryFn:  () => employeeApi.list({ status: 'ACTIVE', limit: 500 }).then(r => r.data.data),
   })
 
   // Config (company profile)
   const { data: configData, refetch: refetchConfig } = useQuery({
     queryKey: ['system-config'],
-    queryFn:  () => configApi.get(),
-    select:   (r) => r.data?.data || {},
-    onSuccess: (d: any) => setCompanyForm({
+    queryFn:  () => configApi.get().then(r => r.data?.data || {}),
+  })
+
+  // Populate company form when config loads
+  useEffect(() => {
+    if (!configData) return
+    const d = configData as any
+    setCompanyForm({
       COMPANY_NAME:     d.COMPANY_NAME     || '',
       COMPANY_ADDRESS:  d.COMPANY_ADDRESS  || '',
       COMPANY_WEBSITE:  d.COMPANY_WEBSITE  || '',
       COMPANY_PHONE:    d.COMPANY_PHONE    || '',
       COMPANY_EMAIL:    d.COMPANY_EMAIL    || '',
       COMPANY_LOGO_URL: d.COMPANY_LOGO_URL || '',
-    }),
-  })
+    })
+  }, [configData])
 
   // Snapshot load when employee selected
   const { mutate: loadSnapshot, isLoading: snapshotLoading } = useMutation({
@@ -351,7 +356,7 @@ export default function DocumentGenerationPage() {
     },
   })
 
-  const filteredEmps = (empData || []).filter((e: any) =>
+  const filteredEmps = (Array.isArray(empData) ? empData : []).filter((e: any) =>
     e.name?.toLowerCase().includes(empSearch.toLowerCase()) ||
     e.employeeCode?.toLowerCase().includes(empSearch.toLowerCase())
   )
@@ -466,12 +471,12 @@ export default function DocumentGenerationPage() {
 
           {/* Letter Date */}
           <Field label="Letter Date">
-            <input type="date" className={inp} value={letterDate} onChange={e => setLetterDate(e.target.value)} />
+            <DatePicker value={letterDate} onChange={setLetterDate} placeholder="Select letter date" />
           </Field>
 
           {/* Effective Date */}
           <Field label="Effective Date">
-            <input type="date" className={inp} value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} />
+            <DatePicker value={effectiveDate} onChange={setEffectiveDate} placeholder="Select effective date" />
           </Field>
 
           {/* CTC */}
