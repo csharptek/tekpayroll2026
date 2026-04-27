@@ -321,12 +321,58 @@ export function isBonusMonth(payrollMonth: string): boolean {
 
 // ─── SALARY REVISION LOOKUP ──────────────────────────────────────────────────
 // Returns the salary input effective as of a given date.
-// Queries SalaryRevision table first; falls back to employee fields.
+// Queries SalaryStructureSnapshot (active) first — this is the source of truth set via the salary tab.
+// Falls back to SalaryRevision → Employee fields for older employees without a snapshot.
 
 export async function getSalaryInputForDate(employeeId: string, asOf: Date): Promise<SalaryInput & { tdsMonthly: number }> {
   const emp = await prisma.employee.findUnique({ where: { id: employeeId } })
   if (!emp) throw new Error(`Employee ${employeeId} not found`)
 
+  // ── 1. Prefer active SalaryStructureSnapshot ──────────────────────────────
+  const snapshot = await prisma.salaryStructureSnapshot.findFirst({
+    where: {
+      employeeId,
+      isActive: true,
+      effectiveDate: { lte: asOf },
+    },
+    orderBy: { effectiveDate: 'desc' },
+  })
+
+  if (snapshot) {
+    // Snapshot has all pre-computed components — convert back to SalaryInput
+    // so the payroll engine can re-run deductions (LOP, ESI, PF) correctly.
+    // We derive the percentages from stored values so engine produces same components.
+    const annualCtc       = Number(snapshot.annualCtc)
+    const basicMonthly    = Number(snapshot.basicMonthly)
+    const hraMonthly      = Number(snapshot.hraMonthly)
+    const transportMonthly= Number(snapshot.transportMonthly)
+    const fbpMonthly      = Number(snapshot.fbpMonthly)
+    const mediclaim       = Number(snapshot.mediclaim)
+    const hasIncentive    = Boolean(snapshot.hasIncentive)
+
+    // Back-derive percentages from stored values (annual basis)
+    const annualBasic = basicMonthly * 12
+    const basicPercent = annualCtc > 0 ? (annualBasic / annualCtc) * 100 : 45
+    const hraPercent   = annualBasic > 0 ? (hraMonthly * 12 / annualBasic) * 100 : 35
+
+    // incentivePercent: annualBonus as % of CTC
+    const annualBonus = Number(snapshot.annualBonus)
+    const incentivePercent = annualCtc > 0 && hasIncentive ? (annualBonus / annualCtc) * 100 : 12
+
+    return {
+      annualCtc,
+      basicPercent,
+      hraPercent,
+      transportMonthly,
+      fbpMonthly,
+      mediclaim,
+      hasIncentive,
+      incentivePercent,
+      tdsMonthly: Number(snapshot.tdsMonthly),
+    }
+  }
+
+  // ── 2. Fallback: SalaryRevision + Employee fields ─────────────────────────
   const revision = await prisma.salaryRevision.findFirst({
     where: {
       employeeId,
@@ -335,7 +381,6 @@ export async function getSalaryInputForDate(employeeId: string, asOf: Date): Pro
     orderBy: { effectiveFrom: 'desc' },
   })
 
-  // Base values from employee record
   const base = {
     annualCtc:        Number(emp.annualCtc),
     basicPercent:     Number((emp as any).basicPercent    ?? 45),
@@ -350,10 +395,6 @@ export async function getSalaryInputForDate(employeeId: string, asOf: Date): Pro
 
   if (!revision) return base
 
-  // Revision only overrides CTC — historically, partial revisions stored
-  // schema-default values for other fields (basicPct=45, mediclaim=0, etc.),
-  // which wiped real employee settings. We only trust newCtc from the revision
-  // and read everything else from the current employee record.
   return {
     ...base,
     annualCtc: Number(revision.newCtc),

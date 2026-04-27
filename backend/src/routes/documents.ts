@@ -236,7 +236,7 @@ documentsRouter.post('/send-email', requireHR, async (req: any, res) => {
   const pdfBase64 = await htmlToPdfBase64(htmlContent)
   const attachmentName = `Increment_Letter_${emp.employeeCode || emp.id}.pdf`
 
-  await sendEmailWithAttachment(emp.email, resolvedSubject, bodyHtml, attachmentName, pdfBase64)
+  await sendEmailWithAttachment(emp.email, resolvedSubject, bodyHtml, attachmentName, pdfBase64, 'application/pdf', ['ashwika.agarwal@csharptek.com'])
   res.json({ success: true, message: `Email sent to ${emp.email}` })
 })
 

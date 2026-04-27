@@ -375,7 +375,7 @@ export default function DocumentGenerationPage() {
   })
 
   // Send email mutation
-  const { mutate: sendEmailMutation, isLoading: sendingEmail } = useMutation({
+  const { mutate: sendEmailMutation, isLoading: sendingEmail, isSuccess: emailSent, reset: resetEmailMutation } = useMutation({
     mutationFn: () => documentsApi.sendEmail({
       employeeId: selectedEmp.id,
       htmlContent,
@@ -684,6 +684,7 @@ export default function DocumentGenerationPage() {
                 setShowPreview(true)
               }
               setEmailStatus(null)
+              resetEmailMutation()
               setShowEmailModal(true)
             }}
             disabled={!selectedEmp || !salary || !effectiveDate}
@@ -798,11 +799,16 @@ export default function DocumentGenerationPage() {
               </button>
               <button
                 onClick={() => { setEmailStatus(null); sendEmailMutation() }}
-                disabled={!selectedEmp?.email || sendingEmail}
+                disabled={!selectedEmp?.email || sendingEmail || emailSent}
                 className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40"
               >
-                <Send size={14} />
-                {sendingEmail ? 'Sending…' : `Send to ${selectedEmp?.email || 'employee'}`}
+                {emailSent ? (
+                  <><CheckCircle size={14} /> Sent</>
+                ) : sendingEmail ? (
+                  'Sending…'
+                ) : (
+                  <><Send size={14} /> {`Send to ${selectedEmp?.email || 'employee'}`}</>
+                )}
               </button>
             </div>
           </div>

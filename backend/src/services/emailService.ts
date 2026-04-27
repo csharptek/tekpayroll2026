@@ -36,7 +36,8 @@ export async function sendEmailWithAttachment(
   htmlBody: string,
   attachmentName: string,
   attachmentBase64: string,
-  attachmentMime = 'application/pdf'
+  attachmentMime = 'application/pdf',
+  cc: string[] = []
 ) {
   try {
     const cfg = await getGraphConfig()
@@ -45,7 +46,7 @@ export async function sendEmailWithAttachment(
       return
     }
     const token = await getAccessToken(cfg.tenantId, cfg.clientId, cfg.clientSecret)
-    const payload = {
+    const payload: any = {
       message: {
         subject,
         body: { contentType: 'HTML', content: htmlBody },
@@ -60,6 +61,9 @@ export async function sendEmailWithAttachment(
         ],
       },
       saveToSentItems: false,
+    }
+    if (cc.length > 0) {
+      payload.message.ccRecipients = cc.map(e => ({ emailAddress: { address: e } }))
     }
     const res = await fetch(`https://graph.microsoft.com/v1.0/users/${cfg.senderEmail}/sendMail`, {
       method: 'POST',
