@@ -83,64 +83,55 @@ function buildIncrementLetterHtml(
   const tfStyle    = 'border:1px solid #ccc;padding:5px 8px;background:#eeeeee;font-weight:700;'
   const tfRStyle   = 'border:1px solid #ccc;padding:5px 8px;background:#eeeeee;font-weight:700;text-align:right;'
 
+  const tagInGross = `<span style="margin-left:6px;font-size:8pt;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:3px;padding:1px 5px;font-weight:600;">in Gross</span>`
+  const tagInCtc   = `<span style="margin-left:6px;font-size:8pt;color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:3px;padding:1px 5px;font-weight:600;">in CTC</span>`
+  const tagPaidMar = `<span style="margin-left:6px;font-size:8pt;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:3px;padding:1px 5px;font-weight:600;">paid March</span>`
+
+  const sectionStyle = 'border:1px solid #ccc;padding:4px 8px;background:#f0f4f8;font-size:9pt;font-weight:700;color:#475569;letter-spacing:0.05em;text-transform:uppercase;'
+
   const annualTable = `
     <table style="${tableStyle}">
       <thead>
-        <tr><th style="${thStyle}">Component</th><th style="${thStyle}" align="right">Annual (₹)</th></tr>
+        <tr><th style="${thStyle}">Component</th><th style="${thStyle}" align="right">Monthly (₹)</th><th style="${thStyle}" align="right">Annual (₹)</th></tr>
       </thead>
       <tbody>
-        <tr><td style="${tdStyle}">Basic Salary</td><td style="${tdRStyle}">${fmt(annualBasic)}</td></tr>
-        <tr><td style="${tdStyle}">House Rent Allowance (HRA)</td><td style="${tdRStyle}">${fmt(annualHra)}</td></tr>
-        <tr><td style="${tdStyle}">Transport Allowance</td><td style="${tdRStyle}">${fmt(annualTransport)}</td></tr>
-        <tr><td style="${tdStyle}">Flexible Benefit Plan (FBP)</td><td style="${tdRStyle}">${fmt(annualFbp)}</td></tr>
-        <tr><td style="${tdStyle}">Half Yearly Incentive (HYI)</td><td style="${tdRStyle}">${fmt(annualHyi)}</td></tr>
-        <tr><td style="${tdStyle}">Annual Bonus</td><td style="${tdRStyle}">${fmt(salary.annualBonus)}</td></tr>
-        <tr><td style="${tdStyle}">Employer PF Contribution</td><td style="${tdRStyle}">${fmt(annualEmpPf)}</td></tr>
-        <tr><td style="${tdStyle}">Mediclaim</td><td style="${tdRStyle}">${fmt(annualMediclaim)}</td></tr>
-        <tr><td style="${tfStyle}">Total CTC</td><td style="${tfRStyle}">${fmt(salary.annualCtc)}</td></tr>
+        <tr><td style="${tdStyle}">Basic Salary</td><td style="${tdRStyle}">${fmt(salary.basicMonthly)}</td><td style="${tdRStyle}">${fmt(annualBasic)}</td></tr>
+        <tr><td style="${tdStyle}">House Rent Allowance (HRA)</td><td style="${tdRStyle}">${fmt(salary.hraMonthly)}</td><td style="${tdRStyle}">${fmt(annualHra)}</td></tr>
+        <tr><td style="${tdStyle}">Transport Allowance</td><td style="${tdRStyle}">${fmt(salary.transportMonthly)}</td><td style="${tdRStyle}">${fmt(annualTransport)}</td></tr>
+        <tr><td style="${tdStyle}">Flexible Benefit Plan (FBP)</td><td style="${tdRStyle}">${fmt(salary.fbpMonthly)}</td><td style="${tdRStyle}">${fmt(annualFbp)}</td></tr>
+        <tr><td style="${tdStyle}">Half Yearly Incentive (HYI)</td><td style="${tdRStyle}">${fmt(salary.hyiMonthly)}</td><td style="${tdRStyle}">${fmt(annualHyi)}</td></tr>
+        <tr style="background:#e8f0fe;font-weight:600;"><td style="${tdStyle}">Gross Salary</td><td style="${tdRStyle}">${fmt(salary.grandTotalMonthly)}</td><td style="${tdRStyle}">${fmt(salary.grandTotalMonthly * 12)}</td></tr>
+        <tr><td colspan="3" style="${sectionStyle}">CTC Components</td></tr>
+        <tr><td style="${tdStyle}">Employer PF Contribution ${tagInCtc}</td><td style="${tdRStyle}">${fmt(salary.employerPfMonthly)}</td><td style="${tdRStyle}">${fmt(annualEmpPf)}</td></tr>
+        ${salary.esiApplies ? `<tr><td style="${tdStyle}">Employer ESI Contribution ${tagInCtc}</td><td style="${tdRStyle}">${fmt(salary.employerEsiMonthly)}</td><td style="${tdRStyle}">${fmt(salary.employerEsiMonthly * 12)}</td></tr>` : ''}
+        ${salary.annualBonus > 0 ? `<tr><td style="${tdStyle}">Annual Bonus ${tagPaidMar}</td><td style="${tdRStyle}">${fmt(salary.annualBonus / 12)}</td><td style="${tdRStyle}">${fmt(salary.annualBonus)}</td></tr>` : ''}
+        ${annualMediclaim > 0 ? `<tr><td style="${tdStyle}">Mediclaim</td><td style="${tdRStyle}">${fmt(salary.mediclaim / 12)}</td><td style="${tdRStyle}">${fmt(annualMediclaim)}</td></tr>` : ''}
+        <tr><td style="${tfStyle}">Total CTC</td><td style="${tfRStyle}">${fmt(salary.annualCtc / 12)}</td><td style="${tfRStyle}">${fmt(salary.annualCtc)}</td></tr>
       </tbody>
     </table>`
 
+  const totalDeductions = salary.employeePfMonthly + (salary.esiApplies ? salary.employeeEsiMonthly : salary.ptMonthly)
   const monthlyTable = `
     <table style="${tableStyle}">
       <thead>
         <tr>
-          <th style="${thStyle}">Earnings</th>
-          <th style="${thStyle}" align="right">Amount (₹)</th>
-          <th style="${thStyle}">Deductions</th>
-          <th style="${thStyle}" align="right">Amount (₹)</th>
+          <th style="${thStyle}" colspan="2">Employee Deductions</th>
+          <th style="${thStyle}" align="right">Monthly (₹)</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td style="${tdStyle}">Basic Salary</td><td style="${tdRStyle}">${fmt(salary.basicMonthly)}</td>
-          <td style="${tdStyle}">Employee PF</td><td style="${tdRStyle}">${fmt(salary.employeePfMonthly)}</td>
+          <td style="${tdStyle}" colspan="2">Employee PF (12% of Basic, max ₹1,800) ${tagInGross}</td>
+          <td style="${tdRStyle}">${fmt(salary.employeePfMonthly)}</td>
         </tr>
-        <tr>
-          <td style="${tdStyle}">HRA</td><td style="${tdRStyle}">${fmt(salary.hraMonthly)}</td>
-          <td style="${tdStyle}">${salary.esiApplies ? 'Employee ESI' : 'Professional Tax'}</td>
-          <td style="${tdRStyle}">${fmt(salary.esiApplies ? salary.employeeEsiMonthly : salary.ptMonthly)}</td>
-        </tr>
-        <tr>
-          <td style="${tdStyle}">Transport Allowance</td><td style="${tdRStyle}">${fmt(salary.transportMonthly)}</td>
-          <td style="${tdStyle}"></td><td style="${tdRStyle}"></td>
-        </tr>
-        <tr>
-          <td style="${tdStyle}">FBP</td><td style="${tdRStyle}">${fmt(salary.fbpMonthly)}</td>
-          <td style="${tdStyle}"></td><td style="${tdRStyle}"></td>
-        </tr>
-        <tr>
-          <td style="${tdStyle}">Half Yearly Incentive</td><td style="${tdRStyle}">${fmt(salary.hyiMonthly)}</td>
-          <td style="${tdStyle}"></td><td style="${tdRStyle}"></td>
-        </tr>
-        <tr>
-          <td style="${tfStyle}">Total Earnings</td><td style="${tfRStyle}">${fmt(salary.grandTotalMonthly)}</td>
-          <td style="${tfStyle}">Total Deductions</td>
-          <td style="${tfRStyle}">${fmt(salary.employeePfMonthly + (salary.esiApplies ? salary.employeeEsiMonthly : salary.ptMonthly))}</td>
-        </tr>
-        <tr>
-          <td style="${tfStyle}" colspan="2">Net Monthly Salary</td>
-          <td style="${tfRStyle}" colspan="2">${fmt(salary.netMonthly)}</td>
+        ${salary.esiApplies
+          ? `<tr><td style="${tdStyle}" colspan="2">Employee ESI ${tagInGross}</td><td style="${tdRStyle}">${fmt(salary.employeeEsiMonthly)}</td></tr>`
+          : `<tr><td style="${tdStyle}" colspan="2" style="color:#999;">Employee ESI — Not Applicable</td><td style="${tdRStyle}" style="color:#999;">0.00</td></tr>`
+        }
+        <tr><td style="${tfStyle}" colspan="2">Total Deductions</td><td style="${tfRStyle}">${fmt(totalDeductions)}</td></tr>
+        <tr style="background:#f0fdf4;">
+          <td style="${tfStyle};background:#f0fdf4;color:#15803d;" colspan="2">Net Monthly Salary</td>
+          <td style="${tfRStyle};background:#f0fdf4;color:#15803d;">${fmt(salary.netMonthly)}</td>
         </tr>
       </tbody>
     </table>`
@@ -337,14 +328,7 @@ export default function DocumentGenerationPage() {
     },
   })
 
-  // Compute salary on CTC override
-  const { mutate: computeSalary, isLoading: computing } = useMutation({
-    mutationFn: (ctc: number) => documentsApi.computeSalary({ employeeId: selectedEmp.id, annualCtc: ctc }),
-    onSuccess: (r) => {
-      const s = r.data?.data
-      if (s) setSalary(s)
-    },
-  })
+  // Salary always from snapshot — no recompute
 
   // Save company profile
   const { mutate: saveCompany, isLoading: savingCompany } = useMutation({
@@ -439,11 +423,6 @@ export default function DocumentGenerationPage() {
     setSalary(null)
     setCtcOverride('')
     loadSnapshot(emp.id)
-  }
-
-  const handleCtcBlur = () => {
-    const val = parseFloat(ctcOverride)
-    if (!isNaN(val) && val > 0 && selectedEmp) computeSalary(val)
   }
 
   const handlePrint = () => {
@@ -574,13 +553,11 @@ export default function DocumentGenerationPage() {
             <div className="flex gap-2">
               <input
                 type="number"
-                className={inp}
+                className={inp + ' bg-slate-50 cursor-not-allowed'}
                 value={ctcOverride}
-                onChange={e => setCtcOverride(e.target.value)}
-                onBlur={handleCtcBlur}
-                placeholder={snapshotLoading ? 'Loading…' : 'Enter CTC'}
+                readOnly
+                placeholder={snapshotLoading ? 'Loading…' : 'From snapshot'}
               />
-              {computing && <RefreshCw size={16} className="self-center animate-spin text-blue-500" />}
             </div>
           </Field>
 
