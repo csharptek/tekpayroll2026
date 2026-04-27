@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, Bell, Mail, Send, CheckCircle2, XCircle } from 'lucide-react'
-import { configApi } from '../../services/api'
+import { configApi, documentsApi } from '../../services/api'
 import api from '../../services/api'
 import { PageHeader, Button, Card, Alert, Input } from '../../components/ui'
 
@@ -422,6 +422,117 @@ export default function NotificationConfigPage() {
           </div>
         </div>
       </Card>
+
+      {/* ── INCREMENT LETTER EMAIL TEMPLATE ── */}
+      <IncrementEmailConfig />
     </div>
+  )
+}
+
+function IncrementEmailConfig() {
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [testEmail, setTestEmail] = useState('')
+  const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+
+  const { data: configData } = useQuery({
+    queryKey: ['system-config'],
+    queryFn: () => configApi.get().then(r => r.data?.data || {}),
+  })
+
+  useEffect(() => {
+    if (!configData) return
+    setSubject((configData as any)['INCREMENT_EMAIL_SUBJECT'] || 'Your Increment Letter — {employeeName}')
+    setBody((configData as any)['INCREMENT_EMAIL_BODY'] || '')
+  }, [configData])
+
+  const { mutate: save, isPending: saving } = useMutation({
+    mutationFn: () => configApi.update({
+      INCREMENT_EMAIL_SUBJECT: subject,
+      INCREMENT_EMAIL_BODY: body,
+    }),
+    onSuccess: () => setStatus({ type: 'success', msg: 'Saved' }),
+    onError: () => setStatus({ type: 'error', msg: 'Save failed' }),
+  })
+
+  const { mutate: sendTest, isPending: testSending } = useMutation({
+    mutationFn: () => documentsApi.testEmail({ toEmail: testEmail }),
+    onSuccess: () => setStatus({ type: 'success', msg: `Test email sent to ${testEmail}` }),
+    onError: (e: any) => setStatus({ type: 'error', msg: e?.response?.data?.error || 'Test failed' }),
+  })
+
+  const vars = ['{employeeName}', '{firstName}', '{employeeCode}', '{designation}']
+  const inp = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+
+  return (
+    <Card>
+      <div className="p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+            <Mail size={14} className="text-blue-600" />
+          </div>
+          <h3 className="text-sm font-semibold text-slate-700">Increment Letter — Email Template</h3>
+        </div>
+
+        <p className="text-xs text-slate-500">
+          Configure the subject and intro body sent when emailing increment letters.
+          The letter PDF/HTML is appended after the body automatically.
+        </p>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+          <p className="text-[11px] font-medium text-slate-600 mb-1">Available placeholders</p>
+          <p className="text-[11px] text-slate-400">{vars.join(', ')}</p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Email Subject</label>
+          <input className={inp} value={subject} onChange={e => setSubject(e.target.value)} placeholder="Your Increment Letter — {employeeName}" />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Email Body (HTML or plain text intro)</label>
+          <textarea
+            className={`${inp} min-h-[120px] font-mono text-xs`}
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            placeholder={`<p>Dear {firstName},</p>\n<p>Please find your increment letter attached below.</p>\n<p>Regards,<br/>HR Team</p>`}
+          />
+          <p className="text-[11px] text-slate-400 mt-1">The letter document will be appended after this body.</p>
+        </div>
+
+        {status && (
+          <div className={`flex items-center gap-2 text-xs p-2 rounded-lg ${status.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+            {status.type === 'success' ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+            {status.msg}
+          </div>
+        )}
+
+        <div className="flex gap-3 flex-wrap items-end">
+          <button
+            onClick={() => { setStatus(null); save() }}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40"
+          >
+            <Save size={14} /> {saving ? 'Saving…' : 'Save Template'}
+          </button>
+
+          <div className="flex gap-2 flex-1 min-w-[200px]">
+            <input
+              className={`${inp} flex-1`}
+              placeholder="test@email.com"
+              value={testEmail}
+              onChange={e => setTestEmail(e.target.value)}
+            />
+            <button
+              onClick={() => { setStatus(null); sendTest() }}
+              disabled={!testEmail || testSending}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white text-sm rounded-lg hover:bg-gray-800 disabled:opacity-40 whitespace-nowrap"
+            >
+              <Send size={14} /> {testSending ? 'Sending…' : 'Send Test'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Card>
   )
 }

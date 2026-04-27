@@ -174,13 +174,83 @@ documentsRouter.post('/generate', requireHR, async (req: any, res) => {
     },
   })
 
-  // Send email if requested
-  if (sendEmailFlag && emp.email) {
-    const subject = documentType === 'INCREMENT_LETTER'
-      ? 'Your Increment Letter'
-      : `Your ${documentType.replace(/_/g, ' ')}`
-    await sendEmail(emp.email, subject, htmlContent)
+  res.json({ success: true, data: { docId: doc.id, url } })
+})
+
+// ─── SEND INCREMENT EMAIL ──────────────────────────────────────────────────────
+
+documentsRouter.post('/send-email', requireHR, async (req: any, res) => {
+  const { employeeId, htmlContent, subject } = req.body
+  if (!employeeId || !htmlContent) throw new AppError('employeeId and htmlContent required', 400)
+
+  const emp = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { id: true, name: true, email: true, employeeCode: true, jobTitle: true },
+  })
+  if (!emp) throw new AppError('Employee not found', 404)
+  if (!emp.email) throw new AppError('Employee has no email address', 400)
+
+  const configs = await prisma.systemConfig.findMany({
+    where: { key: { in: ['INCREMENT_EMAIL_SUBJECT', 'INCREMENT_EMAIL_BODY'] } }
+  })
+  const cfgMap = Object.fromEntries(configs.map(c => [c.key, c.value]))
+
+  const resolvedSubject = (subject || cfgMap['INCREMENT_EMAIL_SUBJECT'] || 'Your Increment Letter — {employeeName}')
+    .replace(/\{employeeName\}/g, emp.name)
+    .replace(/\{employeeCode\}/g, emp.employeeCode || '')
+    .replace(/\{employeeId\}/g, emp.employeeCode || '')
+    .replace(/\{firstName\}/g, emp.name.split(' ')[0])
+
+  const emailBodyTemplate = cfgMap['INCREMENT_EMAIL_BODY'] || ''
+  let finalHtml = htmlContent
+  if (emailBodyTemplate) {
+    const resolvedBody = emailBodyTemplate
+      .replace(/\{employeeName\}/g, emp.name)
+      .replace(/\{employeeCode\}/g, emp.employeeCode || '')
+      .replace(/\{firstName\}/g, emp.name.split(' ')[0])
+      .replace(/\{designation\}/g, emp.jobTitle || '')
+    finalHtml = `${resolvedBody}<br/><br/>${htmlContent}`
   }
 
-  res.json({ success: true, data: { docId: doc.id, url } })
+  await sendEmail(emp.email, resolvedSubject, finalHtml)
+  res.json({ success: true, message: `Email sent to ${emp.email}` })
+})
+
+// ─── TEST INCREMENT EMAIL ──────────────────────────────────────────────────────
+
+documentsRouter.post('/test-email', requireHR, async (req: any, res) => {
+  const { toEmail, employeeId, htmlContent } = req.body
+  if (!toEmail) throw new AppError('toEmail required', 400)
+
+  const emp = employeeId
+    ? await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { name: true, email: true, employeeCode: true, jobTitle: true },
+      })
+    : null
+
+  const configs = await prisma.systemConfig.findMany({
+    where: { key: { in: ['INCREMENT_EMAIL_SUBJECT', 'INCREMENT_EMAIL_BODY'] } }
+  })
+  const cfgMap = Object.fromEntries(configs.map(c => [c.key, c.value]))
+
+  const resolvedSubject = `[TEST] ${(cfgMap['INCREMENT_EMAIL_SUBJECT'] || 'Your Increment Letter — {employeeName}')
+    .replace(/\{employeeName\}/g, emp?.name || 'John Doe')
+    .replace(/\{employeeCode\}/g, emp?.employeeCode || 'EMP001')
+    .replace(/\{firstName\}/g, (emp?.name || 'John').split(' ')[0])}`
+
+  const emailBodyTemplate = cfgMap['INCREMENT_EMAIL_BODY'] || ''
+  let finalHtml = htmlContent || '<p>This is a test of the increment letter email.</p>'
+
+  if (emailBodyTemplate) {
+    const resolvedBody = emailBodyTemplate
+      .replace(/\{employeeName\}/g, emp?.name || 'John Doe')
+      .replace(/\{employeeCode\}/g, emp?.employeeCode || 'EMP001')
+      .replace(/\{firstName\}/g, (emp?.name || 'John').split(' ')[0])
+      .replace(/\{designation\}/g, emp?.jobTitle || 'Software Developer')
+    finalHtml = `${resolvedBody}<br/><br/>${finalHtml}`
+  }
+
+  await sendEmail(toEmail, resolvedSubject, finalHtml)
+  res.json({ success: true, message: `Test email sent to ${toEmail}` })
 })

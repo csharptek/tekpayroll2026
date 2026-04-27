@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, forwardRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { employeeApi, configApi, documentsApi } from '../../services/api'
-import { Upload, RefreshCw, Send, Save } from 'lucide-react'
+import { Upload, RefreshCw, Send, Save, Mail, X, CheckCircle, AlertCircle } from 'lucide-react'
 import { DatePicker } from '../../components/DatePicker'
 import { format } from 'date-fns'
 
@@ -261,6 +261,10 @@ export default function DocumentGenerationPage() {
   const [signFile, setSignFile] = useState<File | null>(null)
   const [companyForm, setCompanyForm] = useState<CompanyProfile>({})
   const [companySaved, setCompanySaved] = useState(false)
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [emailSubjectOverride, setEmailSubjectOverride] = useState('')
+  const [testEmailAddr, setTestEmailAddr] = useState('')
+  const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   // Employees list
@@ -348,9 +352,39 @@ export default function DocumentGenerationPage() {
     onSuccess: () => setCompanySaved(true),
   })
 
+  // Send email mutation
+  const { mutate: sendEmailMutation, isLoading: sendingEmail } = useMutation({
+    mutationFn: () => documentsApi.sendEmail({
+      employeeId: selectedEmp.id,
+      htmlContent,
+      subject: emailSubjectOverride || undefined,
+    }),
+    onSuccess: () => {
+      setEmailStatus({ type: 'success', msg: `Email sent to ${selectedEmp?.email}` })
+    },
+    onError: (e: any) => {
+      setEmailStatus({ type: 'error', msg: e?.response?.data?.error || 'Failed to send email' })
+    },
+  })
+
+  // Test email mutation
+  const { mutate: sendTestEmailMutation, isLoading: sendingTestEmail } = useMutation({
+    mutationFn: () => documentsApi.testEmail({
+      toEmail: testEmailAddr,
+      employeeId: selectedEmp?.id,
+      htmlContent: htmlContent || undefined,
+    }),
+    onSuccess: () => {
+      setEmailStatus({ type: 'success', msg: `Test email sent to ${testEmailAddr}` })
+    },
+    onError: (e: any) => {
+      setEmailStatus({ type: 'error', msg: e?.response?.data?.error || 'Failed to send test email' })
+    },
+  })
+
   // Generate document
   const { mutate: generateDoc, isLoading: generating } = useMutation({
-    mutationFn: (sendEmailFlag: boolean) => {
+    mutationFn: () => {
       const html = buildIncrementLetterHtml(
         selectedEmp, salary!, letterDate, effectiveDate,
         isPromotion, newDesignation,
@@ -366,7 +400,7 @@ export default function DocumentGenerationPage() {
         isPromotion, newDesignation,
         salaryData: salary,
         htmlContent: html,
-        sendEmailFlag,
+        sendEmailFlag: false,
       })
     },
   })
@@ -596,23 +630,35 @@ export default function DocumentGenerationPage() {
             Preview Letter
           </button>
           <button
-            onClick={() => generateDoc(false)}
+            onClick={() => generateDoc()}
             disabled={!selectedEmp || !salary || !effectiveDate || generating}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-40"
           >
             <Save size={14} /> {generating ? 'Saving…' : 'Save'}
           </button>
           <button
-            onClick={() => generateDoc(true)}
-            disabled={!selectedEmp || !salary || !effectiveDate || generating}
+            onClick={() => {
+              if (!htmlContent) {
+                const html = buildIncrementLetterHtml(
+                  selectedEmp, salary!, letterDate, effectiveDate,
+                  isPromotion, newDesignation,
+                  { ...companyForm, COMPANY_LOGO_URL: configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL },
+                  signerName, signerDesignation,
+                )
+                setHtmlContent(html)
+                setShowPreview(true)
+              }
+              setEmailStatus(null)
+              setShowEmailModal(true)
+            }}
+            disabled={!selectedEmp || !salary || !effectiveDate}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40"
           >
-            <Send size={14} /> Save & Email
+            <Mail size={14} /> Email to Employee
           </button>
         </div>
       </section>
 
-      {/* ── LETTER PREVIEW ── */}
       {showPreview && htmlContent && (
         <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
@@ -630,6 +676,102 @@ export default function DocumentGenerationPage() {
             onChange={setHtmlContent}
           />
         </section>
+      )}
+
+      {/* ── EMAIL MODAL ── */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Mail size={18} className="text-blue-600" />
+                <h3 className="text-base font-semibold text-gray-800">Email Increment Letter</h3>
+              </div>
+              <button onClick={() => setShowEmailModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Employee Info */}
+              <div className="bg-blue-50 rounded-lg p-3 text-sm">
+                <p className="font-medium text-blue-900">{selectedEmp?.name}</p>
+                <p className="text-blue-600">{selectedEmp?.employeeCode} · {selectedEmp?.email || <span className="text-red-500">No email on record</span>}</p>
+              </div>
+
+              {/* Email Subject */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Email Subject</label>
+                <input
+                  className={inp}
+                  value={emailSubjectOverride}
+                  onChange={e => setEmailSubjectOverride(e.target.value)}
+                  placeholder="Leave blank to use template from Settings"
+                />
+                <p className="text-xs text-gray-400 mt-1">Configure default in Notification Settings → Increment Letter</p>
+              </div>
+
+              {/* Letter Preview inside modal */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Letter Preview</label>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <iframe
+                    srcDoc={htmlContent}
+                    style={{ width: '100%', height: 320, border: 'none' }}
+                    title="email-preview"
+                  />
+                </div>
+              </div>
+
+              {/* Status */}
+              {emailStatus && (
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${emailStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {emailStatus.type === 'success' ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                  {emailStatus.msg}
+                </div>
+              )}
+
+              {/* Test Email */}
+              <div className="border border-gray-200 rounded-lg p-4 space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Send Test Email</p>
+                <div className="flex gap-2">
+                  <input
+                    className={`${inp} flex-1`}
+                    placeholder="your@email.com"
+                    value={testEmailAddr}
+                    onChange={e => setTestEmailAddr(e.target.value)}
+                  />
+                  <button
+                    onClick={() => { setEmailStatus(null); sendTestEmailMutation() }}
+                    disabled={!testEmailAddr || sendingTestEmail}
+                    className="px-3 py-2 text-sm bg-gray-700 text-white rounded-lg hover:bg-gray-800 disabled:opacity-40 whitespace-nowrap"
+                  >
+                    {sendingTestEmail ? 'Sending…' : 'Send Test'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button
+                onClick={() => setShowEmailModal(false)}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setEmailStatus(null); sendEmailMutation() }}
+                disabled={!selectedEmp?.email || sendingEmail}
+                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40"
+              >
+                <Send size={14} />
+                {sendingEmail ? 'Sending…' : `Send to ${selectedEmp?.email || 'employee'}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

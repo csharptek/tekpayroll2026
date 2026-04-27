@@ -317,4 +317,6 @@ export const documentsApi = {
   getSalarySnapshot: (employeeId: string) => api.get(`/api/documents/salary-snapshot/${employeeId}`),
   computeSalary:   (data: { employeeId: string; annualCtc: number }) => api.post('/api/documents/compute-salary', data),
   generate:        (data: any) => api.post('/api/documents/generate', data),
+  sendEmail:       (data: { employeeId: string; htmlContent: string; subject?: string }) => api.post('/api/documents/send-email', data),
+  testEmail:       (data: { toEmail: string; employeeId?: string; htmlContent?: string }) => api.post('/api/documents/test-email', data),
 }
