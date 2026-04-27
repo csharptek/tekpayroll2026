@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, forwardRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { employeeApi, configApi, documentsApi } from '../../services/api'
-import { Upload, RefreshCw, Send, Save, Mail, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { Upload, RefreshCw, Send, Save, Mail, X, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react'
 import { DatePicker } from '../../components/DatePicker'
 import { format } from 'date-fns'
 
@@ -425,6 +425,22 @@ export default function DocumentGenerationPage() {
     loadSnapshot(emp.id)
   }
 
+  const handleReset = () => {
+    setSelectedEmp(null)
+    setEmpSearch('')
+    setEmpDropOpen(false)
+    setSalary(null)
+    setCtcOverride('')
+    setLetterDate(format(new Date(), 'yyyy-MM-dd'))
+    setEffectiveDate('2026-04-01')
+    setIsPromotion(false)
+    setNewDesignation('')
+    setHtmlContent('')
+    setEmailStatus(null)
+    setEmailSubjectOverride('')
+    resetEmailMutation()
+  }
+
   const handlePrint = () => {
     if (iframeRef.current) {
       iframeRef.current.contentWindow?.print()
@@ -441,7 +457,16 @@ export default function DocumentGenerationPage() {
 
   return (
     <div className="p-4 max-w-6xl mx-auto space-y-6">
-      <h1 className="text-xl font-bold text-gray-800">Increment Letter</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-800">Increment Letter</h1>
+        <button
+          type="button"
+          onClick={handleReset}
+          className="flex items-center gap-2 px-4 py-2 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+        >
+          <RotateCcw size={14}/> Reset
+        </button>
+      </div>
 
       {/* ── COMPANY PROFILE ── */}
       <section className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
