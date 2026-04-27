@@ -324,7 +324,10 @@ export function isBonusMonth(payrollMonth: string): boolean {
 // Queries SalaryStructureSnapshot (active) first — this is the source of truth set via the salary tab.
 // Falls back to SalaryRevision → Employee fields for older employees without a snapshot.
 
-export async function getSalaryInputForDate(employeeId: string, asOf: Date): Promise<SalaryInput & { tdsMonthly: number }> {
+export async function getSalaryInputForDate(
+  employeeId: string,
+  asOf: Date
+): Promise<SalaryInput & { tdsMonthly: number; prebuiltSalary?: SalaryStructure }> {
   const emp = await prisma.employee.findUnique({ where: { id: employeeId } })
   if (!emp) throw new Error(`Employee ${employeeId} not found`)
 
@@ -339,24 +342,54 @@ export async function getSalaryInputForDate(employeeId: string, asOf: Date): Pro
   })
 
   if (snapshot) {
-    // Snapshot has all pre-computed components — convert back to SalaryInput
-    // so the payroll engine can re-run deductions (LOP, ESI, PF) correctly.
-    // We derive the percentages from stored values so engine produces same components.
-    const annualCtc       = Number(snapshot.annualCtc)
-    const basicMonthly    = Number(snapshot.basicMonthly)
-    const hraMonthly      = Number(snapshot.hraMonthly)
-    const transportMonthly= Number(snapshot.transportMonthly)
-    const fbpMonthly      = Number(snapshot.fbpMonthly)
-    const mediclaim       = Number(snapshot.mediclaim)
-    const hasIncentive    = Boolean(snapshot.hasIncentive)
+    const annualCtc         = Number(snapshot.annualCtc)
+    const basicMonthly      = Number(snapshot.basicMonthly)
+    const hraMonthly        = Number(snapshot.hraMonthly)
+    const transportMonthly  = Number(snapshot.transportMonthly)
+    const fbpMonthly        = Number(snapshot.fbpMonthly)
+    const hyiMonthly        = Number(snapshot.hyiMonthly)
+    const grandTotalMonthly = Number(snapshot.grandTotalMonthly)
+    const mediclaim         = Number(snapshot.mediclaim)
+    const hasIncentive      = Boolean(snapshot.hasIncentive)
+    const annualBonus       = Number(snapshot.annualBonus)
+    const esiApplies        = Boolean(snapshot.esiApplies)
 
-    // Back-derive percentages from stored values (annual basis)
-    const annualBasic = basicMonthly * 12
-    const basicPercent = annualCtc > 0 ? (annualBasic / annualCtc) * 100 : 45
-    const hraPercent   = annualBasic > 0 ? (hraMonthly * 12 / annualBasic) * 100 : 35
+    // Read ALL deductions directly from snapshot — no recomputation
+    const employeePfMonthly  = Number(snapshot.employeePfMonthly)
+    const employerPfMonthly  = Number(snapshot.employerPfMonthly)
+    const employerPfAnnual   = employerPfMonthly * 12
+    const employeeEsiMonthly = Number(snapshot.employeeEsiMonthly)
+    const employerEsiMonthly = Number(snapshot.employerEsiMonthly)
+    const employerEsiAnnual  = employerEsiMonthly * 12
+    const tdsMonthly         = Number(snapshot.tdsMonthly)
 
-    // incentivePercent: annualBonus as % of CTC
-    const annualBonus = Number(snapshot.annualBonus)
+    // Build SalaryStructure directly from snapshot — zero recomputation
+    const prebuiltSalary: SalaryStructure & { ptMonthly: number } = {
+      annualCtc,
+      annualBonus,
+      basicMonthly,
+      hraMonthly,
+      transportMonthly,
+      fbpMonthly,
+      hyiMonthly,
+      grandTotalMonthly,
+      basicAnnual:       basicMonthly * 12,
+      hraAnnual:         hraMonthly * 12,
+      employerPfMonthly,
+      employerPfAnnual,
+      employerEsiMonthly,
+      employerEsiAnnual,
+      esiBase:           basicMonthly,
+      esiApplies,
+      employeePfMonthly,
+      employeeEsiMonthly,
+      ptMonthly:         Number(snapshot.ptMonthly),
+    }
+
+    // Also return a valid SalaryInput for callers that need it
+    const annualBasic      = basicMonthly * 12
+    const basicPercent     = annualCtc > 0 ? (annualBasic / annualCtc) * 100 : 45
+    const hraPercent       = annualBasic > 0 ? (hraMonthly * 12 / annualBasic) * 100 : 35
     const incentivePercent = annualCtc > 0 && hasIncentive ? (annualBonus / annualCtc) * 100 : 12
 
     return {
@@ -368,7 +401,8 @@ export async function getSalaryInputForDate(employeeId: string, asOf: Date): Pro
       mediclaim,
       hasIncentive,
       incentivePercent,
-      tdsMonthly: Number(snapshot.tdsMonthly),
+      tdsMonthly,
+      prebuiltSalary,
     }
   }
 
@@ -443,6 +477,7 @@ export async function calculatePayrollForEmployee(params: {
   reimbursements:  number
   employeeStatus?: string
   esiConfig?: Awaited<ReturnType<typeof getEsiConfig>>
+  prebuiltSalary?: SalaryStructure
 }): Promise<PayrollCalculation> {
 
   const esiConfig  = params.esiConfig ?? await getEsiConfig()
@@ -458,14 +493,19 @@ export async function calculatePayrollForEmployee(params: {
     params.cycleStart
   )
 
-  // Build modified input with HYI zeroed if suppressed
-  // We achieve this by temporarily setting hasIncentive=false during structure compute,
-  // then restoring the hyiMonthly to 0 in the result via a wrapper
-  const salaryInputForCalc: SalaryInput = suppressHyi
-    ? { ...salaryInput, hasIncentive: false, incentivePercent: 0 }
-    : salaryInput
+  let salary: SalaryStructure
+  if (params.prebuiltSalary) {
+    // Use snapshot values directly — no recomputation
+    salary = suppressHyi
+      ? { ...params.prebuiltSalary, hyiMonthly: 0, annualBonus: 0 }
+      : params.prebuiltSalary
+  } else {
+    const salaryInputForCalc: SalaryInput = suppressHyi
+      ? { ...salaryInput, hasIncentive: false, incentivePercent: 0 }
+      : salaryInput
+    salary = computeSalaryStructure(salaryInputForCalc, esiConfig)
+  }
 
-  const salary     = computeSalaryStructure(salaryInputForCalc, esiConfig)
   const proration  = computeProration(
     salary.grandTotalMonthly,
     params.cycleStart,
@@ -474,20 +514,25 @@ export async function calculatePayrollForEmployee(params: {
     params.lastWorkingDay
   )
 
-  const lopAmount       = computeLop(salary.grandTotalMonthly, proration.totalDays, params.lopDays)
-  const esi             = salary.employeeEsiMonthly
-  const pt              = await computePt(salary.grandTotalMonthly, params.state)
-  const loanDeduction   = await computeLoanDeduction(params.employeeId, params.payrollMonth)
-  const bonusMonth      = isBonusMonth(params.payrollMonth)
-  const annualBonus     = bonusMonth ? salary.annualBonus : 0
+  const lopAmount     = computeLop(salary.grandTotalMonthly, proration.totalDays, params.lopDays)
+  const loanDeduction = await computeLoanDeduction(params.employeeId, params.payrollMonth)
+  const bonusMonth    = isBonusMonth(params.payrollMonth)
+  const annualBonus   = bonusMonth ? salary.annualBonus : 0
+
+  // When snapshot present — PF, ESI, PT read directly from it. No recomputation.
+  const pf  = salary.employeePfMonthly
+  const esi = salary.employeeEsiMonthly
+  const pt  = (params.prebuiltSalary as any)?.ptMonthly !== undefined
+    ? (params.prebuiltSalary as any).ptMonthly
+    : await computePt(salary.grandTotalMonthly, params.state)
 
   const deductions: DeductionResult = {
-    pf:                salary.employeePfMonthly,  // 12% of Basic, uncapped
-    esi,  // 0.75% of (Gross - HYI) if applicable
+    pf,
+    esi,
     pt,
     tds:               params.tdsMonthly,
     lop:               lopAmount,
-    incentiveRecovery: 0,  // Only applies on F&F
+    incentiveRecovery: 0,
     loanDeduction,
   }
 

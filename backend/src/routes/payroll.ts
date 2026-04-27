@@ -117,6 +117,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         tdsMonthly:      revisionInput.tdsMonthly,
         reimbursements:  Number(reimbs._sum.amount || 0),
         employeeStatus:  emp.status,
+        prebuiltSalary:  revisionInput.prebuiltSalary,
       })
 
       const s = calc.salary
@@ -282,6 +283,7 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
         reimbursements:  reimbAmount,
         employeeStatus:  emp.status,
         esiConfig,
+        prebuiltSalary:  revisionInput.prebuiltSalary,
       })
 
       return { emp, calc, lopDays, reimbAmount }
@@ -486,6 +488,7 @@ payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
     tdsMonthly:     finalTds,
     reimbursements: finalReimb,
     employeeStatus: emp.status,
+    prebuiltSalary: revisionInput.prebuiltSalary,
   })
 
   const s = calc.salary

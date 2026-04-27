@@ -98,6 +98,7 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
           tdsMonthly:      revisionInput.tdsMonthly,
           employeeStatus:  emp.status,
           reimbursements:  Number(reimbs._sum.amount || 0),
+          prebuiltSalary:  revisionInput.prebuiltSalary,
         })
 
         await prisma.payrollEntry.upsert({
