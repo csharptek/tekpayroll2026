@@ -186,7 +186,7 @@ async function htmlToPdfBase64(html: string): Promise<string> {
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   })
   const page = await browser.newPage()
-  await page.setContent(html, { waitUntil: 'networkidle0' })
+  await page.setContent(html, { waitUntil: 'networkidle2', timeout: 15000 })
   const pdf = await page.pdf({
     format: 'A4',
     printBackground: true,
