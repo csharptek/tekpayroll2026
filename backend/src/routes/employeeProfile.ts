@@ -609,9 +609,7 @@ employeeProfileRouter.delete('/:id/documents/:docId', requireHR, async (req, res
 
 // Get password status for current user
 employeeProfileRouter.get('/my/payslip-password-status', async (req: any, res) => {
-  const emp = await prisma.employee.findFirst({ where: { entraId: req.user!.entraId } })
-  if (!emp) throw new AppError('Employee not found', 404)
-  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: emp.id } })
+  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: req.user!.id } })
   res.json({
     success: true,
     data: {
@@ -621,13 +619,11 @@ employeeProfileRouter.get('/my/payslip-password-status', async (req: any, res) =
   })
 })
 
-// Verify password (returns ok if correct — client stores session flag)
+// Verify password
 employeeProfileRouter.post('/my/verify-payslip-password', async (req: any, res) => {
   const { password } = req.body
   if (!password) throw new AppError('Password required', 400)
-  const emp = await prisma.employee.findFirst({ where: { entraId: req.user!.entraId } })
-  if (!emp) throw new AppError('Employee not found', 404)
-  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: emp.id } })
+  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: req.user!.id } })
   if (!profile?.payslipPassword) throw new AppError('No password set', 400)
   const ok = await bcrypt.compare(password, profile.payslipPassword)
   if (!ok) throw new AppError('Incorrect password', 401)
@@ -639,15 +635,12 @@ employeeProfileRouter.post('/my/set-payslip-password', async (req: any, res) => 
   const { oldPassword, newPassword } = req.body
   if (!newPassword || newPassword.length < 4) throw new AppError('Password must be at least 4 characters', 400)
 
-  const emp = await prisma.employee.findFirst({ where: { entraId: req.user!.entraId } })
-  if (!emp) throw new AppError('Employee not found', 404)
-
-  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: emp.id } })
+  const empId = req.user!.id
+  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: empId } })
   const hasExisting = !!profile?.payslipPassword
   const resetAllowed = profile?.payslipPasswordResetAllowed ?? false
 
   if (hasExisting && !resetAllowed) {
-    // Must provide correct old password
     if (!oldPassword) throw new AppError('Current password required', 400)
     const ok = await bcrypt.compare(oldPassword, profile.payslipPassword!)
     if (!ok) throw new AppError('Current password is incorrect', 401)
@@ -656,16 +649,9 @@ employeeProfileRouter.post('/my/set-payslip-password', async (req: any, res) => 
   const hashed = await bcrypt.hash(newPassword, 10)
 
   await prisma.employeeProfile.upsert({
-    where: { employeeId: emp.id },
-    create: {
-      employeeId: emp.id,
-      payslipPassword: hashed,
-      payslipPasswordResetAllowed: false,
-    },
-    update: {
-      payslipPassword: hashed,
-      payslipPasswordResetAllowed: false,  // clear reset flag after password is set
-    },
+    where:  { employeeId: empId },
+    create: { employeeId: empId, payslipPassword: hashed, payslipPasswordResetAllowed: false },
+    update: { payslipPassword: hashed, payslipPasswordResetAllowed: false },
   })
 
   res.json({ success: true })
