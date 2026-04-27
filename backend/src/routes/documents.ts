@@ -5,7 +5,7 @@ import { authenticate, requireHR } from '../middleware/auth'
 import { AppError } from '../middleware/errorHandler'
 import { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters, StorageSharedKeyCredential } from '@azure/storage-blob'
 import { randomUUID } from 'crypto'
-import { sendEmail } from '../services/emailService'
+import { sendEmail, sendEmailWithAttachment } from '../services/emailService'
 import { computeSalaryStructure, getEsiConfig, getSalaryInputForDate, computePt } from '../services/payrollEngine'
 
 export const documentsRouter = Router()
@@ -177,6 +177,33 @@ documentsRouter.post('/generate', requireHR, async (req: any, res) => {
   res.json({ success: true, data: { docId: doc.id, url } })
 })
 
+// ─── SHARED: HTML → PDF ────────────────────────────────────────────────────────
+
+async function htmlToPdfBase64(html: string): Promise<string> {
+  const puppeteer = await import('puppeteer')
+  const browser = await puppeteer.default.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  })
+  const page = await browser.newPage()
+  await page.setContent(html, { waitUntil: 'networkidle0' })
+  const pdf = await page.pdf({
+    format: 'A4',
+    printBackground: true,
+    margin: { top: '15mm', bottom: '20mm', left: '20mm', right: '20mm' },
+  })
+  await browser.close()
+  return Buffer.from(pdf).toString('base64')
+}
+
+function resolveEmailPlaceholders(template: string, emp: { name: string; employeeCode?: string | null; jobTitle?: string | null }) {
+  return template
+    .replace(/\{employeeName\}/g, emp.name)
+    .replace(/\{employeeCode\}/g, emp.employeeCode || '')
+    .replace(/\{firstName\}/g, emp.name.split(' ')[0])
+    .replace(/\{designation\}/g, emp.jobTitle || '')
+}
+
 // ─── SEND INCREMENT EMAIL ──────────────────────────────────────────────────────
 
 documentsRouter.post('/send-email', requireHR, async (req: any, res) => {
@@ -195,24 +222,21 @@ documentsRouter.post('/send-email', requireHR, async (req: any, res) => {
   })
   const cfgMap = Object.fromEntries(configs.map(c => [c.key, c.value]))
 
-  const resolvedSubject = (subject || cfgMap['INCREMENT_EMAIL_SUBJECT'] || 'Your Increment Letter — {employeeName}')
-    .replace(/\{employeeName\}/g, emp.name)
-    .replace(/\{employeeCode\}/g, emp.employeeCode || '')
-    .replace(/\{employeeId\}/g, emp.employeeCode || '')
-    .replace(/\{firstName\}/g, emp.name.split(' ')[0])
+  const resolvedSubject = resolveEmailPlaceholders(
+    subject || cfgMap['INCREMENT_EMAIL_SUBJECT'] || 'Your Increment Letter — {employeeName}',
+    emp
+  )
 
   const emailBodyTemplate = cfgMap['INCREMENT_EMAIL_BODY'] || ''
-  let finalHtml = htmlContent
-  if (emailBodyTemplate) {
-    const resolvedBody = emailBodyTemplate
-      .replace(/\{employeeName\}/g, emp.name)
-      .replace(/\{employeeCode\}/g, emp.employeeCode || '')
-      .replace(/\{firstName\}/g, emp.name.split(' ')[0])
-      .replace(/\{designation\}/g, emp.jobTitle || '')
-    finalHtml = `${resolvedBody}<br/><br/>${htmlContent}`
-  }
+  const bodyHtml = emailBodyTemplate
+    ? resolveEmailPlaceholders(emailBodyTemplate, emp)
+    : `<p>Dear ${emp.name.split(' ')[0]},</p><p>Please find your increment letter attached.</p><p>Regards,<br/>HR Team</p>`
 
-  await sendEmail(emp.email, resolvedSubject, finalHtml)
+  // Generate PDF from letter HTML and attach
+  const pdfBase64 = await htmlToPdfBase64(htmlContent)
+  const attachmentName = `Increment_Letter_${emp.employeeCode || emp.id}.pdf`
+
+  await sendEmailWithAttachment(emp.email, resolvedSubject, bodyHtml, attachmentName, pdfBase64)
   res.json({ success: true, message: `Email sent to ${emp.email}` })
 })
 
@@ -229,28 +253,28 @@ documentsRouter.post('/test-email', requireHR, async (req: any, res) => {
       })
     : null
 
+  const mockEmp = emp || { name: 'John Doe', employeeCode: 'EMP001', jobTitle: 'Software Developer' }
+
   const configs = await prisma.systemConfig.findMany({
     where: { key: { in: ['INCREMENT_EMAIL_SUBJECT', 'INCREMENT_EMAIL_BODY'] } }
   })
   const cfgMap = Object.fromEntries(configs.map(c => [c.key, c.value]))
 
-  const resolvedSubject = `[TEST] ${(cfgMap['INCREMENT_EMAIL_SUBJECT'] || 'Your Increment Letter — {employeeName}')
-    .replace(/\{employeeName\}/g, emp?.name || 'John Doe')
-    .replace(/\{employeeCode\}/g, emp?.employeeCode || 'EMP001')
-    .replace(/\{firstName\}/g, (emp?.name || 'John').split(' ')[0])}`
+  const resolvedSubject = `[TEST] ${resolveEmailPlaceholders(
+    cfgMap['INCREMENT_EMAIL_SUBJECT'] || 'Your Increment Letter — {employeeName}',
+    mockEmp
+  )}`
 
   const emailBodyTemplate = cfgMap['INCREMENT_EMAIL_BODY'] || ''
-  let finalHtml = htmlContent || '<p>This is a test of the increment letter email.</p>'
+  const bodyHtml = emailBodyTemplate
+    ? resolveEmailPlaceholders(emailBodyTemplate, mockEmp)
+    : `<p>Dear ${mockEmp.name.split(' ')[0]},</p><p>Please find your increment letter attached.</p><p>Regards,<br/>HR Team</p>`
 
-  if (emailBodyTemplate) {
-    const resolvedBody = emailBodyTemplate
-      .replace(/\{employeeName\}/g, emp?.name || 'John Doe')
-      .replace(/\{employeeCode\}/g, emp?.employeeCode || 'EMP001')
-      .replace(/\{firstName\}/g, (emp?.name || 'John').split(' ')[0])
-      .replace(/\{designation\}/g, emp?.jobTitle || 'Software Developer')
-    finalHtml = `${resolvedBody}<br/><br/>${finalHtml}`
-  }
+  const letterHtml = htmlContent || `<html><body><p>This is a test increment letter for ${mockEmp.name}.</p></body></html>`
+  const pdfBase64 = await htmlToPdfBase64(letterHtml)
+  const attachmentName = `TEST_Increment_Letter_${mockEmp.employeeCode || 'SAMPLE'}.pdf`
 
-  await sendEmail(toEmail, resolvedSubject, finalHtml)
+  await sendEmailWithAttachment(toEmail, resolvedSubject, bodyHtml, attachmentName, pdfBase64)
   res.json({ success: true, message: `Test email sent to ${toEmail}` })
 })
+

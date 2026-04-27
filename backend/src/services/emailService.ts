@@ -30,6 +30,53 @@ export async function sendEmail(to: string, subject: string, htmlBody: string) {
   return sendEmailWithCc(to, [], subject, htmlBody)
 }
 
+export async function sendEmailWithAttachment(
+  to: string,
+  subject: string,
+  htmlBody: string,
+  attachmentName: string,
+  attachmentBase64: string,
+  attachmentMime = 'application/pdf'
+) {
+  try {
+    const cfg = await getGraphConfig()
+    if (!cfg.tenantId || !cfg.clientId || !cfg.clientSecret || !cfg.senderEmail) {
+      console.warn('[EMAIL] Graph API not configured — skipping email')
+      return
+    }
+    const token = await getAccessToken(cfg.tenantId, cfg.clientId, cfg.clientSecret)
+    const payload = {
+      message: {
+        subject,
+        body: { contentType: 'HTML', content: htmlBody },
+        toRecipients: [{ emailAddress: { address: to } }],
+        attachments: [
+          {
+            '@odata.type': '#microsoft.graph.fileAttachment',
+            name: attachmentName,
+            contentType: attachmentMime,
+            contentBytes: attachmentBase64,
+          }
+        ],
+      },
+      saveToSentItems: false,
+    }
+    const res = await fetch(`https://graph.microsoft.com/v1.0/users/${cfg.senderEmail}/sendMail`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      console.error('[EMAIL] Send with attachment failed:', err)
+      throw new Error(err)
+    }
+  } catch (err) {
+    console.error('[EMAIL] Error:', err)
+    throw err
+  }
+}
+
 export async function sendEmailWithCc(to: string | string[], cc: string[], subject: string, htmlBody: string) {
   try {
     const cfg = await getGraphConfig()

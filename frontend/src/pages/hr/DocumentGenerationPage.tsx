@@ -149,11 +149,12 @@ function buildIncrementLetterHtml(
 <html>
 <head><meta charset="utf-8"/>
 <style>
-  @page { margin: 15mm 20mm; }
+  @page { margin: 15mm 20mm 20mm 20mm; }
   body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #222; margin: 0; padding: 0; }
   .page { max-width: 800px; margin: 0 auto; padding: 20px 30px; }
   .header-table { width: 100%; border-collapse: collapse; border-bottom: 2px solid #823b0b; padding-bottom: 8px; margin-bottom: 16px; }
   .footer { border-top: 3px double #823b0b; text-align: center; font-size: 9pt; font-weight: 700; margin-top: 30px; padding-top: 6px; color: #222; }
+  .disclaimer { margin-top: 24px; padding: 8px 12px; border-top: 1px solid #ddd; font-size: 8pt; color: #666; text-align: center; font-style: italic; }
 </style>
 </head>
 <body>
@@ -215,6 +216,12 @@ function buildIncrementLetterHtml(
     <div>${company.COMPANY_NAME || 'Cloudgarner Solutions Pvt. Ltd.'}</div>
     <div>${company.COMPANY_ADDRESS || '199/A, Mandaliya Nagar, Panchwati Garden Lane, Bariatu, Ranchi, Jharkhand – 834009'}</div>
     <div>Website: ${company.COMPANY_WEBSITE || 'www.cloudgarner.com'} | Email: ${company.COMPANY_EMAIL || 'support@cloudgarner.com'} | Phone: ${company.COMPANY_PHONE || '9334646668'}</div>
+  </div>
+
+  <!-- DISCLAIMER -->
+  <div class="disclaimer">
+    This is a system-generated document and does not require a physical signature.
+    For verification, contact <a href="mailto:hr@csharptek.com" style="color:#666;">hr@csharptek.com</a> or visit <a href="https://www.csharptek.com" style="color:#666;">www.csharptek.com</a>
   </div>
 
 </div>
@@ -488,7 +495,7 @@ export default function DocumentGenerationPage() {
               </label>
             </div>
           </Field>
-          <Field label="Signature / Stamp">
+          <Field label="Signature / Stamp (optional)">
             <div className="flex items-center gap-3">
               {(company.COMPANY_SIGN_URL) && (
                 <img src={company.COMPANY_SIGN_URL} alt="sign" className="h-10 w-auto border rounded" />
@@ -498,6 +505,9 @@ export default function DocumentGenerationPage() {
                 {signFile ? signFile.name : 'Upload Sign/Stamp'}
                 <input type="file" accept="image/*" className="hidden" onChange={e => setSignFile(e.target.files?.[0] || null)} />
               </label>
+              {company.COMPANY_SIGN_URL && (
+                <span className="text-xs text-slate-400 italic">Document will not show signature (system-generated)</span>
+              )}
             </div>
           </Field>
         </div>
