@@ -1,11 +1,12 @@
 import { Router } from 'express'
-import { authenticate, requireHR } from '../middleware/auth'
+import { authenticate, requireHR, requireSuperAdmin } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters, StorageSharedKeyCredential } from '@azure/storage-blob'
 import multer from 'multer'
 import { randomUUID } from 'crypto'
 import path from 'path'
+import bcrypt from 'bcryptjs'
 
 export const employeeProfileRouter = Router()
 employeeProfileRouter.use(authenticate)
@@ -603,3 +604,99 @@ employeeProfileRouter.delete('/:id/documents/:docId', requireHR, async (req, res
   res.json({ success: true })
 })
 
+
+// ─── PAYSLIP PASSWORD — EMPLOYEE SELF-SERVICE ─────────────────────────────────
+
+// Get password status for current user
+employeeProfileRouter.get('/my/payslip-password-status', async (req: any, res) => {
+  const emp = await prisma.employee.findFirst({ where: { entraId: req.user!.entraId } })
+  if (!emp) throw new AppError('Employee not found', 404)
+  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: emp.id } })
+  res.json({
+    success: true,
+    data: {
+      hasPassword: !!profile?.payslipPassword,
+      resetAllowed: profile?.payslipPasswordResetAllowed ?? false,
+    }
+  })
+})
+
+// Verify password (returns ok if correct — client stores session flag)
+employeeProfileRouter.post('/my/verify-payslip-password', async (req: any, res) => {
+  const { password } = req.body
+  if (!password) throw new AppError('Password required', 400)
+  const emp = await prisma.employee.findFirst({ where: { entraId: req.user!.entraId } })
+  if (!emp) throw new AppError('Employee not found', 404)
+  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: emp.id } })
+  if (!profile?.payslipPassword) throw new AppError('No password set', 400)
+  const ok = await bcrypt.compare(password, profile.payslipPassword)
+  if (!ok) throw new AppError('Incorrect password', 401)
+  res.json({ success: true })
+})
+
+// Set / change password
+employeeProfileRouter.post('/my/set-payslip-password', async (req: any, res) => {
+  const { oldPassword, newPassword } = req.body
+  if (!newPassword || newPassword.length < 4) throw new AppError('Password must be at least 4 characters', 400)
+
+  const emp = await prisma.employee.findFirst({ where: { entraId: req.user!.entraId } })
+  if (!emp) throw new AppError('Employee not found', 404)
+
+  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: emp.id } })
+  const hasExisting = !!profile?.payslipPassword
+  const resetAllowed = profile?.payslipPasswordResetAllowed ?? false
+
+  if (hasExisting && !resetAllowed) {
+    // Must provide correct old password
+    if (!oldPassword) throw new AppError('Current password required', 400)
+    const ok = await bcrypt.compare(oldPassword, profile.payslipPassword!)
+    if (!ok) throw new AppError('Current password is incorrect', 401)
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 10)
+
+  await prisma.employeeProfile.upsert({
+    where: { employeeId: emp.id },
+    create: {
+      employeeId: emp.id,
+      payslipPassword: hashed,
+      payslipPasswordResetAllowed: false,
+    },
+    update: {
+      payslipPassword: hashed,
+      payslipPasswordResetAllowed: false,  // clear reset flag after password is set
+    },
+  })
+
+  res.json({ success: true })
+})
+
+// ─── PAYSLIP PASSWORD — HR / SUPER ADMIN ──────────────────────────────────────
+
+// Get password reset status for any employee (HR+)
+employeeProfileRouter.get('/:id/payslip-password-info', requireHR, async (req, res) => {
+  const profile = await prisma.employeeProfile.findUnique({ where: { employeeId: req.params.id } })
+  res.json({
+    success: true,
+    data: {
+      hasPassword: !!profile?.payslipPassword,
+      resetAllowed: profile?.payslipPasswordResetAllowed ?? false,
+    }
+  })
+})
+
+// Allow employee to reset password without old password (Super Admin only)
+employeeProfileRouter.patch('/:id/allow-password-reset', requireSuperAdmin, async (req: any, res) => {
+  const { allow } = req.body
+  await prisma.employeeProfile.upsert({
+    where: { employeeId: req.params.id },
+    create: {
+      employeeId: req.params.id,
+      payslipPasswordResetAllowed: allow !== false,
+    },
+    update: {
+      payslipPasswordResetAllowed: allow !== false,
+    },
+  })
+  res.json({ success: true })
+})

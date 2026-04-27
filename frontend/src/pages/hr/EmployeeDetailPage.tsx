@@ -5,7 +5,7 @@ import {
   ArrowLeft, User, Briefcase, DollarSign, Phone, GraduationCap,
   Building2, CreditCard, FileText, LogOut, UserMinus, X, UserCheck, Eye, EyeOff,
 } from 'lucide-react'
-import { employeeApi, exitApi } from '../../services/api'
+import { employeeApi, exitApi, payslipApi } from '../../services/api'
 import { PageHeader, Button, Alert, Skeleton, StatusBadge } from '../../components/ui'
 import { useAuthStore } from '../../store/authStore'
 import PersonalTab    from '../../components/employee-profile/PersonalTab'
@@ -353,6 +353,67 @@ export default function EmployeeDetailPage() {
               isSuperAdmin={isSuperAdmin}
               onSaved={refetch}
             />
+          )}
+        </div>
+
+        {/* Payslip Password Reset — Super Admin only */}
+        {isSuperAdmin && <PayslipPasswordPanel empId={emp.id} />}
+      </div>
+    </div>
+  )
+}
+
+// ─── PAYSLIP PASSWORD PANEL ───────────────────────────────────────────────────
+
+function PayslipPasswordPanel({ empId }: { empId: string }) {
+  const qc = useQueryClient()
+  const [status, setStatus] = useState<string | null>(null)
+
+  const { data: info } = useQuery({
+    queryKey: ['payslip-pw-info', empId],
+    queryFn: () => payslipApi.passwordInfo(empId).then(r => r.data.data),
+  })
+
+  const { mutate: toggle, isLoading: toggling } = useMutation({
+    mutationFn: (allow: boolean) => payslipApi.allowPasswordReset(empId, allow),
+    onSuccess: (_, allow) => {
+      setStatus(allow ? 'Reset enabled — employee can set a new password.' : 'Reset disabled.')
+      qc.invalidateQueries({ queryKey: ['payslip-pw-info', empId] })
+    },
+    onError: () => setStatus('Failed to update.'),
+  })
+
+  return (
+    <div className="mt-5 border border-slate-200 rounded-xl bg-white p-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">Payslip Password</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {info?.hasPassword ? 'Employee has set a payslip password.' : 'No payslip password set by employee.'}
+            {info?.resetAllowed && (
+              <span className="ml-2 text-amber-600 font-medium">Reset currently enabled.</span>
+            )}
+          </p>
+          {status && <p className="text-xs text-blue-600 mt-1">{status}</p>}
+        </div>
+        <div className="flex gap-2">
+          {info?.resetAllowed ? (
+            <button
+              onClick={() => toggle(false)}
+              disabled={toggling}
+              className="px-4 py-2 text-sm border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+            >
+              {toggling ? 'Updating…' : 'Revoke Reset Access'}
+            </button>
+          ) : (
+            <button
+              onClick={() => toggle(true)}
+              disabled={toggling || !info?.hasPassword}
+              title={!info?.hasPassword ? 'Employee has not set a password yet' : ''}
+              className="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-40"
+            >
+              {toggling ? 'Updating…' : 'Allow Password Reset'}
+            </button>
           )}
         </div>
       </div>

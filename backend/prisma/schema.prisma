@@ -871,6 +871,9 @@ model EmployeeProfile {
   profilePhotoUrl String?
   profilePhotoKey String?
 
+  payslipPassword          String?
+  payslipPasswordResetAllowed Boolean @default(false)
+
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 }

@@ -154,6 +154,13 @@ export const reimbursementApi = {
 export const payslipApi = {
   forEmployee: (employeeId: string) => api.get(`/api/payslips/employee/${employeeId}`),
   generate: (cycleId: string) => api.post(`/api/payslips/generate/${cycleId}`),
+  // Payslip password
+  passwordStatus: () => api.get('/api/employee-profile/my/payslip-password-status'),
+  verifyPassword: (password: string) => api.post('/api/employee-profile/my/verify-payslip-password', { password }),
+  setPassword: (data: { oldPassword?: string; newPassword: string }) => api.post('/api/employee-profile/my/set-payslip-password', data),
+  // HR/SA
+  passwordInfo: (employeeId: string) => api.get(`/api/employee-profile/${employeeId}/payslip-password-info`),
+  allowPasswordReset: (employeeId: string, allow: boolean) => api.patch(`/api/employee-profile/${employeeId}/allow-password-reset`, { allow }),
 }
 
 export const loanApi = {

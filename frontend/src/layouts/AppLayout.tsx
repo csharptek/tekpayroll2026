@@ -172,6 +172,7 @@ const EMPLOYEE_NAV = [
       { label: 'My Reimbursements', icon: Receipt,  to: '/my/reimbursements' },
       { label: 'My Resignation', icon: FileWarning, to: '/my/resignation' },
       { label: 'My Assets',      icon: Package,     to: '/my/assets' },
+      { label: 'My Settings',    icon: Settings,    to: '/my/settings' },
     ]
   },
   {

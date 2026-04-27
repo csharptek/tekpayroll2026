@@ -58,6 +58,7 @@ import AssetDetailPage from './pages/hr/assets/AssetDetailPage'
 import AssetRequestsPage from './pages/hr/assets/AssetRequestsPage'
 import AssetConfiguratorPage from './pages/hr/assets/AssetConfiguratorPage'
 import MyAssetsPage from './pages/employee/MyAssetsPage'
+import MySettingsPage from './pages/employee/MySettingsPage'
 
 // Management Pages
 import ManagementDashboard from './pages/management/ManagementDashboard'
@@ -149,6 +150,7 @@ export default function App() {
           <Route path="reimbursements" element={<MyReimbursementsPage />} />
           <Route path="resignation" element={<MyResignationPage />} />
           <Route path="assets" element={<MyAssetsPage />} />
+          <Route path="settings" element={<MySettingsPage />} />
         </Route>
 
         {/* Management */}

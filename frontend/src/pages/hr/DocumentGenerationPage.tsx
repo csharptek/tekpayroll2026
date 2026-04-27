@@ -248,13 +248,14 @@ export default function DocumentGenerationPage() {
   const [selectedEmp, setSelectedEmp] = useState<any>(null)
   const [docType, setDocType] = useState('INCREMENT_LETTER')
   const [letterDate, setLetterDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [effectiveDate, setEffectiveDate] = useState('')
+  const [effectiveDate, setEffectiveDate] = useState('2026-04-01')
   const [ctcOverride, setCtcOverride] = useState('')
   const [isPromotion, setIsPromotion] = useState(false)
   const [newDesignation, setNewDesignation] = useState('')
   const [salary, setSalary] = useState<SalaryData | null>(null)
-  const [signerName, setSignerName] = useState('Bhanu Pratap Gupta')
-  const [signerDesignation, setSignerDesignation] = useState('CEO')
+  const [signerName, setSignerName] = useState('')
+  const [signerDesignation, setSignerDesignation] = useState('')
+  const [signerLoaded, setSignerLoaded] = useState(false)
   const [htmlContent, setHtmlContent] = useState('')
   const [showPreview, setShowPreview] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -292,6 +293,12 @@ export default function DocumentGenerationPage() {
       COMPANY_LOGO_URL: d.COMPANY_LOGO_URL || '',
       COMPANY_SIGN_URL:  d.COMPANY_SIGN_URL  || '',
     })
+    // Load signer only once — never overwrite user changes
+    if (!signerLoaded) {
+      setSignerName(d.INCREMENT_SIGNER_NAME || 'Bhanu Pratap Gupta')
+      setSignerDesignation(d.INCREMENT_SIGNER_DESIGNATION || 'CEO')
+      setSignerLoaded(true)
+    }
   }, [configData])
 
   // Snapshot load when employee selected
@@ -350,6 +357,14 @@ export default function DocumentGenerationPage() {
       await refetchConfig()
     },
     onSuccess: () => setCompanySaved(true),
+  })
+
+  // Save signer as default
+  const { mutate: saveSigner, isLoading: savingSigner } = useMutation({
+    mutationFn: () => configApi.update({
+      INCREMENT_SIGNER_NAME: signerName,
+      INCREMENT_SIGNER_DESIGNATION: signerDesignation,
+    }),
   })
 
   // Send email mutation
@@ -582,7 +597,17 @@ export default function DocumentGenerationPage() {
             <input className={inp} value={signerName} onChange={e => setSignerName(e.target.value)} placeholder="e.g. Bhanu Pratap Gupta" />
           </Field>
           <Field label="Signer Designation">
-            <input className={inp} value={signerDesignation} onChange={e => setSignerDesignation(e.target.value)} placeholder="e.g. CEO" />
+            <div className="flex gap-2">
+              <input className={inp} value={signerDesignation} onChange={e => setSignerDesignation(e.target.value)} placeholder="e.g. CEO" />
+              <button
+                onClick={() => saveSigner()}
+                disabled={savingSigner || !signerName}
+                className="px-3 py-2 text-xs bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap"
+                title="Save signer as default"
+              >
+                {savingSigner ? '…' : 'Save Default'}
+              </button>
+            </div>
           </Field>
         </div>
 
