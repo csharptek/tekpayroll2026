@@ -20,7 +20,8 @@ const createEmployeeSchema = z.object({
   mobilePhone: z.string().optional(),
   state: z.string().optional(),
   joiningDate: z.string().datetime(),
-  annualCtc: z.number().positive(),
+  annualCtc: z.number().default(0),
+  stipendMonthly: z.number().positive().optional(),
   basicPercent: z.number().min(1).max(100).default(45),
   hraPercent: z.number().min(1).max(100).default(35),
   hasIncentive: z.boolean().default(false),
@@ -154,6 +155,17 @@ employeeRouter.get('/:id', async (req, res) => {
 employeeRouter.post('/', requireHR, async (req, res) => {
   const data = createEmployeeSchema.parse(req.body);
 
+  // Validate: trainee needs stipend, regular employee needs CTC
+  if (data.isTrainee) {
+    if (!data.stipendMonthly || data.stipendMonthly <= 0) {
+      throw new AppError('Stipend amount is required for trainees', 400)
+    }
+  } else {
+    if (!data.annualCtc || data.annualCtc <= 0) {
+      throw new AppError('Annual CTC is required', 400)
+    }
+  }
+
   // Get company
   const company = await prisma.company.findFirst();
   if (!company) throw new AppError('Company not configured', 500);
@@ -163,6 +175,8 @@ employeeRouter.post('/', requireHR, async (req, res) => {
       ...data,
       companyId: company.id,
       joiningDate: new Date(data.joiningDate),
+      // For trainees: store stipend*12 as annualCtc so payroll totals still work
+      annualCtc: data.isTrainee ? (data.stipendMonthly! * 12) : data.annualCtc,
     },
   })
 
@@ -198,7 +212,7 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
     annualCtc, basicPercent, hraPercent, hasIncentive, incentivePercent, transportMonthly, fbpMonthly,
     mediclaim, tdsMonthly, resignationDate, lastWorkingDay,
     state, joiningDate, panNumber, aadhaarNumber, pfNumber, esiNumber, uanNumber,
-    jobTitle, department, mobilePhone, status
+    jobTitle, department, mobilePhone, status, stipendMonthly
   } = req.body;
 
   // Handle CTC revision — log it separately
@@ -256,6 +270,10 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
   if (jobTitle) updateData.jobTitle = jobTitle;
   if (department) updateData.department = department;
   if (mobilePhone) updateData.mobilePhone = mobilePhone;
+  if (stipendMonthly !== undefined && existing.isTrainee) {
+    updateData.stipendMonthly = stipendMonthly
+    updateData.annualCtc = stipendMonthly * 12
+  }
   if (status) updateData.status = status;
 
   // If resignation date set, put employee on notice

@@ -478,9 +478,62 @@ export async function calculatePayrollForEmployee(params: {
   employeeStatus?: string
   esiConfig?: Awaited<ReturnType<typeof getEsiConfig>>
   prebuiltSalary?: SalaryStructure
+  isTrainee?:      boolean
+  stipendMonthly?: number
 }): Promise<PayrollCalculation> {
 
   const esiConfig  = params.esiConfig ?? await getEsiConfig()
+
+  // ── TRAINEE: flat stipend, no CTC formula, no ESI/PF/PT ──────────────────
+  if (params.isTrainee && params.stipendMonthly) {
+    const stipend   = params.stipendMonthly
+    const proration = computeProration(stipend, params.cycleStart, params.cycleEnd, params.joiningDate, params.lastWorkingDay)
+    const lopAmount = computeLop(stipend, proration.totalDays, params.lopDays)
+    const loanDeduction = await computeLoanDeduction(params.employeeId, params.payrollMonth)
+
+    const deductions: DeductionResult = {
+      pf: 0, esi: 0, pt: 0,
+      tds:               params.tdsMonthly,
+      lop:               lopAmount,
+      incentiveRecovery: 0,
+      loanDeduction,
+    }
+
+    const totalDeductions = deductions.tds + deductions.lop + deductions.loanDeduction
+    const netSalary = r2(Math.max(0, proration.proratedGross + params.reimbursements - totalDeductions))
+
+    // Build a minimal SalaryStructure so rest of system (payroll entry) works unchanged
+    const traineeSalary: SalaryStructure = {
+      annualCtc:          stipend * 12,
+      annualBonus:        0,
+      basicMonthly:       0,
+      hraMonthly:         0,
+      transportMonthly:   0,
+      fbpMonthly:         0,
+      hyiMonthly:         0,
+      grandTotalMonthly:  stipend,
+      basicAnnual:        0,
+      hraAnnual:          0,
+      employerPfMonthly:  0,
+      employerPfAnnual:   0,
+      employerEsiMonthly: 0,
+      employerEsiAnnual:  0,
+      esiBase:            0,
+      esiApplies:         false,
+      employeePfMonthly:  0,
+      employeeEsiMonthly: 0,
+    }
+
+    return {
+      salary:         traineeSalary,
+      proration,
+      isBonusMonth:   false,
+      annualBonus:    0,
+      reimbursements: params.reimbursements,
+      deductions,
+      netSalary,
+    }
+  }
 
   // Resolve salary input from revision history if not explicitly provided
   // Callers may pass salaryInput directly (legacy) or we derive it from revisions

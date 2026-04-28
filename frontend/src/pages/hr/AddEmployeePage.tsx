@@ -80,6 +80,7 @@ export default function AddEmployeePage() {
     hasIncentive:     false,
     incentivePercent: 12,
   })
+  const [stipendMonthly, setStipendMonthly] = useState<string>('')
 
   const [error, setError] = useState('')
 
@@ -106,25 +107,43 @@ export default function AddEmployeePage() {
       setError('Please fill in all required fields')
       return
     }
-    if (salaryInput.annualCtc <= 0) {
-      setError('Annual CTC is required')
-      return
-    }
 
-    mutation.mutate({
-      ...form,
-      isTrainee: employeeType === 'TRAINEE',
-      joiningDate: new Date(form.joiningDate).toISOString(),
-      annualCtc:          salaryInput.annualCtc,
-      basicPercent:       salaryInput.basicPercent,
-      hraPercent:         salaryInput.hraPercent,
-      hasIncentive:       salaryInput.hasIncentive,
-      incentivePercent:   salaryInput.incentivePercent,
-      transportMonthly:   salaryInput.transportMonthly,  // null = auto
-      fbpMonthly:         salaryInput.fbpMonthly,          // null = auto
-      mediclaim:          salaryInput.mediclaim,
-      tdsMonthly:         0,
-    })
+    const isTrainee = employeeType === 'TRAINEE'
+
+    if (isTrainee) {
+      const stipend = parseFloat(stipendMonthly)
+      if (!stipendMonthly || isNaN(stipend) || stipend <= 0) {
+        setError('Monthly stipend is required for trainees')
+        return
+      }
+      mutation.mutate({
+        ...form,
+        isTrainee: true,
+        joiningDate: new Date(form.joiningDate).toISOString(),
+        stipendMonthly: stipend,
+        annualCtc: 0,
+        tdsMonthly: 0,
+      })
+    } else {
+      if (salaryInput.annualCtc <= 0) {
+        setError('Annual CTC is required')
+        return
+      }
+      mutation.mutate({
+        ...form,
+        isTrainee: false,
+        joiningDate: new Date(form.joiningDate).toISOString(),
+        annualCtc:          salaryInput.annualCtc,
+        basicPercent:       salaryInput.basicPercent,
+        hraPercent:         salaryInput.hraPercent,
+        hasIncentive:       salaryInput.hasIncentive,
+        incentivePercent:   salaryInput.incentivePercent,
+        transportMonthly:   salaryInput.transportMonthly,
+        fbpMonthly:         salaryInput.fbpMonthly,
+        mediclaim:          salaryInput.mediclaim,
+        tdsMonthly:         0,
+      })
+    }
   }
 
   return (
@@ -239,11 +258,22 @@ export default function AddEmployeePage() {
         {/* ─── SALARY STRUCTURE ─── */}
         <Card>
           <div className="p-5">
-            <SectionHeading icon={DollarSign} title="Salary Structure" />
-            <SalaryCalculatorForm
-              onChange={setSalaryInput}
-              showInstructions={true}
-            />
+            <SectionHeading icon={DollarSign} title={employeeType === 'TRAINEE' ? 'Stipend' : 'Salary Structure'} />
+            {employeeType === 'TRAINEE' ? (
+              <div className="max-w-xs">
+                <label className="label">Monthly Stipend (₹) *</label>
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="e.g. 15000"
+                  value={stipendMonthly}
+                  onChange={e => setStipendMonthly(e.target.value)}
+                />
+                <p className="text-xs text-slate-400 mt-1">No ESI / PF / PT. LOP applies.</p>
+              </div>
+            ) : (
+              <SalaryCalculatorForm onChange={setSalaryInput} showInstructions={true} />
+            )}
           </div>
         </Card>
 

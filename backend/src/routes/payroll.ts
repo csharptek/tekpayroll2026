@@ -118,6 +118,8 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         reimbursements:  Number(reimbs._sum.amount || 0),
         employeeStatus:  emp.status,
         prebuiltSalary:  revisionInput.prebuiltSalary,
+        isTrainee:       emp.isTrainee,
+        stipendMonthly:  emp.isTrainee && emp.stipendMonthly ? Number(emp.stipendMonthly) : undefined,
       })
 
       const s = calc.salary
@@ -284,6 +286,8 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
         employeeStatus:  emp.status,
         esiConfig,
         prebuiltSalary:  revisionInput.prebuiltSalary,
+        isTrainee:       emp.isTrainee,
+        stipendMonthly:  emp.isTrainee && emp.stipendMonthly ? Number(emp.stipendMonthly) : undefined,
       })
 
       return { emp, calc, lopDays, reimbAmount }
@@ -489,6 +493,8 @@ payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
     reimbursements: finalReimb,
     employeeStatus: emp.status,
     prebuiltSalary: revisionInput.prebuiltSalary,
+    isTrainee:      emp.isTrainee,
+    stipendMonthly: emp.isTrainee && emp.stipendMonthly ? Number(emp.stipendMonthly) : undefined,
   })
 
   const s = calc.salary

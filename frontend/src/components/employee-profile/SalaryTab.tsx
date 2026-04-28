@@ -22,29 +22,84 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
     incentivePercent: Number(emp.incentivePercent) || 12,
   })
 
+  const [stipend, setStipend] = useState<string>(emp.stipendMonthly ? String(Number(emp.stipendMonthly)) : '')
   const [revisionReason, setRevisionReason] = useState('')
   const [error,      setError]      = useState('')
   const [success,    setSuccess]    = useState('')
   const [showSalary, setShowSalary] = useState(false)
 
   const ctcChanged = salaryInput.annualCtc !== Number(emp.annualCtc)
+  const isTrainee  = Boolean(emp.isTrainee)
 
   const mut = useMutation({
-    mutationFn: () => employeeApi.update(emp.id, {
-      annualCtc:        salaryInput.annualCtc,
-      basicPercent:     salaryInput.basicPercent,
-      hraPercent:       salaryInput.hraPercent,
-      hasIncentive:     salaryInput.hasIncentive,
-      incentivePercent: salaryInput.incentivePercent,
-      transportMonthly: salaryInput.transportMonthly,
-      fbpMonthly:       salaryInput.fbpMonthly,
-      mediclaim:        salaryInput.mediclaim,
-      revisionReason,
-    }),
-    onSuccess: () => { setSuccess('Salary updated successfully'); onSaved() },
+    mutationFn: () => {
+      if (isTrainee) {
+        return employeeApi.update(emp.id, { stipendMonthly: parseFloat(stipend) })
+      }
+      return employeeApi.update(emp.id, {
+        annualCtc:        salaryInput.annualCtc,
+        basicPercent:     salaryInput.basicPercent,
+        hraPercent:       salaryInput.hraPercent,
+        hasIncentive:     salaryInput.hasIncentive,
+        incentivePercent: salaryInput.incentivePercent,
+        transportMonthly: salaryInput.transportMonthly,
+        fbpMonthly:       salaryInput.fbpMonthly,
+        mediclaim:        salaryInput.mediclaim,
+        revisionReason,
+      })
+    },
+    onSuccess: () => { setSuccess('Saved successfully'); onSaved() },
     onError:   (e: any) => setError(e?.response?.data?.error || 'Save failed'),
   })
 
+  // ── TRAINEE VIEW ──────────────────────────────────────────────────────────
+  if (isTrainee) {
+    return (
+      <div className="space-y-6">
+        {error   && <Alert type="error"   message={error}/>}
+        {success && <Alert type="success" message={success}/>}
+
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Trainee — Stipend Based</p>
+          <p className="text-xs text-amber-600">No ESI, PF, or PT. LOP applies. Fixed monthly stipend.</p>
+        </div>
+
+        {isHR ? (
+          <div className="max-w-xs space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">Monthly Stipend (₹)</label>
+              <input
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-brand-400 focus:outline-none"
+                type="number"
+                placeholder="e.g. 15000"
+                value={stipend}
+                onChange={e => setStipend(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button icon={<Save size={14}/>} loading={mut.isPending}
+                disabled={!stipend || parseFloat(stipend) <= 0}
+                onClick={() => { setError(''); setSuccess(''); mut.mutate() }}>
+                Save Stipend
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-slate-400">Monthly Stipend</p>
+              <button onClick={() => setShowSalary(v => !v)} className="text-slate-400 hover:text-slate-700">
+                {showSalary ? <EyeOff size={13} /> : <Eye size={13} />}
+              </button>
+            </div>
+            <HiddenRupee amount={Number(emp.stipendMonthly) || 0} show={showSalary} className="text-lg font-bold text-slate-800" />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── REGULAR EMPLOYEE VIEW ─────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       {error   && <Alert type="error"   message={error}/>}

@@ -41,18 +41,25 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
 
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
-  const earningsRows = [
-    { label: `Basic Salary${entry.isProrated ? ` (${entry.payableDays}/${entry.totalDays} days)` : ''}`, amount: gross },
-    { label: 'Transportation', amount: transport },
-    { label: 'FBP', amount: fbp },
-    { label: 'HYI / Special Allowance', amount: hyi },
-    ...(incentive > 0 ? [{ label: 'Monthly Incentive', amount: incentive }] : []),
-    // Per-line reimbursements (using the SA-set payslipLabel). Falls back to an aggregated row
-    // if no line-level data is passed but the legacy total is non-zero.
-    ...(reimbLines && reimbLines.length
-      ? reimbLines.map(l => ({ label: l.label, amount: l.amount }))
-      : (reimb > 0 ? [{ label: 'Reimbursements', amount: reimb }] : [])),
-  ]
+  const isTrainee = Boolean((emp as any).isTrainee)
+
+  const earningsRows = isTrainee
+    ? [
+        { label: `Stipend${entry.isProrated ? ` (${entry.payableDays}/${entry.totalDays} days)` : ''}`, amount: gross },
+        ...(reimbLines && reimbLines.length
+          ? reimbLines.map(l => ({ label: l.label, amount: l.amount }))
+          : (reimb > 0 ? [{ label: 'Reimbursements', amount: reimb }] : [])),
+      ]
+    : [
+        { label: `Basic Salary${entry.isProrated ? ` (${entry.payableDays}/${entry.totalDays} days)` : ''}`, amount: gross },
+        { label: 'Transportation', amount: transport },
+        { label: 'FBP', amount: fbp },
+        { label: 'HYI / Special Allowance', amount: hyi },
+        ...(incentive > 0 ? [{ label: 'Monthly Incentive', amount: incentive }] : []),
+        ...(reimbLines && reimbLines.length
+          ? reimbLines.map(l => ({ label: l.label, amount: l.amount }))
+          : (reimb > 0 ? [{ label: 'Reimbursements', amount: reimb }] : [])),
+      ]
 
   const deductionRows = [
     { label: 'Provident Fund (PF)', amount: pf },
