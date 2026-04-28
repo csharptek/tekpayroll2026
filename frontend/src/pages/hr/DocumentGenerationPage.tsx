@@ -174,7 +174,8 @@ function buildIncrementLetterHtml(
   tr { line-height: 1.5; }
   .header-table { width: 100%; border-collapse: collapse; border-bottom: 2px solid #823b0b; padding-bottom: 8px; margin-bottom: 20px; }
   .footer { border-top: 3px double #823b0b; text-align: center; font-size: 9pt; font-weight: 700; margin-top: 24px; padding-top: 8px; color: #222; }
-  .disclaimer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 12px; border-top: 1px solid #ddd; font-size: 8pt; color: #666; text-align: center; font-style: italic; background: #fff; }
+  .disclaimer { padding: 6px 12px; border-top: 1px solid #ddd; font-size: 8pt; color: #666; text-align: center; font-style: italic; background: #fff; margin-top: 8px; }
+  .monthly-section { page-break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -215,8 +216,10 @@ function buildIncrementLetterHtml(
   <p style="margin:14px 0 6px;font-size:11pt;font-weight:600;">Annual CTC Breakup:</p>
   ${annualTable}
 
+  <div class="monthly-section">
   <p style="margin:14px 0 6px;font-size:11pt;font-weight:600;">Monthly Salary Breakup:</p>
   ${monthlyTable}
+  </div>
 
   <p style="margin:16px 0 4px;font-size:11pt;">
     We appreciate your contributions and look forward to your continued association with the organisation.
