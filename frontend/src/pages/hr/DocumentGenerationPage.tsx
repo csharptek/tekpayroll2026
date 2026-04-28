@@ -198,7 +198,7 @@ function buildIncrementLetterHtml(
   <!-- DATE & GREETING -->
   <table style="width:100%;margin-bottom:12px;">
     <tr>
-      <td><strong>Dear ${emp.name?.split(' ')[0] || emp.name},</strong></td>
+      <td><strong>Dear ${emp.name?.split(' ')[0] || emp.name} (${emp.employeeCode || ''}),</strong></td>
       <td style="text-align:right;"><strong>Date: ${formattedLetterDate}</strong></td>
     </tr>
   </table>
