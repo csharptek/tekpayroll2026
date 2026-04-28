@@ -41,6 +41,21 @@ interface CompanyProfile {
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
+async function fetchBase64(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
 function buildIncrementLetterHtml(
   emp: any,
   salary: SalaryData,
@@ -51,10 +66,20 @@ function buildIncrementLetterHtml(
   company: CompanyProfile,
   signerName: string,
   signerDesignation: string,
+  logoBase64?: string | null,
+  signBase64?: string | null,
 ): string {
-  const logoHtml = company.COMPANY_LOGO_URL
+  const logoHtml = logoBase64
+    ? `<img src="${logoBase64}" alt="logo" style="height:55px;width:auto;" />`
+    : company.COMPANY_LOGO_URL
     ? `<img src="${company.COMPANY_LOGO_URL}" alt="logo" style="height:55px;width:auto;" />`
     : `<span style="font-size:20px;font-weight:700;color:#1a237e;">${company.COMPANY_NAME || 'CSharpTek'}</span>`
+
+  const signHtml = signBase64
+    ? `<img src="${signBase64}" alt="sign" style="height:60px;width:auto;margin-bottom:4px;" />`
+    : company.COMPANY_SIGN_URL
+    ? `<img src="${company.COMPANY_SIGN_URL}" alt="sign" style="height:60px;width:auto;margin-bottom:4px;" />`
+    : ''
 
   const formattedLetterDate = letterDate
     ? format(new Date(letterDate), 'dd MMMM yyyy')
@@ -140,12 +165,14 @@ function buildIncrementLetterHtml(
 <html>
 <head><meta charset="utf-8"/>
 <style>
-  @page { margin: 15mm 20mm 20mm 20mm; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #222; margin: 0; padding: 0; }
-  .page { max-width: 800px; margin: 0 auto; padding: 20px 30px; }
+  @page { margin: 15mm 20mm 20mm 20mm; size: A4; }
+  html, body { margin: 0; padding: 0; height: auto; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #222; }
+  .page { width: 100%; padding: 0; page-break-after: avoid; }
+  table { page-break-inside: avoid; }
   .header-table { width: 100%; border-collapse: collapse; border-bottom: 2px solid #823b0b; padding-bottom: 8px; margin-bottom: 16px; }
-  .footer { border-top: 3px double #823b0b; text-align: center; font-size: 9pt; font-weight: 700; margin-top: 30px; padding-top: 6px; color: #222; }
-  .disclaimer { margin-top: 24px; padding: 8px 12px; border-top: 1px solid #ddd; font-size: 8pt; color: #666; text-align: center; font-style: italic; }
+  .footer { border-top: 3px double #823b0b; text-align: center; font-size: 9pt; font-weight: 700; margin-top: 20px; padding-top: 6px; color: #222; }
+  .disclaimer { margin-top: 12px; padding: 8px 12px; border-top: 1px solid #ddd; font-size: 8pt; color: #666; text-align: center; font-style: italic; }
 </style>
 </head>
 <body>
@@ -195,7 +222,7 @@ function buildIncrementLetterHtml(
 
   <!-- SIGNATURE -->
   <div style="margin-top:40px;">
-    ${company.COMPANY_SIGN_URL ? `<img src="${company.COMPANY_SIGN_URL}" alt="sign" style="height:60px;width:auto;margin-bottom:4px;" />` : ''}
+    ${signHtml}
     <p style="margin:0;font-size:11pt;">For <strong>${company.COMPANY_NAME || 'Cloudgarner Solutions Pvt. Ltd.'}</strong></p>
     <br/><br/>
     <p style="margin:0;font-size:11pt;font-weight:700;">${signerName}</p>
@@ -390,12 +417,19 @@ export default function DocumentGenerationPage() {
 
   // Generate document
   const { mutate: generateDoc, isLoading: generating } = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      const logoUrl = configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL
+      const signUrl = configData?.COMPANY_SIGN_URL || companyForm.COMPANY_SIGN_URL
+      const [logoBase64, signBase64] = await Promise.all([
+        logoUrl ? fetchBase64(logoUrl) : Promise.resolve(null),
+        signUrl ? fetchBase64(signUrl) : Promise.resolve(null),
+      ])
       const html = buildIncrementLetterHtml(
         selectedEmp, salary!, letterDate, effectiveDate,
         isPromotion, newDesignation,
-        { ...companyForm, COMPANY_LOGO_URL: configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL },
+        { ...companyForm, COMPANY_LOGO_URL: logoUrl },
         signerName, signerDesignation,
+        logoBase64, signBase64,
       )
       setHtmlContent(html)
       setShowPreview(true)
@@ -651,12 +685,19 @@ export default function DocumentGenerationPage() {
         {/* Action Buttons */}
         <div className="flex gap-3 mt-5">
           <button
-            onClick={() => {
+            onClick={async () => {
+              const logoUrl = configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL
+              const signUrl = configData?.COMPANY_SIGN_URL || companyForm.COMPANY_SIGN_URL
+              const [logoBase64, signBase64] = await Promise.all([
+                logoUrl ? fetchBase64(logoUrl) : Promise.resolve(null),
+                signUrl ? fetchBase64(signUrl) : Promise.resolve(null),
+              ])
               const html = buildIncrementLetterHtml(
                 selectedEmp, salary!, letterDate, effectiveDate,
                 isPromotion, newDesignation,
-                { ...companyForm, COMPANY_LOGO_URL: configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL },
+                { ...companyForm, COMPANY_LOGO_URL: logoUrl },
                 signerName, signerDesignation,
+                logoBase64, signBase64,
               )
               setHtmlContent(html)
               setShowPreview(true)
@@ -674,13 +715,20 @@ export default function DocumentGenerationPage() {
             <Save size={14} /> {generating ? 'Saving…' : 'Save'}
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
               if (!htmlContent) {
+                const logoUrl = configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL
+                const signUrl = configData?.COMPANY_SIGN_URL || companyForm.COMPANY_SIGN_URL
+                const [logoBase64, signBase64] = await Promise.all([
+                  logoUrl ? fetchBase64(logoUrl) : Promise.resolve(null),
+                  signUrl ? fetchBase64(signUrl) : Promise.resolve(null),
+                ])
                 const html = buildIncrementLetterHtml(
                   selectedEmp, salary!, letterDate, effectiveDate,
                   isPromotion, newDesignation,
-                  { ...companyForm, COMPANY_LOGO_URL: configData?.COMPANY_LOGO_URL || companyForm.COMPANY_LOGO_URL },
+                  { ...companyForm, COMPANY_LOGO_URL: logoUrl },
                   signerName, signerDesignation,
+                  logoBase64, signBase64,
                 )
                 setHtmlContent(html)
                 setShowPreview(true)
