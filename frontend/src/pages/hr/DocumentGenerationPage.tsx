@@ -102,11 +102,11 @@ function buildIncrementLetterHtml(
   const annualMediclaim = salary.mediclaim * 12
 
   const tableStyle = 'width:100%;border-collapse:collapse;font-size:10pt;margin:10px 0;'
-  const thStyle    = 'border:1px solid #ccc;padding:6px 8px;background:#f5f5f5;text-align:left;font-weight:600;'
-  const tdStyle    = 'border:1px solid #ccc;padding:5px 8px;'
-  const tdRStyle   = 'border:1px solid #ccc;padding:5px 8px;text-align:right;'
-  const tfStyle    = 'border:1px solid #ccc;padding:5px 8px;background:#eeeeee;font-weight:700;'
-  const tfRStyle   = 'border:1px solid #ccc;padding:5px 8px;background:#eeeeee;font-weight:700;text-align:right;'
+  const thStyle    = 'border:1px solid #ccc;padding:8px 10px;background:#f5f5f5;text-align:left;font-weight:600;'
+  const tdStyle    = 'border:1px solid #ccc;padding:7px 10px;'
+  const tdRStyle   = 'border:1px solid #ccc;padding:7px 10px;text-align:right;'
+  const tfStyle    = 'border:1px solid #ccc;padding:7px 10px;background:#eeeeee;font-weight:700;'
+  const tfRStyle   = 'border:1px solid #ccc;padding:7px 10px;background:#eeeeee;font-weight:700;text-align:right;'
 
   const tagInGross = `<span style="margin-left:6px;font-size:8pt;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:3px;padding:1px 5px;font-weight:600;">in Gross</span>`
   const tagInCtc   = `<span style="margin-left:6px;font-size:8pt;color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:3px;padding:1px 5px;font-weight:600;">in CTC</span>`
@@ -165,14 +165,16 @@ function buildIncrementLetterHtml(
 <html>
 <head><meta charset="utf-8"/>
 <style>
-  @page { margin: 15mm 20mm 20mm 20mm; size: A4; }
+  @page { margin: 15mm 20mm 25mm 20mm; size: A4; }
   html, body { margin: 0; padding: 0; height: auto; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #222; }
-  .page { width: 100%; padding: 0; page-break-after: avoid; }
-  table { page-break-inside: avoid; }
-  .header-table { width: 100%; border-collapse: collapse; border-bottom: 2px solid #823b0b; padding-bottom: 8px; margin-bottom: 16px; }
-  .footer { border-top: 3px double #823b0b; text-align: center; font-size: 9pt; font-weight: 700; margin-top: 20px; padding-top: 6px; color: #222; }
-  .disclaimer { margin-top: 12px; padding: 8px 12px; border-top: 1px solid #ddd; font-size: 8pt; color: #666; text-align: center; font-style: italic; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #222; line-height: 1.6; }
+  p { margin: 12px 0; line-height: 1.6; }
+  .page { width: 100%; padding: 0; }
+  table { page-break-inside: avoid; border-spacing: 0; }
+  tr { line-height: 1.5; }
+  .header-table { width: 100%; border-collapse: collapse; border-bottom: 2px solid #823b0b; padding-bottom: 8px; margin-bottom: 20px; }
+  .footer { border-top: 3px double #823b0b; text-align: center; font-size: 9pt; font-weight: 700; margin-top: 24px; padding-top: 8px; color: #222; }
+  .disclaimer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 12px; border-top: 1px solid #ddd; font-size: 8pt; color: #666; text-align: center; font-style: italic; background: #fff; }
 </style>
 </head>
 <body>
