@@ -206,8 +206,8 @@ function buildIncrementLetterHtml(
   <!-- BODY -->
   <p style="margin:10px 0;font-size:11pt;">
     We are pleased to inform you that your Annual CTC has been revised to
-    <strong>Rs. ${fmt(salary.annualCtc)}</strong> (Rupees ${numberToWords(salary.annualCtc)} Only),
-    effective from <strong>${formattedEffDate}</strong>.
+    <span style="white-space:nowrap;"><strong>Rs. ${fmt(salary.annualCtc)}</strong></span> (Rupees ${numberToWords(salary.annualCtc)} Only),
+    effective from <span style="white-space:nowrap;"><strong>${formattedEffDate}</strong></span>.
   </p>
 
   ${promotionPara}
