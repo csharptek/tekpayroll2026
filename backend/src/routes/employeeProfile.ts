@@ -514,7 +514,21 @@ employeeProfileRouter.get('/:id/documents', async (req, res) => {
     where: { employeeId: req.params.id },
     orderBy: { uploadedAt: 'desc' },
   })
-  res.json({ success: true, data: docs })
+  // Regenerate fresh SAS URLs from stored fileKey (avoids stale/truncated URLs in DB)
+  const { accountName, credential } = getSharedKeyCredential()
+  const docsWithFreshUrls = docs.map(doc => {
+    if (!doc.fileKey) return doc
+    const containerName = doc.fileKey.startsWith('generated-docs/')
+      ? (process.env.AZURE_DOCS_CONTAINER || 'emp-documents')
+      : (process.env.AZURE_DOCS_CONTAINER || 'emp-documents')
+    try {
+      const freshUrl = generateSasUrl(containerName, doc.fileKey, accountName, credential)
+      return { ...doc, fileUrl: freshUrl }
+    } catch {
+      return doc
+    }
+  })
+  res.json({ success: true, data: docsWithFreshUrls })
 })
 
 // HR/SA upload — never locks
