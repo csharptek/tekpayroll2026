@@ -97,21 +97,47 @@ documentsRouter.get('/salary-snapshot/:employeeId', requireHR, async (req: any, 
 
 documentsRouter.post('/compute-salary', requireHR, async (req: any, res) => {
   const { employeeId, annualCtc } = req.body
-  if (!employeeId || !annualCtc) throw new AppError('employeeId and annualCtc required', 400)
+  if (!employeeId) throw new AppError('employeeId required', 400)
 
   const esiConfig = await getEsiConfig()
-  const baseInput = await getSalaryInputForDate(employeeId, new Date())
-  const input = { ...baseInput, annualCtc: Number(annualCtc) }
+
+  // Always read latest SalaryRevision — bypass snapshot to reflect latest salary update
+  const emp = await prisma.employee.findUnique({ where: { id: employeeId } })
+  if (!emp) throw new AppError('Employee not found', 404)
+
+  const revision = await prisma.salaryRevision.findFirst({
+    where: { employeeId, effectiveFrom: { lte: new Date() } },
+    orderBy: { effectiveFrom: 'desc' },
+  })
+
+  const latestCtc = annualCtc
+    ? Number(annualCtc)
+    : revision
+    ? Number(revision.newCtc)
+    : Number((emp as any).annualCtc || 0)
+
+  const baseInput = {
+    annualCtc:        latestCtc,
+    basicPercent:     Number((emp as any).basicPercent ?? 45),
+    hraPercent:       Number((emp as any).hraPercent ?? 35),
+    transportMonthly: (emp as any).transportMonthly != null ? Number((emp as any).transportMonthly) : null,
+    fbpMonthly:       (emp as any).fbpMonthly != null ? Number((emp as any).fbpMonthly) : null,
+    mediclaim:        Number((emp as any).mediclaim ?? 0),
+    hasIncentive:     Boolean((emp as any).hasIncentive),
+    incentivePercent: Number((emp as any).incentivePercent ?? 12),
+    tdsMonthly:       Number((emp as any).tdsMonthly ?? 0),
+  }
+
+  const input = { ...baseInput, annualCtc: latestCtc }
   const s = computeSalaryStructure(input, esiConfig)
-  const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { state: true } })
-  const pt = await computePt(s.grandTotalMonthly, emp?.state || '')
+  const pt = await computePt(s.grandTotalMonthly, (emp as any).state || '')
 
   const netMonthly = s.grandTotalMonthly - s.employeePfMonthly - s.employeeEsiMonthly - pt
 
   res.json({
     success: true,
     data: {
-      annualCtc: Number(annualCtc),
+      annualCtc: latestCtc,
       basicMonthly: s.basicMonthly,
       hraMonthly: s.hraMonthly,
       transportMonthly: s.transportMonthly,

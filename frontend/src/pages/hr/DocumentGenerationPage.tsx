@@ -331,9 +331,9 @@ export default function DocumentGenerationPage() {
     }
   }, [configData])
 
-  // Snapshot load when employee selected
+  // Load salary from latest SalaryRevision — bypasses stale snapshot
   const { mutate: loadSnapshot, isLoading: snapshotLoading } = useMutation({
-    mutationFn: (id: string) => documentsApi.getSalarySnapshot(id),
+    mutationFn: (id: string) => documentsApi.computeSalary({ employeeId: id, annualCtc: 0 }),
     onSuccess: (r) => {
       const s = r.data?.data
       if (s) {
@@ -359,8 +359,6 @@ export default function DocumentGenerationPage() {
       }
     },
   })
-
-  // Salary always from snapshot — no recompute
 
   // Save company profile
   const { mutate: saveCompany, isLoading: savingCompany } = useMutation({
