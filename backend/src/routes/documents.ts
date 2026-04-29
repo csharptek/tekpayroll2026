@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { prisma } from '../utils/prisma'
-import { authenticate, requireHR } from '../middleware/auth'
+import { authenticate, requireHR, requireSuperAdmin } from '../middleware/auth'
 import { AppError } from '../middleware/errorHandler'
 import { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters, StorageSharedKeyCredential } from '@azure/storage-blob'
 import { randomUUID } from 'crypto'
@@ -177,22 +177,24 @@ documentsRouter.post('/generate', requireHR, async (req: any, res) => {
   if (!emp) throw new AppError('Employee not found', 404)
 
   // Save HTML as blob
-  const safeName = emp.name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
-  const dateStr  = new Date().toISOString().slice(0, 10)
-  const key      = `generated-docs/${emp.employeeCode}-${safeName}/${documentType}-${dateStr}-${randomUUID()}.html`
-  const buffer   = Buffer.from(htmlContent, 'utf-8')
-  const url      = await uploadBlob(buffer, key, 'text/html')
+  // Convert HTML → PDF and save
+  const safeName  = emp.name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
+  const dateStr   = new Date().toISOString().slice(0, 10)
+  const key       = `generated-docs/${emp.employeeCode}-${safeName}/${documentType}-${dateStr}-${randomUUID()}.pdf`
+  const pdfBase64 = await htmlToPdfBase64(htmlContent)
+  const buffer    = Buffer.from(pdfBase64, 'base64')
+  const url       = await uploadBlob(buffer, key, 'application/pdf')
 
   // Save to EmployeeDocument
   const doc = await prisma.employeeDocument.create({
     data: {
       employeeId,
       documentType:   (documentType as any) || 'OTHER',
-      fileName:       `${documentType}-${dateStr}.html`,
+      fileName:       `${documentType}-${dateStr}.pdf`,
       fileUrl:        url,
       fileKey:        key,
       fileSize:       buffer.length,
-      mimeType:       'text/html',
+      mimeType:       'application/pdf',
       notes:          documentType,
       uploadedBy:     req.user!.id,
       uploadedByRole: req.user!.role,
@@ -304,3 +306,104 @@ documentsRouter.post('/test-email', requireHR, async (req: any, res) => {
   res.json({ success: true, message: `Test email sent to ${toEmail}` })
 })
 
+
+// ─── MIGRATE HTML DOCS → PDF ───────────────────────────────────────────────────
+
+// Preview: list all HTML documents
+documentsRouter.get('/migrate-html-preview', requireSuperAdmin, async (req: any, res) => {
+  const docs = await prisma.employeeDocument.findMany({
+    where: { mimeType: 'text/html' },
+    include: { employee: { select: { name: true, employeeCode: true } } },
+    orderBy: { createdAt: 'desc' },
+  })
+  res.json({
+    success: true,
+    data: {
+      total: docs.length,
+      documents: docs.map(d => ({
+        id: d.id,
+        employeeName: d.employee?.name,
+        employeeCode: d.employee?.employeeCode,
+        fileName: d.fileName,
+        documentType: d.documentType,
+        fileSize: d.fileSize,
+        createdAt: d.createdAt,
+      })),
+    },
+  })
+})
+
+// Execute: convert all HTML docs to PDF
+documentsRouter.post('/migrate-html-to-pdf', requireSuperAdmin, async (req: any, res) => {
+  const docs = await prisma.employeeDocument.findMany({
+    where: { mimeType: 'text/html' },
+    include: { employee: { select: { name: true, employeeCode: true } } },
+  })
+
+  const connStr = getConnStr()
+  const containerName = process.env.AZURE_DOCS_CONTAINER || 'emp-documents'
+  const blobClient = BlobServiceClient.fromConnectionString(connStr)
+  const container = blobClient.getContainerClient(containerName)
+
+  let success = 0
+  let failed = 0
+  const errors: string[] = []
+
+  for (const doc of docs) {
+    try {
+      // Fetch HTML from blob
+      const blob = container.getBlockBlobClient(doc.fileKey)
+      const download = await blob.download()
+      const chunks: Buffer[] = []
+      for await (const chunk of download.readableStreamBody as any) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      }
+      const html = Buffer.concat(chunks).toString('utf-8')
+
+      // Convert to PDF
+      const pdfBase64 = await htmlToPdfBase64(html)
+      const pdfBuffer = Buffer.from(pdfBase64, 'base64')
+
+      // Build new key (replace .html with .pdf)
+      const newKey = doc.fileKey.replace(/\.html$/, '.pdf')
+      const newFileName = doc.fileName.replace(/\.html$/, '.pdf')
+
+      // Upload PDF
+      const pdfBlob = container.getBlockBlobClient(newKey)
+      await pdfBlob.uploadData(pdfBuffer, { blobHTTPHeaders: { blobContentType: 'application/pdf' } })
+
+      // Generate new SAS URL
+      const newUrl = makeSasUrl(containerName, newKey)
+
+      // Update DB record
+      await prisma.employeeDocument.update({
+        where: { id: doc.id },
+        data: {
+          fileKey: newKey,
+          fileName: newFileName,
+          fileUrl: newUrl,
+          mimeType: 'application/pdf',
+          fileSize: pdfBuffer.length,
+        },
+      })
+
+      // Delete old HTML blob
+      await blob.delete()
+
+      success++
+    } catch (err: any) {
+      failed++
+      errors.push(`${doc.fileName} (${doc.employee?.employeeCode}): ${err?.message || 'Unknown error'}`)
+    }
+  }
+
+  res.json({
+    success: true,
+    data: {
+      total: docs.length,
+      success,
+      failed,
+      errors: errors.slice(0, 20),
+    },
+  })
+})

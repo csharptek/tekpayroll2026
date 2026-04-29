@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
   Play, Loader2, CheckCircle, XCircle, AlertCircle,
-  CreditCard, FileText, RefreshCw, CalendarDays, Terminal, Database, Package
+  CreditCard, FileText, RefreshCw, CalendarDays, Terminal, Database, Package,
+  FileCode2, Eye, ArrowRightLeft
 } from 'lucide-react'
-import { cronApi } from '../../services/api'
+import { cronApi, documentsApi } from '../../services/api'
 import { PageHeader, Card } from '../../components/ui'
 import clsx from 'clsx'
 
@@ -325,6 +326,191 @@ export default function RunTasksPage() {
           )
         })}
       </div>
+
+      {/* ── HTML → PDF Migration ─────────────────────────────── */}
+      <HtmlToPdfMigrationCard />
     </div>
+  )
+}
+
+// ─── HTML → PDF MIGRATION CARD ────────────────────────────────────────────────
+
+type MigrationDoc = {
+  id: string
+  employeeName: string
+  employeeCode: string
+  fileName: string
+  documentType: string
+  fileSize: number
+  createdAt: string
+}
+
+type MigrationResult = {
+  total: number
+  success: number
+  failed: number
+  errors: string[]
+}
+
+function HtmlToPdfMigrationCard() {
+  const [previewed, setPreviewed] = useState(false)
+  const [migrating, setMigrating] = useState(false)
+  const [result, setResult] = useState<MigrationResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const previewQuery = useQuery({
+    queryKey: ['migrate-html-preview'],
+    queryFn: () => documentsApi.migrateHtmlPreview(),
+    enabled: false,
+  })
+
+  const docs: MigrationDoc[] = (previewQuery.data as any)?.data?.data?.documents ?? []
+  const total: number = (previewQuery.data as any)?.data?.data?.total ?? 0
+
+  async function handlePreview() {
+    setError(null)
+    setResult(null)
+    await previewQuery.refetch()
+    setPreviewed(true)
+  }
+
+  async function handleMigrate() {
+    if (!window.confirm(`Convert ${total} HTML document(s) to PDF?\n\nThis cannot be undone. No emails will be sent.`)) return
+    setMigrating(true)
+    setError(null)
+    setResult(null)
+    try {
+      const res = await documentsApi.migrateHtmlToPdf()
+      setResult((res as any).data?.data)
+      previewQuery.refetch()
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || 'Migration failed')
+    } finally {
+      setMigrating(false)
+    }
+  }
+
+  const hasHtml = total > 0
+
+  return (
+    <Card>
+      <div className="p-4 flex gap-4">
+        <div className="mt-0.5 shrink-0 text-orange-500">
+          <FileCode2 size={22} />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="font-semibold text-gray-800">Convert HTML Documents to PDF</p>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Batch convert saved HTML increment letters to PDF. No emails sent.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={handlePreview}
+                disabled={previewQuery.isFetching}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors disabled:opacity-50"
+              >
+                {previewQuery.isFetching
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Eye size={14} />}
+                Preview
+              </button>
+              {previewed && hasHtml && (
+                <button
+                  onClick={handleMigrate}
+                  disabled={migrating}
+                  className={clsx(
+                    'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                    migrating
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-orange-600 hover:bg-orange-700 text-white'
+                  )}
+                >
+                  {migrating
+                    ? <><Loader2 size={14} className="animate-spin" /> Converting...</>
+                    : <><ArrowRightLeft size={14} /> Convert {total}</>}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Preview results */}
+          {previewed && !previewQuery.isFetching && (
+            <div className={clsx(
+              'mt-3 rounded-lg border p-3 text-sm space-y-2',
+              hasHtml ? 'border-orange-200 bg-orange-50' : 'border-green-200 bg-green-50'
+            )}>
+              <div className="flex items-center gap-2">
+                {hasHtml
+                  ? <AlertCircle size={14} className="text-orange-600" />
+                  : <CheckCircle size={14} className="text-green-600" />}
+                <span className={clsx('font-medium', hasHtml ? 'text-orange-700' : 'text-green-700')}>
+                  {hasHtml ? `${total} HTML document(s) found — ready to convert` : 'No HTML documents found'}
+                </span>
+              </div>
+
+              {hasHtml && docs.length > 0 && (
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full text-xs text-gray-700">
+                    <thead>
+                      <tr className="text-left text-gray-500 border-b border-orange-200">
+                        <th className="pb-1 pr-3">Employee</th>
+                        <th className="pb-1 pr-3">Type</th>
+                        <th className="pb-1 pr-3">File</th>
+                        <th className="pb-1">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {docs.map(d => (
+                        <tr key={d.id} className="border-b border-orange-100 last:border-0">
+                          <td className="py-1 pr-3">{d.employeeName} <span className="text-gray-400">({d.employeeCode})</span></td>
+                          <td className="py-1 pr-3">{d.documentType}</td>
+                          <td className="py-1 pr-3 font-mono">{d.fileName}</td>
+                          <td className="py-1">{format(new Date(d.createdAt), 'dd MMM yyyy')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Migration result */}
+          {result && (
+            <div className={clsx(
+              'mt-3 rounded-lg border p-3 text-sm space-y-2',
+              result.failed === 0 ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'
+            )}>
+              <div className="flex items-center gap-2">
+                {result.failed === 0
+                  ? <CheckCircle size={14} className="text-green-600" />
+                  : <AlertCircle size={14} className="text-amber-600" />}
+                <span className={clsx('font-medium', result.failed === 0 ? 'text-green-700' : 'text-amber-700')}>
+                  {result.failed === 0
+                    ? `All ${result.success} document(s) converted successfully`
+                    : `${result.success} converted, ${result.failed} failed`}
+                </span>
+              </div>
+              {result.errors.length > 0 && (
+                <div className="text-xs text-red-700 bg-red-100 rounded p-2 space-y-0.5">
+                  {result.errors.map((e, i) => <div key={i}>{e}</div>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <XCircle size={14} className="inline mr-1" />{error}
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
   )
 }

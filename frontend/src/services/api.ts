@@ -326,4 +326,6 @@ export const documentsApi = {
   generate:        (data: any) => api.post('/api/documents/generate', data),
   sendEmail:       (data: { employeeId: string; htmlContent: string; subject?: string }) => api.post('/api/documents/send-email', data),
   testEmail:       (data: { toEmail: string; employeeId?: string; htmlContent?: string }) => api.post('/api/documents/test-email', data),
+  migrateHtmlPreview: () => api.get('/api/documents/migrate-html-preview'),
+  migrateHtmlToPdf:   () => api.post('/api/documents/migrate-html-to-pdf'),
 }
