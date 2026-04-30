@@ -106,7 +106,6 @@ export const employeeApi = {
   convertToEmployee: (id: string, traineeEndDate: string) => api.post(`/api/employees/${id}/convert-to-employee`, { traineeEndDate }),
   payrollHistory: (id: string) => api.get(`/api/employees/${id}/payroll-history`),
   salaryRevisions: (id: string) => api.get(`/api/employees/${id}/salary-revisions`),
-  setSkipPayroll: (id: string, skip: boolean) => api.patch(`/api/employees/${id}/skip-payroll`, { skip }),
 }
 
 export const payrollApi = {
@@ -119,6 +118,10 @@ export const payrollApi = {
   disburse: (id: string) => api.post(`/api/payroll/cycles/${id}/disburse`),
   adjustEntry: (id: string, data: any) => api.put(`/api/payroll/entries/${id}`, data),
   preview: (data: any) => api.post('/api/payroll/dry-run', data),
+  // PayrollSkip
+  getSkips: (payrollMonth: string) => api.get(`/api/payroll/skips/${payrollMonth}`),
+  addSkip: (data: { employeeId: string; payrollMonth: string; reason?: string }) => api.post('/api/payroll/skips', data),
+  removeSkip: (id: string) => api.delete(`/api/payroll/skips/${id}`),
 }
 
 export const lopApi = {

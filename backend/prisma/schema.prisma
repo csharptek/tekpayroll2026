@@ -159,7 +159,6 @@ model Employee {
   lastWorkingDay  DateTime?
   isTrainee      Boolean        @default(false)
   stipendMonthly Decimal?       @db.Decimal(10, 2)  // set only when isTrainee = true
-  skipPayroll    Boolean        @default(false)      // SA-controlled: exclude from payroll runs
   convertedToEmployeeId   String?   // trainee record: points to new employee
   convertedFromTraineeId  String?   // employee record: points to original trainee
   status         EmployeeStatus @default(ACTIVE)
@@ -219,6 +218,7 @@ model Employee {
   payrollEntries      PayrollEntry[]
   lopEntries          LopEntry[]
   reimbursements      Reimbursement[]
+  payrollSkips        PayrollSkip[]
   payslips            Payslip[]
   fnfSettlement       FnfSettlement?
   loans               Loan[]
@@ -407,6 +407,22 @@ model PayrollEntry {
   @@unique([cycleId, employeeId])
   @@index([cycleId])
   @@index([employeeId])
+}
+
+// ─── PAYROLL SKIP ─────────────────────────────────────────────────────────────
+
+model PayrollSkip {
+  id            String   @id @default(cuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollMonth  String   // format: YYYY-MM
+  reason        String?  @db.Text
+  skippedBy     String
+  skippedByName String
+  createdAt     DateTime @default(now())
+
+  @@unique([employeeId, payrollMonth])
+  @@index([payrollMonth])
 }
 
 // ─── LOP ENTRIES ─────────────────────────────────────────────────────────────

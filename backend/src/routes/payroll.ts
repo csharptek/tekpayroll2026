@@ -84,13 +84,23 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
   }
 
   const employees = await prisma.employee.findMany({
-    where: { status: { in: ['ACTIVE', 'ON_NOTICE'] }, skipPayroll: false },
+    where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
   })
+
+  // Fetch skipped employees for this month
+  const skippedIds = new Set(
+    (await prisma.payrollSkip.findMany({
+      where: { payrollMonth: cycle.payrollMonth },
+      select: { employeeId: true },
+    })).map(s => s.employeeId)
+  )
+
+  const activeEmployees = employees.filter(e => !skippedIds.has(e.id))
 
   const results: any[] = []
   let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0
 
-  for (const emp of employees) {
+  for (const emp of activeEmployees) {
     try {
       const lopEntry = await prisma.lopEntry.findUnique({
         where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: emp.id } },
@@ -206,7 +216,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
       totalNet,
       totalPf,
       totalEsi,
-      employeeCount: employees.length,
+      employeeCount: activeEmployees.length,
     },
   })
 
@@ -242,13 +252,17 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
   const end   = new Date(cycleEnd)
 
   // Fetch shared data once upfront
-  const [employees, esiConfig] = await Promise.all([
+  const [allEmployees, esiConfig, skippedSkips] = await Promise.all([
     prisma.employee.findMany({
-      where: { status: { in: ['ACTIVE', 'ON_NOTICE'] }, skipPayroll: false },
+      where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
       orderBy: { name: 'asc' },
     }),
     getEsiConfig(),
+    prisma.payrollSkip.findMany({ where: { payrollMonth }, select: { employeeId: true } }),
   ])
+
+  const skippedIds = new Set(skippedSkips.map(s => s.employeeId))
+  const employees = allEmployees.filter(e => !skippedIds.has(e.id))
 
   const bonusMonth = isBonusMonth(payrollMonth)
 
@@ -570,4 +584,38 @@ payrollRouter.get('/cycles/:id/summary', requireSuperAdmin, async (req, res) => 
     orderBy: { employee: { name: 'asc' } },
   })
   res.json({ success: true, data: entries })
+})
+
+// ─── PAYROLL SKIP MANAGEMENT ──────────────────────────────────────────────────
+
+// GET skips for a month
+payrollRouter.get('/skips/:payrollMonth', requireSuperAdmin, async (req, res) => {
+  const skips = await prisma.payrollSkip.findMany({
+    where: { payrollMonth: req.params.payrollMonth },
+    include: { employee: { select: { id: true, name: true, employeeCode: true, department: true } } },
+    orderBy: { createdAt: 'desc' },
+  })
+  res.json({ success: true, data: skips })
+})
+
+// POST add a skip
+payrollRouter.post('/skips', requireSuperAdmin, async (req, res) => {
+  const { employeeId, payrollMonth, reason } = req.body
+  if (!employeeId || !payrollMonth) throw new AppError('employeeId and payrollMonth are required', 400)
+
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId } })
+  if (!employee) throw new AppError('Employee not found', 404)
+
+  const skip = await prisma.payrollSkip.upsert({
+    where: { employeeId_payrollMonth: { employeeId, payrollMonth } },
+    create: { employeeId, payrollMonth, reason: reason || null, skippedBy: req.user!.id, skippedByName: req.user!.name },
+    update: { reason: reason || null, skippedBy: req.user!.id, skippedByName: req.user!.name },
+  })
+  res.json({ success: true, data: skip })
+})
+
+// DELETE remove a skip
+payrollRouter.delete('/skips/:id', requireSuperAdmin, async (req, res) => {
+  await prisma.payrollSkip.delete({ where: { id: req.params.id } })
+  res.json({ success: true })
 })

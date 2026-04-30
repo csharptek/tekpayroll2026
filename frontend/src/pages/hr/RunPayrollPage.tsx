@@ -3,10 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Play, Lock, Unlock, Banknote,
-  RefreshCw, ChevronDown, ChevronUp, Pencil, Check, X as XIcon
+  RefreshCw, ChevronDown, ChevronUp, Pencil, Check, X as XIcon, UserMinus, Plus, Trash2
 } from 'lucide-react'
 import { format } from 'date-fns'
-import { payrollApi } from '../../services/api'
+import { payrollApi, employeeApi } from '../../services/api'
 import api from '../../services/api'
 import {
   PageHeader, Button, Card, StatusBadge, Rupee,
@@ -166,6 +166,11 @@ export default function RunPayrollPage() {
         errors_count === 0
           ? <Alert type="success" message={`All ${entries.length} employees calculated. Review and edit if needed, then lock.`} />
           : <Alert type="error" message={`${errors_count} employees had errors. Fix before locking.`} />
+      )}
+
+      {/* Skip Payroll Panel — SA only, only before lock */}
+      {isSuperAdmin && cycle?.payrollMonth && (canRun || canLock) && (
+        <PayrollSkipPanel payrollMonth={cycle.payrollMonth} />
       )}
 
       {entries.length > 0 && (
@@ -381,5 +386,139 @@ export default function RunPayrollPage() {
         </div>
       </Modal>
     </div>
+  )
+}
+
+// ─── PAYROLL SKIP PANEL ───────────────────────────────────────────────────────
+
+function PayrollSkipPanel({ payrollMonth }: { payrollMonth: string }) {
+  const qc = useQueryClient()
+  const [showAdd, setShowAdd] = useState(false)
+  const [selectedEmpId, setSelectedEmpId] = useState('')
+  const [reason, setReason] = useState('')
+  const [empSearch, setEmpSearch] = useState('')
+
+  const { data: skips = [], isLoading: loadingSkips } = useQuery({
+    queryKey: ['payroll-skips', payrollMonth],
+    queryFn: () => payrollApi.getSkips(payrollMonth).then(r => r.data.data),
+  })
+
+  const { data: empList = [] } = useQuery({
+    queryKey: ['employees-list'],
+    queryFn: () => employeeApi.list({ status: 'ACTIVE,ON_NOTICE' }).then(r => r.data.data),
+    staleTime: 60000,
+  })
+
+  const addMut = useMutation({
+    mutationFn: () => payrollApi.addSkip({ employeeId: selectedEmpId, payrollMonth, reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payroll-skips', payrollMonth] })
+      setShowAdd(false); setSelectedEmpId(''); setReason(''); setEmpSearch('')
+    },
+  })
+
+  const removeMut = useMutation({
+    mutationFn: (id: string) => payrollApi.removeSkip(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll-skips', payrollMonth] }),
+  })
+
+  const filteredEmps = (empList as any[]).filter((e: any) =>
+    !skips.some((s: any) => s.employeeId === e.id) &&
+    (e.name.toLowerCase().includes(empSearch.toLowerCase()) || e.employeeCode.toLowerCase().includes(empSearch.toLowerCase()))
+  )
+
+  return (
+    <Card title={`Skip Payroll — ${payrollMonth}`}>
+      <div className="p-5 space-y-4">
+        {loadingSkips ? (
+          <p className="text-sm text-slate-400">Loading…</p>
+        ) : skips.length === 0 ? (
+          <p className="text-sm text-slate-400">No employees skipped for this month.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left text-xs text-slate-400 font-medium pb-2">Employee</th>
+                <th className="text-left text-xs text-slate-400 font-medium pb-2">Code</th>
+                <th className="text-left text-xs text-slate-400 font-medium pb-2">Reason</th>
+                <th className="text-left text-xs text-slate-400 font-medium pb-2">Skipped By</th>
+                <th className="pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {(skips as any[]).map((s: any) => (
+                <tr key={s.id} className="border-b border-slate-50">
+                  <td className="py-2 text-slate-700 font-medium">{s.employee?.name}</td>
+                  <td className="py-2 text-slate-500">{s.employee?.employeeCode}</td>
+                  <td className="py-2 text-slate-500">{s.reason || '—'}</td>
+                  <td className="py-2 text-slate-500">{s.skippedByName}</td>
+                  <td className="py-2 text-right">
+                    <button
+                      onClick={() => removeMut.mutate(s.id)}
+                      disabled={removeMut.isPending}
+                      className="text-red-400 hover:text-red-600 disabled:opacity-40"
+                      title="Remove skip"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {showAdd ? (
+          <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50">
+            <p className="text-sm font-medium text-slate-700">Add Employee to Skip List</p>
+            <input
+              type="text"
+              placeholder="Search employee name or code…"
+              value={empSearch}
+              onChange={e => setEmpSearch(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {empSearch && (
+              <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg bg-white">
+                {filteredEmps.length === 0 ? (
+                  <p className="p-3 text-sm text-slate-400">No employees found</p>
+                ) : filteredEmps.slice(0, 10).map((e: any) => (
+                  <button
+                    key={e.id}
+                    onClick={() => { setSelectedEmpId(e.id); setEmpSearch(`${e.name} (${e.employeeCode})`) }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0"
+                  >
+                    <span className="font-medium">{e.name}</span>
+                    <span className="text-slate-400 ml-2">{e.employeeCode}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <input
+              type="text"
+              placeholder="Reason (optional)"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex gap-2">
+              <Button
+                onClick={() => addMut.mutate()}
+                disabled={!selectedEmpId || addMut.isPending}
+              >
+                {addMut.isPending ? 'Adding…' : 'Add to Skip List'}
+              </Button>
+              <Button variant="secondary" onClick={() => { setShowAdd(false); setSelectedEmpId(''); setReason(''); setEmpSearch('') }}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button variant="secondary" icon={<Plus size={14} />} onClick={() => setShowAdd(true)}>
+            Add Employee
+          </Button>
+        )}
+      </div>
+    </Card>
   )
 }
