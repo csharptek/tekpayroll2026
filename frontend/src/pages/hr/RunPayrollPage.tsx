@@ -404,9 +404,9 @@ function PayrollSkipPanel({ payrollMonth }: { payrollMonth: string }) {
   })
 
   const { data: empList = [] } = useQuery({
-    queryKey: ['employees-list'],
-    queryFn: () => employeeApi.list({ status: 'ACTIVE,ON_NOTICE' }).then(r => r.data.data),
-    staleTime: 60000,
+    queryKey: ['employees-list', empSearch],
+    queryFn: () => employeeApi.list({ search: empSearch || undefined, limit: 50 }).then(r => r.data.data),
+    enabled: empSearch.length > 0,
   })
 
   const addMut = useMutation({
@@ -423,8 +423,7 @@ function PayrollSkipPanel({ payrollMonth }: { payrollMonth: string }) {
   })
 
   const filteredEmps = (empList as any[]).filter((e: any) =>
-    !skips.some((s: any) => s.employeeId === e.id) &&
-    (e.name.toLowerCase().includes(empSearch.toLowerCase()) || e.employeeCode.toLowerCase().includes(empSearch.toLowerCase()))
+    !skips.some((s: any) => s.employeeId === e.id)
   )
 
   return (
