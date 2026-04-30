@@ -17,7 +17,7 @@ const createEmployeeSchema = z.object({
   email: z.string().email(),
   jobTitle: z.string().optional(),
   department: z.string().optional(),
-  mobilePhone: z.string().optional(),
+  mobilePhone: z.string().min(10, 'Valid mobile number is required'),
   state: z.string().optional(),
   joiningDate: z.string().datetime(),
   annualCtc: z.number().default(0),

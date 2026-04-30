@@ -25,6 +25,8 @@ export default function PersonalTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
     bloodGroup:   p.bloodGroup   || '',
   })
 
+  const [mobilePhone, setMobilePhone] = useState(emp.mobilePhone || '')
+
   const [address, setAddress] = useState({
     currentLine1:   a.currentLine1   || '',
     currentLine2:   a.currentLine2   || '',
@@ -57,6 +59,12 @@ export default function PersonalTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
   const profileMut = useMutation({
     mutationFn: () => profileApi.updateProfile(emp.id, profile),
     onSuccess: () => { setSuccess('Personal info saved'); onSaved() },
+    onError:   (e: any) => setError(e?.response?.data?.error || 'Save failed'),
+  })
+
+  const mobileMut = useMutation({
+    mutationFn: () => profileApi.updateMobile(emp.id, mobilePhone),
+    onSuccess: () => { setSuccess('Mobile number saved'); onSaved() },
     onError:   (e: any) => setError(e?.response?.data?.error || 'Save failed'),
   })
 
@@ -121,6 +129,10 @@ export default function PersonalTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
           <Field label="Last Name"><input className={inp} value={profile.lastName} disabled={ro} onChange={e => sp('lastName', e.target.value)}/></Field>
           <Field label="Official Email"><input className={inp} value={emp.email} disabled/></Field>
           <Field label="Personal Email"><input className={inp} type="email" value={profile.personalEmail} disabled={ro} onChange={e => sp('personalEmail', e.target.value)}/></Field>
+          <Field label="Mobile Number" required>
+            <input className={inp} placeholder="+91 98765 43210" value={mobilePhone} disabled={ro}
+              onChange={e => setMobilePhone(e.target.value)}/>
+          </Field>
           <Field label="Date of Birth"><DatePicker value={profile.dateOfBirth} disabled={ro} onChange={v => sp('dateOfBirth', v)}/></Field>
           <Field label="Gender">
             <select className={sel} value={profile.gender} disabled={ro} onChange={e => sp('gender', e.target.value)}>
@@ -141,7 +153,17 @@ export default function PersonalTab({ emp, isHR, onSaved }: { emp: any; isHR: bo
             </select>
           </Field>
         </div>
-        {isHR && <div className="mt-4 flex justify-end"><Button icon={<Save size={14}/>} loading={profileMut.isPending} onClick={() => { setError(''); setSuccess(''); profileMut.mutate() }}>Save Personal Info</Button></div>}
+        {isHR && (
+          <div className="mt-4 flex justify-between items-center">
+            <div className="flex gap-2">
+              <Button variant="secondary" icon={<Save size={14}/>} loading={mobileMut.isPending}
+                onClick={() => { setError(''); setSuccess(''); if (!mobilePhone.trim()) { setError('Mobile number is required'); return; } mobileMut.mutate() }}>
+                Save Mobile
+              </Button>
+            </div>
+            <Button icon={<Save size={14}/>} loading={profileMut.isPending} onClick={() => { setError(''); setSuccess(''); profileMut.mutate() }}>Save Personal Info</Button>
+          </div>
+        )}
       </div>
 
       {/* ── ADDRESS ── */}

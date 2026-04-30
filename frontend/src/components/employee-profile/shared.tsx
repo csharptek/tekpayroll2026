@@ -3,6 +3,7 @@ import api from '../../services/api'
 
 export const profileApi = {
   updateProfile:     (id: string, data: any) => api.put(`/api/employees/${id}/profile`, data),
+  updateMobile:      (id: string, mobilePhone: string) => api.patch(`/api/employees/${id}`, { mobilePhone }),
   uploadPhoto:       (id: string, file: File) => {
     const fd = new FormData(); fd.append('photo', file)
     return api.post(`/api/employees/${id}/profile/photo`, fd)

@@ -108,6 +108,11 @@ export default function AddEmployeePage() {
       return
     }
 
+    if (!form.mobilePhone || form.mobilePhone.trim().length < 10) {
+      setError('Valid mobile number is required')
+      return
+    }
+
     const isTrainee = employeeType === 'TRAINEE'
 
     if (isTrainee) {
@@ -178,7 +183,7 @@ export default function AddEmployeePage() {
                   value={form.email} onChange={e => setField('email', e.target.value)} />
               </div>
               <div>
-                <label className="label">Mobile Number</label>
+                <label className="label">Mobile Number *</label>
                 <input className="input" placeholder="+91 98765 43210"
                   value={form.mobilePhone} onChange={e => setField('mobilePhone', e.target.value)} />
               </div>
