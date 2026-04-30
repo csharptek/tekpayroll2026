@@ -97,6 +97,13 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
 
   const activeEmployees = employees.filter(e => !skippedIds.has(e.id))
 
+  // Remove any existing entries for skipped employees (in case of re-run)
+  if (skippedIds.size > 0) {
+    await prisma.payrollEntry.deleteMany({
+      where: { cycleId: cycle.id, employeeId: { in: [...skippedIds] } },
+    })
+  }
+
   const results: any[] = []
   let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0
 
