@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { FileText, Wallet, User, Download, Eye, EyeOff } from 'lucide-react'
 import { format } from 'date-fns'
-import { payslipApi, employeeApi } from '../../services/api'
+import { payslipApi, employeeApi, documentsApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { Card, Rupee, Button, StatusBadge, Skeleton } from '../../components/ui'
 import MonthCalendar from '../../components/MonthCalendar'
@@ -37,12 +37,21 @@ export default function EmployeeDashboard() {
     enabled: !!user?.id,
   })
 
+  const { data: salaryData, isLoading: loadingSalary } = useQuery({
+    queryKey: ['my-salary-structure', user?.id],
+    queryFn: () => documentsApi.computeSalary({ employeeId: user!.id, annualCtc: 0 }).then(r => r.data.data),
+    enabled: !!user?.id,
+  })
+
   const latestPayslip = payslips?.[0]
   const latestEntry   = history?.[0]
-  const monthly = profile ? Number(profile.annualCtc) / 12 : 0
-  const basic   = monthly * 0.40
-  const hra     = basic * 0.80
-  const allw    = monthly - basic - hra
+  const monthly  = salaryData?.grossMonthly     ?? (profile ? Number(profile.annualCtc) / 12 : 0)
+  const basic    = salaryData?.basicMonthly     ?? 0
+  const hra      = salaryData?.hraMonthly       ?? 0
+  const transport= salaryData?.transportMonthly ?? 0
+  const fbp      = salaryData?.fbpMonthly       ?? 0
+  const hyi      = salaryData?.hyiMonthly       ?? 0
+  const netMonthly = salaryData?.netMonthly     ?? 0
 
   return (
     <div className="space-y-6">
@@ -77,15 +86,15 @@ export default function EmployeeDashboard() {
         </div>
 
         <div className="card p-5">
-          <p className="stat-label">Monthly CTC</p>
-          {loadingProfile
+          <p className="stat-label">Monthly Gross</p>
+          {loadingProfile || loadingSalary
             ? <Skeleton className="h-8 w-32 mt-1" />
             : showSalary
               ? <Rupee amount={monthly} className="text-2xl font-display font-bold text-slate-900 mt-1" />
               : <span className="text-2xl font-display font-bold text-slate-400 mt-1 block">₹ ••••••</span>
           }
           <p className="stat-sub mt-1">
-            {showSalary ? <><Rupee amount={profile?.annualCtc || 0} /> per year</> : '₹ •••••• per year'}
+            {showSalary ? <><Rupee amount={salaryData?.annualCtc ?? Number(profile?.annualCtc ?? 0)} /> per year</> : '₹ •••••• per year'}
           </p>
         </div>
 
@@ -111,18 +120,20 @@ export default function EmployeeDashboard() {
             <div className="p-5">
               <div className="space-y-3">
                 {[
-                  { label: 'Annual CTC',          value: profile?.annualCtc || 0, bold: true },
-                  { label: 'Monthly CTC',          value: monthly, bold: true },
-                  { label: 'Basic (40%)',           value: basic },
-                  { label: 'HRA (80% of Basic)',    value: hra },
-                  { label: 'Allowances',            value: allw },
-                  { label: 'Annual Incentive',      value: profile?.annualIncentive || 0 },
+                  { label: 'Annual CTC',        value: salaryData?.annualCtc ?? Number(profile?.annualCtc ?? 0), bold: true },
+                  { label: 'Monthly Gross',     value: monthly, bold: true },
+                  { label: 'Basic',             value: basic },
+                  { label: 'HRA',               value: hra },
+                  { label: 'Transport',         value: transport },
+                  { label: 'FBP',               value: fbp },
+                  { label: 'HYI',               value: hyi },
+                  { label: 'Net Monthly',       value: netMonthly, bold: true },
                 ].map(({ label, value, bold }, i) => (
                   <div key={label}>
-                    {(i === 2 || i === 5) && <hr className="border-slate-100 my-3" />}
+                    {(i === 2 || i === 7) && <hr className="border-slate-100 my-3" />}
                     <div className="flex justify-between items-center">
                       <span className={bold ? 'text-sm font-semibold text-slate-700' : 'text-sm text-slate-500'}>{label}</span>
-                      <HiddenAmount amount={value} show={showSalary} loading={loadingProfile} bold={bold} />
+                      <HiddenAmount amount={value} show={showSalary} loading={loadingProfile || loadingSalary} bold={bold} />
                     </div>
                   </div>
                 ))}

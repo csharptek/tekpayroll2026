@@ -95,9 +95,18 @@ documentsRouter.get('/salary-snapshot/:employeeId', requireHR, async (req: any, 
 
 // ─── COMPUTE SALARY BREAKUP (for CTC override) ────────────────────────────────
 
-documentsRouter.post('/compute-salary', requireHR, async (req: any, res) => {
+documentsRouter.post('/compute-salary', async (req: any, res) => {
   const { employeeId, annualCtc } = req.body
   if (!employeeId) throw new AppError('employeeId required', 400)
+
+  // Employees can only fetch their own salary
+  if (req.user!.role === 'EMPLOYEE' && req.user!.id !== employeeId) {
+    throw new AppError('Access denied', 403)
+  }
+  // Non-employee roles require HR or above
+  if (req.user!.role !== 'EMPLOYEE' && !['HR', 'SUPER_ADMIN'].includes(req.user!.role)) {
+    throw new AppError('Access denied', 403)
+  }
 
   const esiConfig = await getEsiConfig()
 
