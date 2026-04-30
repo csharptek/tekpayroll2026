@@ -159,6 +159,7 @@ model Employee {
   lastWorkingDay  DateTime?
   isTrainee      Boolean        @default(false)
   stipendMonthly Decimal?       @db.Decimal(10, 2)  // set only when isTrainee = true
+  skipPayroll    Boolean        @default(false)      // SA-controlled: exclude from payroll runs
   convertedToEmployeeId   String?   // trainee record: points to new employee
   convertedFromTraineeId  String?   // employee record: points to original trainee
   status         EmployeeStatus @default(ACTIVE)

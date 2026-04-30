@@ -84,7 +84,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
   }
 
   const employees = await prisma.employee.findMany({
-    where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
+    where: { status: { in: ['ACTIVE', 'ON_NOTICE'] }, skipPayroll: false },
   })
 
   const results: any[] = []
@@ -244,7 +244,7 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
   // Fetch shared data once upfront
   const [employees, esiConfig] = await Promise.all([
     prisma.employee.findMany({
-      where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
+      where: { status: { in: ['ACTIVE', 'ON_NOTICE'] }, skipPayroll: false },
       orderBy: { name: 'asc' },
     }),
     getEsiConfig(),

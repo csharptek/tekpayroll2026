@@ -8,7 +8,7 @@ reportRouter.use(authenticate, requireManagement);
 
 reportRouter.get('/summary', async (_req, res) => {
   const [totalEmployees, lastCycle] = await Promise.all([
-    prisma.employee.count({ where: { status: 'ACTIVE' } }),
+    prisma.employee.count({ where: { status: 'ACTIVE', skipPayroll: false } }),
     prisma.payrollCycle.findFirst({ orderBy: { cycleStart: 'desc' } }),
   ]);
   res.json({ success: true, data: { totalEmployees, lastCycle } });
@@ -30,7 +30,7 @@ reportRouter.get('/salary-summary', requireSuperAdmin, async (_req, res) => {
   const esiConfig = await getEsiConfig();
 
   const employees = await prisma.employee.findMany({
-    where: { status: { in: ['ACTIVE', 'ON_NOTICE', 'SEPARATED'] } },
+    where: { status: { in: ['ACTIVE', 'ON_NOTICE', 'SEPARATED'] }, skipPayroll: false },
     select: {
       annualCtc: true,
       basicPercent: true,

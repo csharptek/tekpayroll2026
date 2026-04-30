@@ -310,6 +310,34 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
+// ─── SKIP PAYROLL TOGGLE (SUPER ADMIN ONLY) ──────────────────────────────────
+
+employeeRouter.patch('/:id/skip-payroll', requireSuperAdmin, async (req, res) => {
+  const { skip } = req.body;
+  if (typeof skip !== 'boolean') throw new AppError('skip must be a boolean', 400);
+
+  const employee = await prisma.employee.findUnique({ where: { id: req.params.id } });
+  if (!employee) throw new AppError('Employee not found', 404);
+
+  const updated = await prisma.employee.update({
+    where: { id: req.params.id },
+    data: { skipPayroll: skip },
+  });
+
+  await createAuditLog({
+    user: req.user!,
+    action: AuditAction.UPDATE,
+    tableName: 'employees',
+    recordId: employee.id,
+    targetEmployeeId: employee.id,
+    previousValue: { skipPayroll: employee.skipPayroll },
+    newValue: { skipPayroll: skip },
+    description: `${skip ? 'Enabled' : 'Disabled'} payroll skip for ${employee.name}`,
+  });
+
+  res.json({ success: true, data: updated });
+});
+
 // ─── DEACTIVATE EMPLOYEE ─────────────────────────────────────────────────────
 
 employeeRouter.post('/:id/deactivate', requireHR, async (req, res) => {

@@ -358,6 +358,8 @@ export default function EmployeeDetailPage() {
 
         {/* Payslip Password Reset — Super Admin only */}
         {isSuperAdmin && <PayslipPasswordPanel empId={emp.id} />}
+        {/* Skip Payroll Toggle — Super Admin only */}
+        {isSuperAdmin && <SkipPayrollPanel emp={emp} />}
       </div>
     </div>
   )
@@ -413,6 +415,59 @@ function PayslipPasswordPanel({ empId }: { empId: string }) {
               className="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-40"
             >
               {toggling ? 'Updating…' : 'Allow Password Reset'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── SKIP PAYROLL PANEL ───────────────────────────────────────────────────────
+
+function SkipPayrollPanel({ emp }: { emp: any }) {
+  const qc = useQueryClient()
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const { mutate: toggle, isPending: toggling } = useMutation({
+    mutationFn: (skip: boolean) => employeeApi.setSkipPayroll(emp.id, skip),
+    onSuccess: (_, skip) => {
+      setMsg(skip ? 'Payroll processing skipped for this employee.' : 'Payroll processing re-enabled.')
+      qc.invalidateQueries({ queryKey: ['employee-full', emp.id] })
+    },
+    onError: () => setMsg('Failed to update.'),
+  })
+
+  const skipped = emp.skipPayroll
+
+  return (
+    <div className="mt-5 border border-slate-200 rounded-xl bg-white p-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">Payroll Processing</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {skipped
+              ? 'This employee is excluded from payroll runs, preview, PF reports, and dashboard totals.'
+              : 'This employee is included in payroll runs normally.'}
+          </p>
+          {msg && <p className="text-xs text-blue-600 mt-1">{msg}</p>}
+        </div>
+        <div>
+          {skipped ? (
+            <button
+              onClick={() => toggle(false)}
+              disabled={toggling}
+              className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40"
+            >
+              {toggling ? 'Updating…' : 'Re-enable Payroll'}
+            </button>
+          ) : (
+            <button
+              onClick={() => toggle(true)}
+              disabled={toggling}
+              className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-40"
+            >
+              {toggling ? 'Updating…' : 'Skip Payroll'}
             </button>
           )}
         </div>

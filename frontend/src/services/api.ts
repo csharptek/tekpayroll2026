@@ -106,6 +106,7 @@ export const employeeApi = {
   convertToEmployee: (id: string, traineeEndDate: string) => api.post(`/api/employees/${id}/convert-to-employee`, { traineeEndDate }),
   payrollHistory: (id: string) => api.get(`/api/employees/${id}/payroll-history`),
   salaryRevisions: (id: string) => api.get(`/api/employees/${id}/salary-revisions`),
+  setSkipPayroll: (id: string, skip: boolean) => api.patch(`/api/employees/${id}/skip-payroll`, { skip }),
 }
 
 export const payrollApi = {
