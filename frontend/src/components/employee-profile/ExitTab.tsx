@@ -22,8 +22,8 @@ function SectionHeader({ icon: Icon, title, color = 'text-brand-600', bg = 'bg-b
   )
 }
 
-function DaysRemaining({ expectedLwd }: { expectedLwd: string }) {
-  const lwd  = new Date(expectedLwd)
+function DaysRemaining({ expectedLwd, lastWorkingDay }: { expectedLwd: string; lastWorkingDay?: string }) {
+  const lwd  = new Date(lastWorkingDay || expectedLwd)
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const diff  = Math.ceil((lwd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
   const color = diff <= 7 ? 'text-red-600 bg-red-50' : diff <= 30 ? 'text-amber-600 bg-amber-50' : 'text-emerald-600 bg-emerald-50'
@@ -171,7 +171,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
                   <p className="text-sm font-medium text-slate-700">
                     {expectedLwd ? new Date(expectedLwd).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                   </p>
-                  {expectedLwd && emp.status === 'ON_NOTICE' && <DaysRemaining expectedLwd={expectedLwd} />}
+                  {expectedLwd && emp.status === 'ON_NOTICE' && <DaysRemaining expectedLwd={expectedLwd} lastWorkingDay={ed?.lastWorkingDay || details.lastWorkingDay || undefined} />}
                 </div>
               </div>
               <div>
