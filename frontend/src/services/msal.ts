@@ -7,8 +7,8 @@ const msalConfig: Configuration = {
     redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin,
   },
   cache: {
-    cacheLocation: 'localStorage',
-    storeAuthStateInCookie: false,
+    cacheLocation: 'sessionStorage',
+    storeAuthStateInCookie: true,
   },
 }
 
