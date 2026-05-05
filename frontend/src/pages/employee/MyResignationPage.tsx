@@ -5,8 +5,9 @@ import { exitApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { PageHeader, Button, Alert, Card } from '../../components/ui'
 
-function DaysRemaining({ expectedLwd }: { expectedLwd: string }) {
-  const lwd  = new Date(expectedLwd)
+function DaysRemaining({ expectedLwd, lastWorkingDay }: { expectedLwd: string; lastWorkingDay?: string }) {
+  const effectiveLwd = lastWorkingDay || expectedLwd
+  const lwd  = new Date(effectiveLwd)
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const diff  = Math.ceil((lwd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
   const color = diff <= 7 ? 'text-red-600' : diff <= 30 ? 'text-amber-600' : 'text-emerald-600'
@@ -144,7 +145,7 @@ export default function MyResignationPage() {
                   <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                   <span className="text-sm font-semibold text-amber-700">On Notice Period</span>
                 </div>
-                {data.expectedLwd && <DaysRemaining expectedLwd={data.expectedLwd} />}
+                {data.expectedLwd && <DaysRemaining expectedLwd={data.expectedLwd} lastWorkingDay={data.lastWorkingDay} />}
               </div>
 
               <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
