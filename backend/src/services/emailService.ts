@@ -12,6 +12,18 @@ async function getGraphConfig() {
   }
 }
 
+export async function getDocEmailConfig(): Promise<{ senderEmail: string; cc: string[] }> {
+  const records = await prisma.systemConfig.findMany({
+    where: { key: { in: ['GRAPH_SENDER_EMAIL', 'DOC_SENDER_EMAIL', 'DOC_CC_EMAILS'] } }
+  })
+  const map = Object.fromEntries(records.map(r => [r.key, r.value]))
+  const senderEmail = map['DOC_SENDER_EMAIL']?.trim() || map['GRAPH_SENDER_EMAIL'] || ''
+  const cc = map['DOC_CC_EMAILS']
+    ? map['DOC_CC_EMAILS'].split(',').map((e: string) => e.trim()).filter(Boolean)
+    : []
+  return { senderEmail, cc }
+}
+
 async function getAccessToken(tenantId: string, clientId: string, clientSecret: string) {
   const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`
   const body = new URLSearchParams({
@@ -37,11 +49,13 @@ export async function sendEmailWithAttachment(
   attachmentName: string,
   attachmentBase64: string,
   attachmentMime = 'application/pdf',
-  cc: string[] = []
+  cc: string[] = [],
+  senderOverride?: string
 ) {
   try {
     const cfg = await getGraphConfig()
-    if (!cfg.tenantId || !cfg.clientId || !cfg.clientSecret || !cfg.senderEmail) {
+    const senderEmail = senderOverride || cfg.senderEmail
+    if (!cfg.tenantId || !cfg.clientId || !cfg.clientSecret || !senderEmail) {
       console.warn('[EMAIL] Graph API not configured — skipping email')
       return
     }
@@ -65,7 +79,7 @@ export async function sendEmailWithAttachment(
     if (cc.length > 0) {
       payload.message.ccRecipients = cc.map(e => ({ emailAddress: { address: e } }))
     }
-    const res = await fetch(`https://graph.microsoft.com/v1.0/users/${cfg.senderEmail}/sendMail`, {
+    const res = await fetch(`https://graph.microsoft.com/v1.0/users/${senderEmail}/sendMail`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
