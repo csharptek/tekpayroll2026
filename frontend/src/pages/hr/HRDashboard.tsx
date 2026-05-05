@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Users, CreditCard, TrendingUp, AlertCircle,
   Play, Plus, FileText, ArrowRight, CheckCircle2,
@@ -11,7 +11,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer
 } from 'recharts'
-import { reportApi, payrollApi } from '../../services/api'
+import { reportApi, payrollApi, payslipApi } from '../../services/api'
 import { StatCard, Card, Rupee, StatusBadge, Button, Skeleton } from '../../components/ui'
 import { format } from 'date-fns'
 import { useAuthStore } from '../../store/authStore'
@@ -403,17 +403,26 @@ function SuperAdminDashboard({
 
 // ─── MAIN EXPORT ─────────────────────────────────────────────────────────────
 
+const DASH_SESSION_KEY = 'dashboard-figures-unlocked'
+
 export default function HRDashboard() {
   const { user } = useAuthStore()
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const [showFinancials, setShowFinancials] = useState(false)
+  const [showModal, setShowModal]           = useState(false)
+  const [pwInput, setPwInput]               = useState('')
+  const [showPw, setShowPw]                 = useState(false)
+  const [pwError, setPwError]               = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // session-level unlock (same tab session only)
+  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(DASH_SESSION_KEY) === '1')
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['hr-summary'],
     queryFn: () => reportApi.summary().then(r => r.data.data),
   })
 
-  // Only fetch payroll data if super admin
   const { data: cycles, isLoading: loadingCycles } = useQuery({
     queryKey: ['payroll-cycles'],
     queryFn: () => payrollApi.cycles().then(r => r.data.data),
@@ -431,6 +440,48 @@ export default function HRDashboard() {
     queryFn: () => reportApi.salarySummary().then(r => r.data.data),
     enabled: isSuperAdmin,
   })
+
+  const { data: pwStatus } = useQuery({
+    queryKey: ['payslip-password-status'],
+    queryFn: () => payslipApi.passwordStatus().then(r => r.data.data),
+    enabled: isSuperAdmin,
+  })
+
+  const { mutate: verify, isLoading: verifying } = useMutation({
+    mutationFn: () => payslipApi.verifyPassword(pwInput),
+    onSuccess: () => {
+      sessionStorage.setItem(DASH_SESSION_KEY, '1')
+      setUnlocked(true)
+      setShowFinancials(true)
+      setShowModal(false)
+      setPwInput('')
+      setPwError('')
+    },
+    onError: (e: any) => {
+      setPwError(e?.response?.data?.error || 'Incorrect password')
+    },
+  })
+
+  useEffect(() => {
+    if (showModal) setTimeout(() => inputRef.current?.focus(), 50)
+  }, [showModal])
+
+  const noPasswordSet = pwStatus && !pwStatus.hasPassword
+
+  const handleShowFigures = () => {
+    if (showFinancials) {
+      // hide — also lock session
+      sessionStorage.removeItem(DASH_SESSION_KEY)
+      setUnlocked(false)
+      setShowFinancials(false)
+      return
+    }
+    if (unlocked || noPasswordSet) {
+      setShowFinancials(true)
+      return
+    }
+    setShowModal(true)
+  }
 
   const trendData = (trend || []).map((t: any) => ({
     month: t.payrollMonth,
@@ -450,7 +501,7 @@ export default function HRDashboard() {
         </div>
         {isSuperAdmin && (
           <button
-            onClick={() => setShowFinancials(v => !v)}
+            onClick={handleShowFigures}
             className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-100 border border-slate-200"
           >
             {showFinancials ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -458,6 +509,59 @@ export default function HRDashboard() {
           </button>
         )}
       </div>
+
+      {/* Password modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 space-y-5">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                <Lock size={22} className="text-blue-600" />
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-slate-800">Enter Payslip Password</p>
+                <p className="text-xs text-slate-500 mt-1">Required to view salary figures</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  type={showPw ? 'text' : 'password'}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 pr-10"
+                  placeholder="Enter password"
+                  value={pwInput}
+                  onChange={e => { setPwInput(e.target.value); setPwError('') }}
+                  onKeyDown={e => e.key === 'Enter' && pwInput && verify()}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                >
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {pwError && <p className="text-xs text-red-600">{pwError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowModal(false); setPwInput(''); setPwError('') }}
+                  className="flex-1 py-2.5 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => verify()}
+                  disabled={!pwInput || verifying}
+                  className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-40"
+                >
+                  {verifying ? 'Verifying…' : 'Unlock'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isSuperAdmin
         ? <SuperAdminDashboard
