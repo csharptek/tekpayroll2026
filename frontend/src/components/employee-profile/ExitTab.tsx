@@ -176,7 +176,15 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-0.5">Notice Period</p>
-                <p className="text-sm font-medium text-slate-700">{ed.noticePeriodDays ?? 90} days</p>
+                <p className="text-sm font-medium text-slate-700">
+                  {(() => {
+                    const lwd = ed?.lastWorkingDay || details.lastWorkingDay || expectedLwd
+                    const start = ed?.resignationDate || ed?.resignationSubmittedAt
+                    if (!lwd || !start) return `${ed?.noticePeriodDays ?? 90} days`
+                    const days = Math.round((new Date(lwd).getTime() - new Date(start).getTime()) / (1000 * 60 * 60 * 24))
+                    return `${days} days`
+                  })()}
+                </p>
               </div>
             </div>
             {ed.resignationReason && (

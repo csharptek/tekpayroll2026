@@ -175,7 +175,15 @@ export default function MyResignationPage() {
                 )}
                 <div>
                   <p className="text-xs text-slate-400 mb-1">Notice Period</p>
-                  <p className="text-sm font-medium text-slate-700">{data.noticePeriodDays ?? 90} days</p>
+                  <p className="text-sm font-medium text-slate-700">
+                    {(() => {
+                      const lwd = data.lastWorkingDay || data.expectedLwd
+                      const start = data.resignationDate || data.resignationSubmittedAt
+                      if (!lwd || !start) return `${data.noticePeriodDays ?? 90} days`
+                      const days = Math.round((new Date(lwd).getTime() - new Date(start).getTime()) / (1000 * 60 * 60 * 24))
+                      return `${days} days`
+                    })()}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400 mb-1">Exit Type</p>
