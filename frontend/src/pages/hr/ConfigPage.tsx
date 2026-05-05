@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, Shield, Calendar, DollarSign, Mail, Clock, CheckCircle2, Send } from 'lucide-react'
+import { Save, Shield, Calendar, DollarSign, Mail, Clock, CheckCircle2, Send, FileText } from 'lucide-react'
 import { configApi } from '../../services/api'
 import { exitApi } from '../../services/api'
 import { PageHeader, Button, Card, Alert, Skeleton, Input, Table, Th, Td, Tr } from '../../components/ui'
@@ -181,6 +181,33 @@ export default function ConfigPage() {
               <li>Create a Client Secret and paste above</li>
               <li>The Sender Email must be a licensed M365 user in your tenant</li>
             </ol>
+          </div>
+        </div>
+      </Section>
+
+      {/* ── Documents Email ─────────────────────────────────────────── */}
+      <Section icon={FileText} title="Documents — Sender & CC" subtitle="Used when sending increment letters and other generated documents to employees.">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Sender Email (override)</label>
+              <input className="input" type="email" placeholder="Leave blank to use Graph API sender"
+                value={getValue('DOC_SENDER_EMAIL', '')} onChange={e => set('DOC_SENDER_EMAIL', e.target.value)} />
+              <p className="text-xs text-slate-400 mt-1">If blank, falls back to GRAPH_SENDER_EMAIL</p>
+            </div>
+            <div>
+              <label className="label">CC Email Addresses</label>
+              <input className="input" type="text" placeholder="email1@domain.com, email2@domain.com"
+                value={getValue('DOC_CC_EMAILS', '')} onChange={e => set('DOC_CC_EMAILS', e.target.value)} />
+              <p className="text-xs text-slate-400 mt-1">Comma-separated. Applied to all document emails.</p>
+            </div>
+          </div>
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700">
+            <p className="font-semibold mb-1">Applies to</p>
+            <ul className="list-disc ml-4 space-y-0.5">
+              <li>Increment Letters</li>
+              <li>Any future sub-sections under Documents</li>
+            </ul>
           </div>
         </div>
       </Section>

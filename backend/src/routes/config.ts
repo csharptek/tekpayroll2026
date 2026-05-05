@@ -21,7 +21,7 @@ configRouter.put('/', requireHR, async (req, res) => {
     'NOTICE_DAYS_RESIGNED', 'NOTICE_DAYS_TERMINATED', 'NOTICE_DAYS_ABSCONDED',
   ]
   const isSuperAdminKey = (key: string) =>
-    superAdminKeysExact.includes(key) || key.startsWith('NOTIF_')
+    superAdminKeysExact.includes(key) || key.startsWith('NOTIF_') || key.startsWith('DOC_')
 
   for (const [key, value] of Object.entries(updates)) {
     if (isSuperAdminKey(key) && req.user!.role !== 'SUPER_ADMIN') continue

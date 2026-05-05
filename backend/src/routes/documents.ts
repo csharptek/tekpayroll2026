@@ -255,7 +255,7 @@ documentsRouter.post('/send-email', requireHR, async (req: any, res) => {
   if (!emp.email) throw new AppError('Employee has no email address', 400)
 
   const configs = await prisma.systemConfig.findMany({
-    where: { key: { in: ['INCREMENT_EMAIL_SUBJECT', 'INCREMENT_EMAIL_BODY'] } }
+    where: { key: { in: ['INCREMENT_EMAIL_SUBJECT', 'INCREMENT_EMAIL_BODY', 'DOC_SENDER_EMAIL', 'DOC_CC_EMAILS'] } }
   })
   const cfgMap = Object.fromEntries(configs.map(c => [c.key, c.value]))
 
@@ -269,11 +269,15 @@ documentsRouter.post('/send-email', requireHR, async (req: any, res) => {
     ? resolveEmailPlaceholders(emailBodyTemplate, emp)
     : `<p>Dear ${emp.name.split(' ')[0]},</p><p>Please find your increment letter attached.</p><p>Regards,<br/>HR Team</p>`
 
+  const ccList = cfgMap['DOC_CC_EMAILS']
+    ? cfgMap['DOC_CC_EMAILS'].split(',').map((e: string) => e.trim()).filter(Boolean)
+    : []
+
   // Generate PDF from letter HTML and attach
   const pdfBase64 = await htmlToPdfBase64(htmlContent)
   const attachmentName = `Increment_Letter_${emp.employeeCode || emp.id}.pdf`
 
-  await sendEmailWithAttachment(emp.email, resolvedSubject, bodyHtml, attachmentName, pdfBase64, 'application/pdf', ['ashwika.agarwal@csharptek.com'])
+  await sendEmailWithAttachment(emp.email, resolvedSubject, bodyHtml, attachmentName, pdfBase64, 'application/pdf', ccList)
   res.json({ success: true, message: `Email sent to ${emp.email}` })
 })
 
