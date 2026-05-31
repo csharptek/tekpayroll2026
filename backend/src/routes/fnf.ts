@@ -54,6 +54,13 @@ fnfRouter.post('/calculate/:employeeId', async (req, res) => {
   res.json({ success: true, data: calc })
 })
 
+// Preview with optional custom LWD — does NOT save anything
+fnfRouter.post('/preview/:employeeId', async (req, res) => {
+  const overrideLwd = req.body.lastWorkingDay ? new Date(req.body.lastWorkingDay) : undefined
+  const calc = await calculateFnf(req.params.employeeId, overrideLwd)
+  res.json({ success: true, data: calc })
+})
+
 fnfRouter.post('/initiate/:employeeId', async (req, res) => {
   const { employeeId } = req.params
   const existing = await prisma.fnfSettlement.findUnique({ where: { employeeId } })

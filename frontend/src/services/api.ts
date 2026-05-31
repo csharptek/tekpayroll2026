@@ -205,6 +205,7 @@ export const fnfApi = {
   byEmployee:      (id: string) => api.get(`/api/fnf/employee/${id}`),
   get:             (id: string) => api.get(`/api/fnf/${id}`),
   calculate:       (empId: string) => api.post(`/api/fnf/calculate/${empId}`),
+  preview:         (empId: string, lastWorkingDay?: string) => api.post(`/api/fnf/preview/${empId}`, { lastWorkingDay }),
   initiate:        (empId: string) => api.post(`/api/fnf/initiate/${empId}`),
   approve:         (id: string, notes?: string) => api.post(`/api/fnf/${id}/approve`, { notes }),
   update:          (id: string, data: any) => api.put(`/api/fnf/${id}`, data),

@@ -104,7 +104,7 @@ exitRouter.post('/:id/resign', async (req, res) => {
 
   const noticeDays  = await getNoticeDays('RESIGNED')
   const now         = new Date()
-  const expectedLwd = addDays(now, noticeDays)
+  const expectedLwd = addDays(now, noticeDays - 1) // inclusive: day 1 is resignation date
 
   await prisma.employee.update({
     where: { id: emp.id },
@@ -119,6 +119,7 @@ exitRouter.post('/:id/resign', async (req, res) => {
       resignationInitiatorId: me.id,
       noticePeriodDays:      noticeDays,
       expectedLwd,
+      lastWorkingDay:        expectedLwd, // auto-set; HR/SA can change later
     },
   })
 
@@ -126,6 +127,14 @@ exitRouter.post('/:id/resign', async (req, res) => {
   await prisma.exitClearance.upsert({
     where:  { employeeId: emp.id },
     create: { employeeId: emp.id },
+    update: {},
+  })
+
+  // Auto-skip from current month's payroll
+  const payrollMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  await prisma.payrollSkip.upsert({
+    where:  { employeeId_payrollMonth: { employeeId: emp.id, payrollMonth } },
+    create: { employeeId: emp.id, payrollMonth, reason: 'Auto-skipped: employee resigned', skippedBy: me.id, skippedByName: me.name },
     update: {},
   })
 
@@ -161,7 +170,7 @@ exitRouter.post('/:id/initiate', requireHR, async (req, res) => {
 
   const noticeDays  = await getNoticeDays(exitType)
   const resDate     = resignationDate ? new Date(resignationDate) : new Date()
-  const expectedLwd = addDays(resDate, noticeDays)
+  const expectedLwd = addDays(resDate, noticeDays - 1) // inclusive
 
   await prisma.employee.update({
     where: { id: emp.id },
@@ -175,12 +184,21 @@ exitRouter.post('/:id/initiate', requireHR, async (req, res) => {
       resignationInitiatorId: me.id,
       noticePeriodDays:      noticeDays,
       expectedLwd,
+      lastWorkingDay:        expectedLwd, // auto-set; HR/SA can change later
     },
   })
 
   await prisma.exitClearance.upsert({
     where:  { employeeId: emp.id },
     create: { employeeId: emp.id },
+    update: {},
+  })
+
+  // Auto-skip from current month's payroll
+  const payrollMonth = `${resDate.getFullYear()}-${String(resDate.getMonth() + 1).padStart(2, '0')}`
+  await prisma.payrollSkip.upsert({
+    where:  { employeeId_payrollMonth: { employeeId: emp.id, payrollMonth } },
+    create: { employeeId: emp.id, payrollMonth, reason: `Auto-skipped: ${exitType.toLowerCase()} initiated`, skippedBy: me.id, skippedByName: me.name },
     update: {},
   })
 
@@ -197,17 +215,36 @@ exitRouter.post('/:id/initiate', requireHR, async (req, res) => {
 
 exitRouter.patch('/:id/details', requireHR, async (req, res) => {
   const me = req.user!
-  const { lastWorkingDay, exitType, noticePeriodServed, buyoutAmount, resignationDate } = req.body
+  const { lastWorkingDay, exitType, noticePeriodServed, buyoutAmount, resignationDate, noticePeriodDays } = req.body
 
   const emp = await prisma.employee.findUnique({ where: { id: req.params.id } })
   if (!emp) throw new AppError('Employee not found', 404)
 
   const data: any = {}
-  if (lastWorkingDay      !== undefined) data.lastWorkingDay      = new Date(lastWorkingDay)
   if (exitType            !== undefined) data.exitType            = exitType
   if (resignationDate     !== undefined) data.resignationDate     = new Date(resignationDate)
   if (noticePeriodServed  !== undefined) data.noticePeriodServed  = Boolean(noticePeriodServed)
   if (buyoutAmount        !== undefined) data.buyoutAmount        = buyoutAmount != null ? Number(buyoutAmount) : null
+
+  // If noticePeriodDays changed, recalculate expectedLwd from resignationDate
+  if (noticePeriodDays !== undefined) {
+    data.noticePeriodDays = Number(noticePeriodDays)
+    const resDate = data.resignationDate || emp.resignationDate
+    if (resDate) {
+      data.expectedLwd = addDays(new Date(resDate), Number(noticePeriodDays) - 1)
+      // If no explicit LWD override, sync lastWorkingDay to new expectedLwd
+      if (lastWorkingDay === undefined) {
+        data.lastWorkingDay = data.expectedLwd
+      }
+    }
+  }
+
+  // Explicit LWD override (e.g. "Confirm LWD" button with custom date)
+  if (lastWorkingDay !== undefined) {
+    data.lastWorkingDay = new Date(lastWorkingDay)
+    // Also keep expectedLwd in sync
+    data.expectedLwd = new Date(lastWorkingDay)
+  }
 
   await prisma.employee.update({ where: { id: req.params.id }, data })
   await logHistory(emp.id, 'UPDATED', me.id, me.name, me.role, 'Exit details updated')

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Save, AlertTriangle, CheckSquare, Square, Clock, Shield,
   FileCheck, User, Unlock, UserMinus, RotateCcw, ChevronDown, ChevronUp,
+  Calendar, IndianRupee,
 } from 'lucide-react'
-import { exitApi } from '../../services/api'
+import { exitApi, fnfApi } from '../../services/api'
 import { Field, inp, sel } from './shared'
 import { Button, Alert } from '../ui'
 import { DatePicker } from '../DatePicker'
@@ -53,6 +54,77 @@ function ClearanceRow({ label, done, doneAt, doneByName, onToggle, disabled }: a
   )
 }
 
+function fmt(d: string | Date) {
+  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function TentativeFnfPanel({ empId, lwdDate }: { empId: string; lwdDate: string }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['fnf-preview', empId, lwdDate],
+    queryFn:  () => fnfApi.preview(empId, new Date(lwdDate).toISOString()).then(r => r.data.data),
+    enabled:  !!lwdDate,
+    retry:    false,
+  })
+
+  if (isLoading) return <p className="text-xs text-slate-400 py-2">Calculating...</p>
+  if (error)     return <p className="text-xs text-red-500 py-2">Could not calculate — ensure resignation date is set.</p>
+  if (!data)     return null
+
+  const additions  = data.breakdown.filter((b: any) => b.type === 'addition')
+  const deductions = data.breakdown.filter((b: any) => b.type === 'deduction')
+
+  return (
+    <div className="mt-3 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 bg-white">
+        <IndianRupee size={13} className="text-brand-600" />
+        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Tentative F&amp;F Calculation</p>
+        <span className="ml-auto text-xs text-slate-400">LWD: {fmt(lwdDate)} · {data.salaryDays} days salary</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
+        {/* Additions */}
+        <div className="px-4 py-3">
+          <p className="text-xs font-medium text-emerald-700 mb-2">Earnings</p>
+          <div className="space-y-1.5">
+            {additions.map((b: any) => (
+              <div key={b.label} className="flex justify-between text-xs">
+                <span className="text-slate-600">{b.label}</span>
+                <span className="font-medium text-slate-800">₹{Number(b.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between text-xs font-semibold text-emerald-700 mt-2 pt-2 border-t border-slate-200">
+            <span>Total Earnings</span>
+            <span>₹{Number(data.totalAdditions).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+          </div>
+        </div>
+        {/* Deductions */}
+        <div className="px-4 py-3">
+          <p className="text-xs font-medium text-red-600 mb-2">Deductions</p>
+          <div className="space-y-1.5">
+            {deductions.map((b: any) => (
+              <div key={b.label} className="flex justify-between text-xs">
+                <span className="text-slate-600">{b.label}</span>
+                <span className="font-medium text-red-700">−₹{Number(b.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+              </div>
+            ))}
+            {deductions.length === 0 && <p className="text-xs text-slate-400">No deductions</p>}
+          </div>
+          <div className="flex justify-between text-xs font-semibold text-red-600 mt-2 pt-2 border-t border-slate-200">
+            <span>Total Deductions</span>
+            <span>−₹{Number(data.totalDeductions).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+          </div>
+        </div>
+      </div>
+      {/* Net */}
+      <div className="px-4 py-3 bg-white border-t border-slate-200 flex items-center justify-between">
+        <span className="text-sm font-semibold text-slate-700">Net Payable</span>
+        <span className="text-base font-bold text-brand-600">₹{Number(data.netPayable).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+      </div>
+      <p className="text-xs text-slate-400 px-4 pb-3">* Tentative estimate. Actual F&amp;F may vary based on final approvals.</p>
+    </div>
+  )
+}
+
 export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
   emp: any; isHR: boolean; isSuperAdmin: boolean; onSaved: () => void
 }) {
@@ -71,9 +143,29 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
     exitType:           emp.exitType          || 'RESIGNED',
     resignationDate:    emp.resignationDate?.slice(0, 10) || '',
     lastWorkingDay:     emp.lastWorkingDay?.slice(0, 10)  || '',
+    noticePeriodDays:   String(emp.noticePeriodDays || 90),
     noticePeriodServed: emp.noticePeriodServed || false,
     buyoutAmount:       emp.buyoutAmount       || '',
   })
+
+  // LWD panel state
+  const [lwdMode, setLwdMode]   = useState<'view' | 'edit'>('view')
+  const [previewLwd, setPreviewLwd] = useState(emp.lastWorkingDay?.slice(0, 10) || emp.expectedLwd?.slice(0, 10) || '')
+
+  // Sync previewLwd when exitData loads
+  useEffect(() => {
+    if (exitData) {
+      const lwd = exitData.lastWorkingDay?.slice(0, 10) || exitData.expectedLwd?.slice(0, 10) || ''
+      setPreviewLwd(lwd)
+      setDetails(p => ({
+        ...p,
+        exitType:        exitData.exitType         || p.exitType,
+        resignationDate: exitData.resignationDate?.slice(0, 10) || p.resignationDate,
+        lastWorkingDay:  lwd,
+        noticePeriodDays: String(exitData.noticePeriodDays || p.noticePeriodDays),
+      }))
+    }
+  }, [exitData])
 
   // Interview form
   const [interview, setInterview] = useState({
@@ -86,12 +178,27 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
     mutationFn: () => exitApi.updateDetails(emp.id, {
       exitType:          details.exitType,
       resignationDate:   details.resignationDate ? new Date(details.resignationDate).toISOString() : undefined,
-      lastWorkingDay:    details.lastWorkingDay  ? new Date(details.lastWorkingDay).toISOString()  : undefined,
       noticePeriodServed:details.noticePeriodServed,
       buyoutAmount:      details.buyoutAmount || undefined,
     }),
     onSuccess: () => { setSuccess('Exit details saved'); onSaved(); qc.invalidateQueries({ queryKey: ['exit', emp.id] }) },
     onError:   (e: any) => setError(e?.response?.data?.error || 'Save failed'),
+  })
+
+  const lwdMut = useMutation({
+    mutationFn: (payload: { lastWorkingDay: string; noticePeriodDays?: number }) =>
+      exitApi.updateDetails(emp.id, {
+        lastWorkingDay:  new Date(payload.lastWorkingDay).toISOString(),
+        noticePeriodDays: payload.noticePeriodDays,
+      }),
+    onSuccess: () => {
+      setSuccess('Last working day updated')
+      setLwdMode('view')
+      onSaved()
+      qc.invalidateQueries({ queryKey: ['exit', emp.id] })
+      qc.invalidateQueries({ queryKey: ['fnf-preview', emp.id] })
+    },
+    onError: (e: any) => setError(e?.response?.data?.error || 'Save failed'),
   })
 
   const clearanceMut = useMutation({
@@ -130,7 +237,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
 
   const convertLopMut = useMutation({
     mutationFn: (applicationId: string) => exitApi.convertLop(emp.id, applicationId),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ['exit', emp.id], queryKey2: ['lop-leaves', emp.id] } as any),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['exit', emp.id] } as any),
     onError:    (e: any) => setError(e?.response?.data?.error || 'Failed'),
   })
 
@@ -147,6 +254,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
   const iv       = ed?.exitInterview
   const allClear = cl?.itClearance && cl?.assetReturned && cl?.financeClearance && cl?.managerClearance
   const expectedLwd = ed?.expectedLwd || emp.expectedLwd
+  const confirmedLwd = ed?.lastWorkingDay || emp.lastWorkingDay
 
   return (
     <div className="space-y-6">
@@ -162,28 +270,24 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
               <div>
                 <p className="text-xs text-slate-400 mb-0.5">Submitted On</p>
                 <p className="text-sm font-medium text-slate-700">
-                  {new Date(ed.resignationSubmittedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {fmt(ed.resignationSubmittedAt)}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-400 mb-0.5">Expected LWD</p>
+                <p className="text-xs text-slate-400 mb-0.5">Last Working Day</p>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-slate-700">
-                    {expectedLwd ? new Date(expectedLwd).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                    {confirmedLwd ? fmt(confirmedLwd) : (expectedLwd ? fmt(expectedLwd) : '—')}
                   </p>
-                  {expectedLwd && emp.status === 'ON_NOTICE' && <DaysRemaining expectedLwd={expectedLwd} lastWorkingDay={ed?.lastWorkingDay || details.lastWorkingDay || undefined} />}
+                  {(confirmedLwd || expectedLwd) && emp.status === 'ON_NOTICE' && (
+                    <DaysRemaining expectedLwd={expectedLwd || confirmedLwd} lastWorkingDay={confirmedLwd || undefined} />
+                  )}
                 </div>
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-0.5">Notice Period</p>
                 <p className="text-sm font-medium text-slate-700">
-                  {(() => {
-                    const lwd = ed?.lastWorkingDay || details.lastWorkingDay || expectedLwd
-                    const start = ed?.resignationDate || ed?.resignationSubmittedAt
-                    if (!lwd || !start) return `${ed?.noticePeriodDays ?? 90} days`
-                    const days = Math.round((new Date(lwd).getTime() - new Date(start).getTime()) / (1000 * 60 * 60 * 24))
-                    return `${days} days`
-                  })()}
+                  {ed.noticePeriodDays ?? 90} days
                 </p>
               </div>
             </div>
@@ -203,7 +307,95 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
         </div>
       )}
 
-      {/* ── Section 2: Exit Details ────────────────────────────────────── */}
+      {/* ── Section 2: Last Working Day Management (HR/SA) ─────────────── */}
+      {isHR && emp.status === 'ON_NOTICE' && (
+        <div className="space-y-3 pt-2 border-t border-slate-100">
+          <SectionHeader icon={Calendar} title="Last Working Day" color="text-amber-600" bg="bg-amber-50" />
+
+          <div className="bg-white border border-slate-200 rounded-xl p-4">
+            {lwdMode === 'view' ? (
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">Confirmed Last Working Day</p>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {confirmedLwd ? fmt(confirmedLwd) : <span className="text-slate-400">Not yet confirmed</span>}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">Notice period: {ed?.noticePeriodDays ?? 90} days</p>
+                </div>
+                <Button variant="secondary" icon={<Calendar size={14} />} onClick={() => setLwdMode('edit')}>
+                  Change Last Working Day
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Last Working Day">
+                    <DatePicker
+                      value={previewLwd}
+                      onChange={v => {
+                        setPreviewLwd(v)
+                        // Auto-calc notice days from resignation date
+                        if (v && (ed?.resignationDate || emp.resignationDate)) {
+                          const resDate = new Date(ed?.resignationDate || emp.resignationDate)
+                          const lwdDate = new Date(v)
+                          const days = Math.round((lwdDate.getTime() - resDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                          setDetails(p => ({ ...p, lastWorkingDay: v, noticePeriodDays: String(Math.max(1, days)) }))
+                        } else {
+                          setDetails(p => ({ ...p, lastWorkingDay: v }))
+                        }
+                      }}
+                    />
+                  </Field>
+                  <Field label="Notice Period (days)">
+                    <input
+                      className={inp}
+                      type="number"
+                      min="1"
+                      value={details.noticePeriodDays}
+                      onChange={e => {
+                        const days = Number(e.target.value)
+                        setDetails(p => ({ ...p, noticePeriodDays: e.target.value }))
+                        // Recalc LWD from resignation date + notice days
+                        if (days > 0 && (ed?.resignationDate || emp.resignationDate)) {
+                          const resDate = new Date(ed?.resignationDate || emp.resignationDate)
+                          const newLwd = new Date(resDate)
+                          newLwd.setDate(newLwd.getDate() + days - 1)
+                          const v = newLwd.toISOString().slice(0, 10)
+                          setPreviewLwd(v)
+                          setDetails(p => ({ ...p, lastWorkingDay: v, noticePeriodDays: e.target.value }))
+                        }
+                      }}
+                    />
+                  </Field>
+                </div>
+                <div className="flex items-center gap-2 justify-end flex-wrap">
+                  <Button variant="ghost" onClick={() => setLwdMode('view')}>Cancel</Button>
+                  <Button
+                    icon={<Save size={14} />}
+                    loading={lwdMut.isPending}
+                    onClick={() => {
+                      setError(''); setSuccess('')
+                      lwdMut.mutate({
+                        lastWorkingDay:  details.lastWorkingDay || previewLwd,
+                        noticePeriodDays: Number(details.noticePeriodDays) || undefined,
+                      })
+                    }}
+                  >
+                    Confirm Last Working Day
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Tentative FnF always shown below LWD */}
+            {previewLwd && (
+              <TentativeFnfPanel empId={emp.id} lwdDate={previewLwd} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Section 3: Exit Details ────────────────────────────────────── */}
       <div className="space-y-3">
         <SectionHeader icon={FileCheck} title="Exit Details" />
 
@@ -217,10 +409,6 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
           <Field label="Resignation Date">
             <DatePicker value={details.resignationDate} disabled={!isHR}
               onChange={v => setDetails(p => ({ ...p, resignationDate: v }))} />
-          </Field>
-          <Field label="Last Working Day">
-            <DatePicker value={details.lastWorkingDay} disabled={!isHR}
-              onChange={v => setDetails(p => ({ ...p, lastWorkingDay: v }))} />
           </Field>
           <Field label="Notice Period Buyout (₹)">
             <input className={inp} type="number" placeholder="0" value={details.buyoutAmount} disabled={!isHR}
@@ -244,7 +432,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
         )}
       </div>
 
-      {/* ── Section 3: Exit Interview ──────────────────────────────────── */}
+      {/* ── Section 4: Exit Interview ──────────────────────────────────── */}
       <div className="space-y-3 pt-4 border-t border-slate-100">
         <SectionHeader icon={User} title="Exit Interview" color="text-violet-600" bg="bg-violet-50" />
 
@@ -282,7 +470,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
         )}
       </div>
 
-      {/* ── Section 4: Clearance Checklist ────────────────────────────── */}
+      {/* ── Section 5: Clearance Checklist ────────────────────────────── */}
       <div className="space-y-3 pt-4 border-t border-slate-100">
         <SectionHeader icon={CheckSquare} title="Clearance Checklist" color="text-emerald-600" bg="bg-emerald-50" />
 
@@ -316,7 +504,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
         )}
       </div>
 
-      {/* ── Section 5: F&F & Separation (Super Admin only) ─────────────── */}
+      {/* ── Section 6: F&F & Separation (Super Admin only) ─────────────── */}
       {isSuperAdmin && (
         <div className="space-y-3 pt-4 border-t border-slate-100">
           <SectionHeader icon={Shield} title="F&F & Final Separation" color="text-red-600" bg="bg-red-50" />
@@ -423,7 +611,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
         </div>
       )}
 
-      {/* ── Section 6: History ────────────────────────────────────────── */}
+      {/* ── Section 7: History ────────────────────────────────────────── */}
       {ed?.resignationHistory?.length > 0 && (
         <div className="space-y-3 pt-4 border-t border-slate-100">
           <SectionHeader icon={Clock} title="Activity Log" color="text-slate-500" bg="bg-slate-100" />

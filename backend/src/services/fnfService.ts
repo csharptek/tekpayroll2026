@@ -32,7 +32,7 @@ function daysBetween(start: Date, end: Date): number {
 
 function r2(n: number): number { return Math.round(n * 100) / 100 }
 
-export async function calculateFnf(employeeId: string): Promise<FnfCalculation> {
+export async function calculateFnf(employeeId: string, overrideLwd?: Date): Promise<FnfCalculation> {
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
     include: { loans: { where: { status: 'ACTIVE' } } },
@@ -40,9 +40,10 @@ export async function calculateFnf(employeeId: string): Promise<FnfCalculation> 
 
   if (!employee) throw new AppError('Employee not found', 404)
   if (!employee.resignationDate) throw new AppError('No resignation date set', 400)
-  if (!employee.lastWorkingDay)  throw new AppError('No last working day set', 400)
 
-  const lwd      = employee.lastWorkingDay
+  const lwd = overrideLwd || employee.lastWorkingDay || employee.expectedLwd
+  if (!lwd) throw new AppError('No last working day set', 400)
+
   const lwdMonth = lwd.getMonth()
   const lwdYear  = lwd.getFullYear()
 

@@ -447,17 +447,23 @@ export function getHyiSlab(month: number): 0 | 1 {
 export function shouldSuppressHyi(
   employeeStatus: string,
   lastWorkingDay: Date | null | undefined,
-  cycleStart: Date
+  cycleStart: Date,
+  resignationDate?: Date | null
 ): boolean {
   if (employeeStatus !== 'ON_NOTICE') return false
-  if (!lastWorkingDay) return false
+
+  // Use resignationDate slab for suppression decision.
+  // LWD can fall in the next slab (e.g. resign in June, LWD in July) —
+  // but HYI should still be suppressed based on when the resignation happened.
+  const referenceDate = resignationDate || lastWorkingDay
+  if (!referenceDate) return false
 
   const cycleSlab = getHyiSlab(cycleStart.getMonth())
-  const lwdSlab   = getHyiSlab(lastWorkingDay.getMonth())
-  const sameYear  = lastWorkingDay.getFullYear() === cycleStart.getFullYear()
+  const refSlab   = getHyiSlab(referenceDate.getMonth())
+  const sameYear  = referenceDate.getFullYear() === cycleStart.getFullYear()
 
-  // Suppress if LWD is in the same half-year slab as current cycle
-  return sameYear && cycleSlab === lwdSlab
+  // Suppress if resignation is in the same half-year slab as current cycle
+  return sameYear && cycleSlab === refSlab
 }
 
 // ─── FULL CALCULATION ────────────────────────────────────────────────────────
@@ -539,11 +545,12 @@ export async function calculatePayrollForEmployee(params: {
   // Callers may pass salaryInput directly (legacy) or we derive it from revisions
   let salaryInput = params.salaryInput
 
-  // HYI suppression: zero out hyiMonthly for ON_NOTICE employees in LWD slab
+  // HYI suppression: zero out hyiMonthly for ON_NOTICE employees — based on resignation slab
   const suppressHyi = shouldSuppressHyi(
     params.employeeStatus || 'ACTIVE',
     params.lastWorkingDay,
-    params.cycleStart
+    params.cycleStart,
+    params.resignationDate
   )
 
   let salary: SalaryStructure

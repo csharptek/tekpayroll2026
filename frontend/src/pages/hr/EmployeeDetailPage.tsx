@@ -5,7 +5,7 @@ import {
   ArrowLeft, User, Briefcase, DollarSign, Phone, GraduationCap,
   Building2, CreditCard, FileText, LogOut, UserMinus, X, UserCheck, Eye, EyeOff,
 } from 'lucide-react'
-import { employeeApi, exitApi, payslipApi } from '../../services/api'
+import { employeeApi, exitApi, payslipApi, payrollApi } from '../../services/api'
 import { PageHeader, Button, Alert, Skeleton, StatusBadge } from '../../components/ui'
 import { useAuthStore } from '../../store/authStore'
 import PersonalTab    from '../../components/employee-profile/PersonalTab'
@@ -428,46 +428,81 @@ function PayslipPasswordPanel({ empId }: { empId: string }) {
 function SkipPayrollPanel({ emp }: { emp: any }) {
   const qc = useQueryClient()
   const [msg, setMsg] = useState<string | null>(null)
+  const [reason, setReason] = useState('')
 
-  const { mutate: toggle, isPending: toggling } = useMutation({
-    mutationFn: (skip: boolean) => employeeApi.setSkipPayroll(emp.id, skip),
-    onSuccess: (_, skip) => {
-      setMsg(skip ? 'Payroll processing skipped for this employee.' : 'Payroll processing re-enabled.')
-      qc.invalidateQueries({ queryKey: ['employee-full', emp.id] })
-    },
-    onError: () => setMsg('Failed to update.'),
+  const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
+
+  const { data: skipsData, isLoading: loadingSkips } = useQuery({
+    queryKey: ['payroll-skips-emp', emp.id, currentMonth],
+    queryFn: () => payrollApi.getSkips(currentMonth).then(r => r.data.data as any[]),
   })
 
-  const skipped = emp.skipPayroll
+  const existingSkip = skipsData?.find((s: any) => s.employeeId === emp.id)
+  const skipped = !!existingSkip
+
+  const { mutate: addSkip, isPending: adding } = useMutation({
+    mutationFn: () => payrollApi.addSkip({ employeeId: emp.id, payrollMonth: currentMonth, reason: reason || undefined }),
+    onSuccess: () => {
+      setMsg(`Payroll skipped for ${currentMonth}.`)
+      setReason('')
+      qc.invalidateQueries({ queryKey: ['payroll-skips-emp', emp.id, currentMonth] })
+    },
+    onError: () => setMsg('Failed to skip payroll.'),
+  })
+
+  const { mutate: removeSkip, isPending: removing } = useMutation({
+    mutationFn: () => payrollApi.removeSkip(existingSkip!.id),
+    onSuccess: () => {
+      setMsg(`Payroll re-enabled for ${currentMonth}.`)
+      qc.invalidateQueries({ queryKey: ['payroll-skips-emp', emp.id, currentMonth] })
+    },
+    onError: () => setMsg('Failed to re-enable payroll.'),
+  })
+
+  const busy = adding || removing || loadingSkips
 
   return (
     <div className="mt-5 border border-slate-200 rounded-xl bg-white p-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-slate-800">Payroll Processing</p>
           <p className="text-xs text-slate-500 mt-0.5">
+            Month: <span className="font-medium">{currentMonth}</span>
+            {skipped && existingSkip?.reason && (
+              <span className="ml-2 text-amber-600">Reason: {existingSkip.reason}</span>
+            )}
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">
             {skipped
-              ? 'This employee is excluded from payroll runs, preview, PF reports, and dashboard totals.'
-              : 'This employee is included in payroll runs normally.'}
+              ? 'Excluded from payroll run, preview, PF reports, and dashboard totals.'
+              : 'Included in payroll runs normally.'}
           </p>
           {msg && <p className="text-xs text-blue-600 mt-1">{msg}</p>}
+          {!skipped && (
+            <input
+              className="mt-2 w-full max-w-xs text-xs border border-slate-200 rounded px-2 py-1 text-slate-700"
+              placeholder="Reason (optional)"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+            />
+          )}
         </div>
         <div>
           {skipped ? (
             <button
-              onClick={() => toggle(false)}
-              disabled={toggling}
+              onClick={() => removeSkip()}
+              disabled={busy}
               className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40"
             >
-              {toggling ? 'Updating…' : 'Re-enable Payroll'}
+              {removing ? 'Updating…' : 'Re-enable Payroll'}
             </button>
           ) : (
             <button
-              onClick={() => toggle(true)}
-              disabled={toggling}
+              onClick={() => addSkip()}
+              disabled={busy}
               className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-40"
             >
-              {toggling ? 'Updating…' : 'Skip Payroll'}
+              {adding ? 'Skipping…' : 'Skip Payroll'}
             </button>
           )}
         </div>
