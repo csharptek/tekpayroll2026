@@ -78,7 +78,7 @@ function TentativeFnfPanel({ empId, lwdDate }: { empId: string; lwdDate: string 
       <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 bg-white">
         <IndianRupee size={13} className="text-brand-600" />
         <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Tentative F&amp;F Calculation</p>
-        <span className="ml-auto text-xs text-slate-400">LWD: {fmt(lwdDate)} · {data.salaryDays} days salary</span>
+        <span className="ml-auto text-xs text-slate-400">LWD: {fmt(lwdDate)} · {data.salaryDays} days total salary</span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
         {/* Additions */}
