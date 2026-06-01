@@ -141,6 +141,7 @@ export default function PayrollCyclesPage() {
             action={<Button size="sm" icon={<Plus size={13} />} onClick={() => setNewOpen(true)}>Create First Cycle</Button>}
           />
         ) : (
+          <Table>
           <thead>
             <tr className="border-b border-slate-100">
               <Th>Month</Th>
