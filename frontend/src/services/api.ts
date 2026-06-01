@@ -158,6 +158,8 @@ export const reimbursementApi = {
 export const payslipApi = {
   forEmployee: (employeeId: string) => api.get(`/api/payslips/employee/${employeeId}`),
   generate: (cycleId: string) => api.post(`/api/payslips/generate/${cycleId}`),
+  emailOne: (payslipId: string) => api.post(`/api/payslips/email/${payslipId}`),
+  emailAll: (cycleId: string) => api.post(`/api/payslips/email-all/${cycleId}`),
   // Payslip password
   passwordStatus: () => api.get('/api/employees/my/payslip-password-status'),
   verifyPassword: (password: string) => api.post('/api/employees/my/verify-payslip-password', { password }),

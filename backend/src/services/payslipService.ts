@@ -11,7 +11,7 @@ async function generatePDF(html: string): Promise<Buffer> {
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     })
     const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle0' })
+    await page.setContent(html, { waitUntil: 'networkidle2', timeout: 15000 })
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -62,7 +62,7 @@ export async function deleteFromAzureBlob(blobName: string): Promise<void> {
 
 // ─── EMAIL ───────────────────────────────────────────────────────────────────
 
-async function sendPayslipEmail(
+export async function sendPayslipEmail(
   toEmail: string,
   employeeName: string,
   payrollMonth: string,
@@ -111,7 +111,7 @@ async function sendPayslipEmail(
   })
 }
 
-// ─── MAIN ─────────────────────────────────────────────────────────────────────
+// ─── MAIN — GENERATE ONLY (no auto-email) ────────────────────────────────────
 
 export async function generateAndDeliverPayslips(
   cycleId: string,
@@ -154,7 +154,6 @@ export async function generateAndDeliverPayslips(
         }
       } catch { /* leave module not yet set up — skip */ }
 
-      // Fetch approved reimbursements for this entry's cycle+employee (for per-line rendering).
       const reimbItems = await prisma.reimbursement.findMany({
         where:  { cycleId: entry.cycleId, employeeId: entry.employeeId, status: { in: ['APPROVED', 'PAID'] } },
         select: { payslipLabel: true, category: true, amount: true },
@@ -168,13 +167,12 @@ export async function generateAndDeliverPayslips(
       const html      = generatePayslipHTML(entry as any, leaveBalance, reimbLines)
       const pdfBuffer = await generatePDF(html)
 
-      // Blob path: payslips/2025-04/CST-001/payslip-CST-001-2025-04.pdf
       const filename = `payslip-${entry.employee.employeeCode}-${cycle.payrollMonth}.pdf`
       const blobName = `payslips/${cycle.payrollMonth}/${entry.employee.employeeCode}/${filename}`
 
       const pdfUrl = await uploadToAzureBlob(pdfBuffer, blobName)
 
-      const payslip = await prisma.payslip.upsert({
+      await prisma.payslip.upsert({
         where:  { entryId: entry.id },
         create: {
           cycleId, employeeId: entry.employeeId, entryId: entry.id,
@@ -184,16 +182,6 @@ export async function generateAndDeliverPayslips(
           pdfUrl, pdfKey: blobName, status: 'GENERATED',
           generatedAt: new Date(), version: { increment: 1 }, regeneratedAt: new Date(),
         },
-      })
-
-      await sendPayslipEmail(
-        entry.employee.email, entry.employee.name,
-        cycle.payrollMonth, pdfBuffer, filename, pdfUrl
-      )
-
-      await prisma.payslip.update({
-        where: { id: payslip.id },
-        data:  { status: 'EMAILED', emailedAt: new Date(), emailStatus: 'delivered' },
       })
 
       success++
@@ -214,4 +202,58 @@ export async function generateAndDeliverPayslips(
 
   console.log(`[PAYSLIP] Complete — ${success} success, ${failed} failed`)
   return { success, failed, errors }
+}
+
+// ─── EMAIL SINGLE PAYSLIP ────────────────────────────────────────────────────
+
+export async function emailSinglePayslip(payslipId: string): Promise<void> {
+  const payslip = await prisma.payslip.findUnique({
+    where: { id: payslipId },
+    include: {
+      employee: true,
+      cycle: true,
+      entry: true,
+    },
+  })
+  if (!payslip) throw new Error('Payslip not found')
+  if (!payslip.pdfUrl || !payslip.pdfKey) throw new Error('PDF not yet generated')
+
+  // Download from blob to get buffer for attachment
+  const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING
+  let pdfBuffer: Buffer
+
+  if (!connectionString || connectionString === 'PLACEHOLDER') {
+    pdfBuffer = Buffer.from('dev-pdf')
+  } else {
+    const { BlobServiceClient } = await import('@azure/storage-blob')
+    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString)
+    const containerClient = blobServiceClient.getContainerClient(
+      process.env.AZURE_STORAGE_CONTAINER || 'payslips'
+    )
+    const blobClient = containerClient.getBlobClient(payslip.pdfKey)
+    const download = await blobClient.download()
+    const chunks: Buffer[] = []
+    for await (const chunk of download.readableStreamBody as any) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    }
+    pdfBuffer = Buffer.concat(chunks)
+  }
+
+  const filename = `payslip-${payslip.employee.employeeCode}-${payslip.cycle.payrollMonth}.pdf`
+
+  await sendPayslipEmail(
+    payslip.employee.email,
+    payslip.employee.name,
+    payslip.cycle.payrollMonth,
+    pdfBuffer,
+    filename,
+    payslip.pdfUrl
+  )
+
+  await prisma.payslip.update({
+    where: { id: payslipId },
+    data: { status: 'EMAILED', emailedAt: new Date(), emailStatus: 'delivered' },
+  })
+
+  console.log(`[PAYSLIP EMAIL] ✓ ${payslip.employee.name} — ${payslip.cycle.payrollMonth}`)
 }

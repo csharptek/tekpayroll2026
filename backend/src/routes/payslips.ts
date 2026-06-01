@@ -4,14 +4,13 @@ import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
 import { AuditAction } from '@prisma/client'
-import { generateAndDeliverPayslips } from '../services/payslipService'
+import { generateAndDeliverPayslips, emailSinglePayslip } from '../services/payslipService'
 
 export const payslipRouter = Router()
 payslipRouter.use(authenticate)
 
 // GET payslips for a specific employee (self-service + HR)
 payslipRouter.get('/employee/:employeeId', async (req, res) => {
-  // Employees can only view their own
   if (req.user!.role === 'EMPLOYEE' && req.user!.id !== req.params.employeeId) {
     throw new AppError('Access denied', 403)
   }
@@ -35,7 +34,6 @@ payslipRouter.get('/:id', async (req, res) => {
   })
   if (!payslip) throw new AppError('Payslip not found', 404)
 
-  // Employees can only access their own
   if (req.user!.role === 'EMPLOYEE' && req.user!.id !== payslip.employeeId) {
     throw new AppError('Access denied', 403)
   }
@@ -43,10 +41,10 @@ payslipRouter.get('/:id', async (req, res) => {
   res.json({ success: true, data: payslip })
 })
 
-// POST generate payslips for a cycle (HR only)
+// POST generate payslips for a cycle (no auto-email)
 payslipRouter.post('/generate/:cycleId', requireSuperAdmin, async (req, res) => {
   const { cycleId } = req.params
-  const { employeeIds } = req.body // optional — generate for specific employees only
+  const { employeeIds } = req.body
 
   const cycle = await prisma.payrollCycle.findUnique({ where: { id: cycleId } })
   if (!cycle) throw new AppError('Payroll cycle not found', 404)
@@ -55,8 +53,6 @@ payslipRouter.post('/generate/:cycleId', requireSuperAdmin, async (req, res) => 
     throw new AppError('Payroll must be calculated before generating payslips', 400)
   }
 
-  // Run generation (async — responds immediately with job started)
-  // For small teams we do it synchronously; for large teams queue it
   const result = await generateAndDeliverPayslips(cycleId, employeeIds)
 
   await createAuditLog({
@@ -68,15 +64,11 @@ payslipRouter.post('/generate/:cycleId', requireSuperAdmin, async (req, res) => 
 
   res.json({
     success: true,
-    data: {
-      cycleId,
-      payrollMonth: cycle.payrollMonth,
-      ...result,
-    },
+    data: { cycleId, payrollMonth: cycle.payrollMonth, ...result },
   })
 })
 
-// POST regenerate single payslip (HR only)
+// POST regenerate single payslip
 payslipRouter.post('/regenerate/:entryId', requireSuperAdmin, async (req, res) => {
   const entry = await prisma.payrollEntry.findUnique({ where: { id: req.params.entryId } })
   if (!entry) throw new AppError('Payroll entry not found', 404)
@@ -86,6 +78,41 @@ payslipRouter.post('/regenerate/:entryId', requireSuperAdmin, async (req, res) =
   res.json({
     success: true,
     data: result,
-    message: result.failed > 0 ? 'Regeneration failed' : 'Payslip regenerated and emailed',
+    message: result.failed > 0 ? 'Regeneration failed' : 'Payslip regenerated successfully',
   })
+})
+
+// POST email single payslip
+payslipRouter.post('/email/:payslipId', requireSuperAdmin, async (req, res) => {
+  const { payslipId } = req.params
+
+  await emailSinglePayslip(payslipId)
+
+  res.json({ success: true, message: 'Payslip emailed successfully' })
+})
+
+// POST email all payslips for a cycle
+payslipRouter.post('/email-all/:cycleId', requireSuperAdmin, async (req, res) => {
+  const { cycleId } = req.params
+
+  const payslips = await prisma.payslip.findMany({
+    where: { cycleId, status: 'GENERATED' },
+    select: { id: true },
+  })
+
+  let success = 0
+  let failed = 0
+  const errors: { id: string; error: string }[] = []
+
+  for (const ps of payslips) {
+    try {
+      await emailSinglePayslip(ps.id)
+      success++
+    } catch (err: any) {
+      failed++
+      errors.push({ id: ps.id, error: err.message })
+    }
+  }
+
+  res.json({ success: true, data: { success, failed, errors } })
 })
