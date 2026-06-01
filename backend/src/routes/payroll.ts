@@ -96,6 +96,22 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
   )
 
   const activeEmployees = employees.filter(e => !skippedIds.has(e.id))
+  const activeIds = new Set(activeEmployees.map(e => e.id))
+
+  // On re-run: remove entries for employees who are now separated/inactive
+  // (they were active when payroll first ran but status changed since)
+  const existingEntries = await prisma.payrollEntry.findMany({
+    where:  { cycleId: cycle.id },
+    select: { employeeId: true },
+  })
+  const staleIds = existingEntries
+    .map(e => e.employeeId)
+    .filter(id => !activeIds.has(id) && !skippedIds.has(id))
+  if (staleIds.length > 0) {
+    await prisma.payrollEntry.deleteMany({
+      where: { cycleId: cycle.id, employeeId: { in: staleIds } },
+    })
+  }
 
   // Remove any existing entries for skipped employees (in case of re-run)
   if (skippedIds.size > 0) {
