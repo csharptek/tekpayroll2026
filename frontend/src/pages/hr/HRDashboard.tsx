@@ -307,95 +307,59 @@ function SuperAdminDashboard({
         />
       </div>
 
-      {/* Row 2 — PF & ESI combined cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Row 2 — PF & ESI compact inline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* PF Card */}
-        <div className="card p-5">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <p className="stat-label">Provident Fund (PF)</p>
-              {loadingSalarySummary
-                ? <div className="h-8 w-32 bg-slate-100 animate-pulse rounded-lg mt-1" />
-                : <p className="stat-value mt-1">{salarySummary?.totalEmployeePf != null ? fmt(Number(salarySummary.totalEmployeePf) + Number(salarySummary.totalEmployerPf)) : '—'}</p>
-              }
-              <p className="stat-sub mt-0.5">Total remittance to Govt</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-purple-50">
-              <span className="text-purple-500"><TrendingUp size={18} /></span>
-            </div>
+        <div className="card px-4 py-3 flex items-center gap-4">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-50 flex-shrink-0">
+            <span className="text-purple-500"><TrendingUp size={15} /></span>
           </div>
-          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100">
-            <div>
-              <p className="text-xs text-slate-400 mb-0.5">Employee PF</p>
-              {loadingSalarySummary
-                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
-                : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployeePf != null ? fmt(salarySummary.totalEmployeePf) : '—'}</p>
-              }
-              <p className="text-xs text-slate-400">Deducted from salary</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 mb-0.5">Employer PF</p>
-              {loadingSalarySummary
-                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
-                : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployerPf != null ? fmt(salarySummary.totalEmployerPf) : '—'}</p>
-              }
-              <p className="text-xs text-slate-400">Company contribution</p>
-            </div>
-            <div>
-              <p className="text-xs text-blue-500 mb-0.5">Total to Govt</p>
-              {loadingSalarySummary
-                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
-                : <p className="text-sm font-bold text-blue-700">{salarySummary?.totalEmployeePf != null ? fmt(Number(salarySummary.totalEmployeePf) + Number(salarySummary.totalEmployerPf)) : '—'}</p>
-              }
-              <p className="text-xs text-slate-400">Employee + Employer</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Provident Fund (PF)</p>
+            <div className="flex items-center gap-5 flex-wrap">
+              <div>
+                <p className="text-xs text-slate-400">Employee</p>
+                {loadingSalarySummary ? <div className="h-4 w-14 bg-slate-100 animate-pulse rounded mt-0.5" /> : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployeePf != null ? fmt(salarySummary.totalEmployeePf) : '—'}</p>}
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Employer</p>
+                {loadingSalarySummary ? <div className="h-4 w-14 bg-slate-100 animate-pulse rounded mt-0.5" /> : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployerPf != null ? fmt(salarySummary.totalEmployerPf) : '—'}</p>}
+              </div>
+              <div className="border-l border-slate-200 pl-4">
+                <p className="text-xs text-purple-500 font-medium">Total to Govt</p>
+                {loadingSalarySummary ? <div className="h-4 w-16 bg-slate-100 animate-pulse rounded mt-0.5" /> : <p className="text-sm font-bold text-purple-700">{salarySummary?.totalEmployeePf != null ? fmt(Number(salarySummary.totalEmployeePf) + Number(salarySummary.totalEmployerPf)) : '—'}</p>}
+              </div>
             </div>
           </div>
         </div>
 
         {/* ESI Card */}
-        <div className="card p-5">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <p className="stat-label">Employee State Insurance (ESI)</p>
-              {loadingSalarySummary
-                ? <div className="h-8 w-32 bg-slate-100 animate-pulse rounded-lg mt-1" />
-                : <p className="stat-value mt-1">{salarySummary?.totalEmployeeEsi != null ? fmt(Number(salarySummary.totalEmployeeEsi) + Number(salarySummary.totalEmployerEsi)) : '—'}</p>
-              }
-              <p className="stat-sub mt-0.5">Total remittance to Govt</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-50">
-              <span className="text-emerald-500"><TrendingUp size={18} /></span>
-            </div>
+        <div className="card px-4 py-3 flex items-center gap-4">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-50 flex-shrink-0">
+            <span className="text-emerald-500"><TrendingUp size={15} /></span>
           </div>
-          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100">
-            <div>
-              <p className="text-xs text-slate-400 mb-0.5">Employee ESI</p>
-              {loadingSalarySummary
-                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
-                : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployeeEsi != null ? fmt(salarySummary.totalEmployeeEsi) : '—'}</p>
-              }
-              <p className="text-xs text-slate-400">Deducted from salary</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 mb-0.5">Employer ESI</p>
-              {loadingSalarySummary
-                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
-                : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployerEsi != null ? fmt(salarySummary.totalEmployerEsi) : '—'}</p>
-              }
-              <p className="text-xs text-slate-400">Company contribution</p>
-            </div>
-            <div>
-              <p className="text-xs text-blue-500 mb-0.5">Total to Govt</p>
-              {loadingSalarySummary
-                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
-                : <p className="text-sm font-bold text-blue-700">{salarySummary?.totalEmployeeEsi != null ? fmt(Number(salarySummary.totalEmployeeEsi) + Number(salarySummary.totalEmployerEsi)) : '—'}</p>
-              }
-              <p className="text-xs text-slate-400">Employee + Employer</p>
-            </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">ESI</p>
+            {(salarySummary?.totalEmployeeEsi === 0 || salarySummary?.totalEmployeeEsi == null) && !loadingSalarySummary
+              ? <p className="text-xs text-slate-400 italic">No ESI applicable this cycle</p>
+              : (
+                <div className="flex items-center gap-5 flex-wrap">
+                  <div>
+                    <p className="text-xs text-slate-400">Employee</p>
+                    {loadingSalarySummary ? <div className="h-4 w-14 bg-slate-100 animate-pulse rounded mt-0.5" /> : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployeeEsi != null ? fmt(salarySummary.totalEmployeeEsi) : '—'}</p>}
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Employer</p>
+                    {loadingSalarySummary ? <div className="h-4 w-14 bg-slate-100 animate-pulse rounded mt-0.5" /> : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployerEsi != null ? fmt(salarySummary.totalEmployerEsi) : '—'}</p>}
+                  </div>
+                  <div className="border-l border-slate-200 pl-4">
+                    <p className="text-xs text-emerald-500 font-medium">Total to Govt</p>
+                    {loadingSalarySummary ? <div className="h-4 w-16 bg-slate-100 animate-pulse rounded mt-0.5" /> : <p className="text-sm font-bold text-emerald-700">{salarySummary?.totalEmployeeEsi != null ? fmt(Number(salarySummary.totalEmployeeEsi) + Number(salarySummary.totalEmployerEsi)) : '—'}</p>}
+                  </div>
+                </div>
+              )
+            }
           </div>
-          {(salarySummary?.totalEmployeeEsi === 0 || salarySummary?.totalEmployeeEsi == null) && !loadingSalarySummary && (
-            <p className="text-xs text-slate-400 mt-3 italic">No ESI applicable this cycle</p>
-          )}
         </div>
       </div>
 
