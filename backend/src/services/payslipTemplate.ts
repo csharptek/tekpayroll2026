@@ -21,7 +21,7 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
   const monthly   = Number(entry.monthlyCtc)
   const basic     = Number(entry.basic)
   const hra       = Number(entry.hra)
-  const transport  = Number((entry as any).transport || 0)
+  const transport = Number((entry as any).transport || 0)
   const fbp       = Number((entry as any).fbp || 0)
   const hyi       = Number((entry as any).hyi || 0)
   const gross     = Number((entry as any).proratedGross)
@@ -36,6 +36,20 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
   const incRec    = Number(entry.incentiveRecovery)
   const net       = Number(entry.netSalary)
 
+  // Prorate each component proportionally when isProrated
+  const ratio = entry.isProrated && Number(entry.totalDays) > 0
+    ? Number(entry.payableDays) / Number(entry.totalDays)
+    : 1
+
+  const r2 = (n: number) => Math.round(n * 100) / 100
+
+  const basicProrated     = r2(basic     * ratio)
+  const hraProrated       = r2(hra       * ratio)
+  const transportProrated = r2(transport * ratio)
+  const fbpProrated       = r2(fbp       * ratio)
+  const hyiProrated       = r2(hyi       * ratio)
+
+  // Use proratedGross as total earnings (source of truth from payroll engine)
   const totalEarnings  = gross + incentive + reimb
   const totalDeductions = pf + esi + pt + tds + lop + loan + incRec
 
@@ -43,19 +57,22 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
 
   const isTrainee = Boolean((emp as any).isTrainee)
 
+  const proratedLabel = entry.isProrated ? ` (${entry.payableDays}/${entry.totalDays} days)` : ''
+
   const earningsRows = isTrainee
     ? [
-        { label: `Stipend${entry.isProrated ? ` (${entry.payableDays}/${entry.totalDays} days)` : ''}`, amount: gross },
+        { label: `Stipend${proratedLabel}`, amount: gross },
         ...(reimbLines && reimbLines.length
           ? reimbLines.map(l => ({ label: l.label, amount: l.amount }))
           : (reimb > 0 ? [{ label: 'Reimbursements', amount: reimb }] : [])),
       ]
     : [
-        { label: `Basic Salary${entry.isProrated ? ` (${entry.payableDays}/${entry.totalDays} days)` : ''}`, amount: gross },
-        { label: 'Transportation', amount: transport },
-        { label: 'FBP', amount: fbp },
-        { label: 'HYI / Special Allowance', amount: hyi },
-        ...(incentive > 0 ? [{ label: 'Monthly Incentive', amount: incentive }] : []),
+        { label: `Basic Salary${proratedLabel}`, amount: basicProrated },
+        { label: `HRA${proratedLabel}`,          amount: hraProrated },
+        ...(transportProrated > 0 ? [{ label: 'Transportation', amount: transportProrated }] : []),
+        ...(fbpProrated       > 0 ? [{ label: 'FBP',            amount: fbpProrated       }] : []),
+        ...(hyiProrated       > 0 ? [{ label: 'HYI / Special Allowance', amount: hyiProrated }] : []),
+        ...(incentive         > 0 ? [{ label: 'Monthly Incentive',       amount: incentive  }] : []),
         ...(reimbLines && reimbLines.length
           ? reimbLines.map(l => ({ label: l.label, amount: l.amount }))
           : (reimb > 0 ? [{ label: 'Reimbursements', amount: reimb }] : [])),

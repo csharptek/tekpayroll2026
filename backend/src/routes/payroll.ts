@@ -121,7 +121,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
   }
 
   const results: any[] = []
-  let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0
+  let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0, totalEmployerPf = 0, totalEmployerEsi = 0
 
   for (const emp of activeEmployees) {
     try {
@@ -184,7 +184,9 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
           lopDays:           lopEntry?.lopDays || 0,
           lopAmount:         calc.deductions.lop,
           pfAmount:          calc.deductions.pf,
+          employerPfAmount:  calc.salary.employerPfMonthly,
           esiAmount:         calc.deductions.esi,
+          employerEsiAmount: calc.salary.employerEsiMonthly,
           ptAmount:          calc.deductions.pt,
           tdsAmount:         calc.deductions.tds,
           incentiveRecovery: calc.deductions.incentiveRecovery,
@@ -211,7 +213,9 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
           lopDays:           lopEntry?.lopDays || 0,
           lopAmount:         calc.deductions.lop,
           pfAmount:          calc.deductions.pf,
+          employerPfAmount:  calc.salary.employerPfMonthly,
           esiAmount:         calc.deductions.esi,
+          employerEsiAmount: calc.salary.employerEsiMonthly,
           ptAmount:          calc.deductions.pt,
           tdsAmount:         calc.deductions.tds,
           incentiveRecovery: calc.deductions.incentiveRecovery,
@@ -221,10 +225,12 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         },
       })
 
-      totalGross += s.grandTotalMonthly
-      totalNet   += calc.netSalary
-      totalPf    += calc.deductions.pf
-      totalEsi   += calc.deductions.esi
+      totalGross       += s.grandTotalMonthly
+      totalNet         += calc.netSalary
+      totalPf          += calc.deductions.pf
+      totalEmployerPf  += calc.salary.employerPfMonthly
+      totalEsi         += calc.deductions.esi
+      totalEmployerEsi += calc.salary.employerEsiMonthly
       results.push({ employeeId: emp.id, name: emp.name, netSalary: calc.netSalary, status: 'ok' })
     } catch (err: any) {
       results.push({ employeeId: emp.id, name: emp.name, status: 'error', error: err.message })
@@ -240,7 +246,9 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
       totalGross,
       totalNet,
       totalPf,
+      totalEmployerPf,
       totalEsi,
+      totalEmployerEsi,
       employeeCount: activeEmployees.length,
     },
   })
@@ -582,8 +590,10 @@ payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
     data: {
       totalGross: allEntries.reduce((s, e) => s + Number(e.grossSalary), 0),
       totalNet:   allEntries.reduce((s, e) => s + Number(e.netSalary),   0),
-      totalPf:    allEntries.reduce((s, e) => s + Number(e.pfAmount),    0),
-      totalEsi:   allEntries.reduce((s, e) => s + Number(e.esiAmount),   0),
+      totalPf:             allEntries.reduce((s, e) => s + Number(e.pfAmount),           0),
+      totalEmployerPf:     allEntries.reduce((s, e) => s + Number((e as any).employerPfAmount  || 0), 0),
+      totalEsi:            allEntries.reduce((s, e) => s + Number(e.esiAmount),          0),
+      totalEmployerEsi:    allEntries.reduce((s, e) => s + Number((e as any).employerEsiAmount || 0), 0),
     },
   })
 

@@ -428,7 +428,9 @@ export async function getSalaryInputForDate(
     tdsMonthly:       Number((emp as any).tdsMonthly       ?? 0),
   }
 
-  if (!revision) return base
+  // skipSnapshot (snapshot regen) → read pure Employee record, ignore revision override.
+  // Employee.annualCtc is always written on every CTC change, so it is the current truth.
+  if (!revision || skipSnapshot) return base
 
   return {
     ...base,

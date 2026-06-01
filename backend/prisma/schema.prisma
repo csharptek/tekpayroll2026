@@ -334,11 +334,13 @@ model PayrollCycle {
   runAt         DateTime?
   runBy         String?
 
-  totalGross    Decimal?      @db.Decimal(14, 2)
-  totalNet      Decimal?      @db.Decimal(14, 2)
-  totalPf       Decimal?      @db.Decimal(14, 2)
-  totalEsi      Decimal?      @db.Decimal(14, 2)
-  employeeCount Int?
+  totalGross       Decimal?      @db.Decimal(14, 2)
+  totalNet         Decimal?      @db.Decimal(14, 2)
+  totalPf          Decimal?      @db.Decimal(14, 2)   // employee PF total
+  totalEmployerPf  Decimal?      @db.Decimal(14, 2)   // employer PF total
+  totalEsi         Decimal?      @db.Decimal(14, 2)   // employee ESI total
+  totalEmployerEsi Decimal?      @db.Decimal(14, 2)   // employer ESI total
+  employeeCount    Int?
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -386,8 +388,10 @@ model PayrollEntry {
   // Deductions
   lopDays         Int                @default(0)
   lopAmount       Decimal            @default(0) @db.Decimal(12, 2)
-  pfAmount        Decimal            @default(0) @db.Decimal(12, 2)
-  esiAmount       Decimal            @default(0) @db.Decimal(12, 2)
+  pfAmount        Decimal            @default(0) @db.Decimal(12, 2)   // employee PF
+  employerPfAmount  Decimal          @default(0) @db.Decimal(12, 2)   // employer PF (inside CTC)
+  esiAmount       Decimal            @default(0) @db.Decimal(12, 2)   // employee ESI
+  employerEsiAmount Decimal          @default(0) @db.Decimal(12, 2)   // employer ESI (inside CTC)
   ptAmount        Decimal            @default(0) @db.Decimal(12, 2)
   tdsAmount       Decimal            @default(0) @db.Decimal(12, 2)
   incentiveRecovery Decimal          @default(0) @db.Decimal(12, 2)

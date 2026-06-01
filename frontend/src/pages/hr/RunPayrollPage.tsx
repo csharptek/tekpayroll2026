@@ -139,16 +139,51 @@ export default function RunPayrollPage() {
             </div>
             <div className="flex flex-wrap gap-4">
               {[
-                { label: 'Employees',   value: cycle?.employeeCount ?? entries.length },
-                { label: 'Total Gross', value: cycle?.totalGross ? <Rupee amount={cycle.totalGross} /> : '—' },
-                { label: 'Total Net',   value: cycle?.totalNet   ? <Rupee amount={cycle.totalNet} />   : '—' },
-                { label: 'Total PF',    value: cycle?.totalPf    ? <Rupee amount={cycle.totalPf} />    : '—' },
+                { label: 'Employees',        value: cycle?.employeeCount ?? entries.length },
+                { label: 'Total Gross',      value: cycle?.totalGross ? <Rupee amount={cycle.totalGross} /> : '—' },
+                { label: 'Total Net',        value: cycle?.totalNet   ? <Rupee amount={cycle.totalNet} />   : '—' },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <p className="text-xs text-slate-400">{label}</p>
                   <p className="text-sm font-bold text-slate-800">{value}</p>
                 </div>
               ))}
+              {/* PF breakdown */}
+              <div className="border-l border-slate-200 pl-4 flex gap-4">
+                <div>
+                  <p className="text-xs text-slate-400">Employee PF</p>
+                  <p className="text-sm font-bold text-slate-800">{cycle?.totalPf ? <Rupee amount={cycle.totalPf} /> : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Employer PF</p>
+                  <p className="text-sm font-bold text-slate-800">{cycle?.totalEmployerPf ? <Rupee amount={cycle.totalEmployerPf} /> : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-blue-600">Total PF to Govt</p>
+                  <p className="text-sm font-bold text-blue-700">
+                    {cycle?.totalPf ? <Rupee amount={Number(cycle.totalPf) + Number(cycle.totalEmployerPf || 0)} /> : '—'}
+                  </p>
+                </div>
+              </div>
+              {/* ESI breakdown — only show if any ESI exists */}
+              {(Number(cycle?.totalEsi || 0) > 0 || Number(cycle?.totalEmployerEsi || 0) > 0) && (
+                <div className="border-l border-slate-200 pl-4 flex gap-4">
+                  <div>
+                    <p className="text-xs text-slate-400">Employee ESI</p>
+                    <p className="text-sm font-bold text-slate-800">{cycle?.totalEsi ? <Rupee amount={cycle.totalEsi} /> : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Employer ESI</p>
+                    <p className="text-sm font-bold text-slate-800">{cycle?.totalEmployerEsi ? <Rupee amount={cycle.totalEmployerEsi} /> : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-600">Total ESI to Govt</p>
+                    <p className="text-sm font-bold text-blue-700">
+                      <Rupee amount={Number(cycle?.totalEsi || 0) + Number(cycle?.totalEmployerEsi || 0)} />
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
