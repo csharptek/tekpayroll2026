@@ -26,7 +26,8 @@ export async function computeAndSaveSnapshot(
   if (!emp) throw new Error('Employee not found')
   if (!emp.annualCtc || Number(emp.annualCtc) <= 0) throw new Error('No CTC set')
 
-  const input = await getSalaryInputForDate(employeeId, asOf)
+  // skipSnapshot=true → read live employee/revision config, NOT the stale snapshot
+  const input = await getSalaryInputForDate(employeeId, asOf, true)
   const s = computeSalaryStructure(input, esiConfig)
   const pt = await computePt(s.grandTotalMonthly, emp.state || '')
 

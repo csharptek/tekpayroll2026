@@ -326,13 +326,14 @@ export function isBonusMonth(payrollMonth: string): boolean {
 
 export async function getSalaryInputForDate(
   employeeId: string,
-  asOf: Date
+  asOf: Date,
+  skipSnapshot: boolean = false
 ): Promise<SalaryInput & { tdsMonthly: number; prebuiltSalary?: SalaryStructure }> {
   const emp = await prisma.employee.findUnique({ where: { id: employeeId } })
   if (!emp) throw new Error(`Employee ${employeeId} not found`)
 
-  // ── 1. Prefer active SalaryStructureSnapshot ──────────────────────────────
-  const snapshot = await prisma.salaryStructureSnapshot.findFirst({
+  // ── 1. Prefer active SalaryStructureSnapshot (unless skipSnapshot) ─────────
+  const snapshot = skipSnapshot ? null : await prisma.salaryStructureSnapshot.findFirst({
     where: {
       employeeId,
       isActive: true,
