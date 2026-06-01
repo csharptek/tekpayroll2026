@@ -333,7 +333,11 @@ export async function getSalaryInputForDate(
   if (!emp) throw new Error(`Employee ${employeeId} not found`)
 
   // ── 1. Prefer active SalaryStructureSnapshot (unless skipSnapshot) ─────────
-  const snapshot = skipSnapshot ? null : await prisma.salaryStructureSnapshot.findFirst({
+  // First try a snapshot effective as of the cycle date (historical correctness).
+  // If none qualifies (e.g. snapshot just regenerated with a later timestamp than
+  // the cycle start), fall back to the single current active snapshot rather than
+  // dropping to the stale SalaryRevision.
+  let snapshot = skipSnapshot ? null : await prisma.salaryStructureSnapshot.findFirst({
     where: {
       employeeId,
       isActive: true,
@@ -341,6 +345,13 @@ export async function getSalaryInputForDate(
     },
     orderBy: { effectiveDate: 'desc' },
   })
+
+  if (!skipSnapshot && !snapshot) {
+    snapshot = await prisma.salaryStructureSnapshot.findFirst({
+      where: { employeeId, isActive: true },
+      orderBy: { effectiveDate: 'desc' },
+    })
+  }
 
   if (snapshot) {
     const annualCtc         = Number(snapshot.annualCtc)
