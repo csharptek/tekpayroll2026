@@ -79,6 +79,28 @@ function RowDetail({ row }: { row: any }) {
             </div>
           </div>
         </div>
+
+        {/* Statutory PF / ESI — employee, employer, total */}
+        <div className="grid grid-cols-2 gap-6 max-w-2xl mt-3 pt-3 border-t border-slate-200">
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Provident Fund</p>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs"><span className="text-slate-500">Employee PF</span><span className="font-medium text-slate-700">{ru(row.pfAmount)}</span></div>
+              <div className="flex justify-between text-xs"><span className="text-slate-500">Employer PF</span><span className="font-medium text-slate-700">{ru(row.employerPfAmount)}</span></div>
+              <div className="flex justify-between text-xs font-semibold text-blue-700 border-t border-slate-200 pt-1 mt-1"><span>Total PF to Govt</span><span>{ru(Number(row.pfAmount||0)+Number(row.employerPfAmount||0))}</span></div>
+            </div>
+          </div>
+          {(Number(row.esiAmount||0) > 0 || Number(row.employerEsiAmount||0) > 0) && (
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">ESI</p>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs"><span className="text-slate-500">Employee ESI</span><span className="font-medium text-slate-700">{ru(row.esiAmount)}</span></div>
+                <div className="flex justify-between text-xs"><span className="text-slate-500">Employer ESI</span><span className="font-medium text-slate-700">{ru(row.employerEsiAmount)}</span></div>
+                <div className="flex justify-between text-xs font-semibold text-blue-700 border-t border-slate-200 pt-1 mt-1"><span>Total ESI to Govt</span><span>{ru(Number(row.esiAmount||0)+Number(row.employerEsiAmount||0))}</span></div>
+              </div>
+            </div>
+          )}
+        </div>
         {row.isProrated   && <p className="text-[11px] text-amber-600 mt-2 flex items-center gap-1"><Info size={11} /> Prorated employee</p>}
         {row.isBonusMonth && <p className="text-[11px] text-purple-600 mt-1 flex items-center gap-1"><Info size={11} /> Bonus month — annual incentive included</p>}
       </td>

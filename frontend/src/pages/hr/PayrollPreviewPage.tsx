@@ -189,6 +189,19 @@ export default function PayrollPreviewPage() {
                             <div><span className="text-gray-500">Annual Bonus:</span> <Rupee amount={r.annualBonus} /></div>
                           )}
                         </div>
+
+                        {/* PF / ESI — employee, employer, total */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-sm mt-3 pt-3 border-t border-gray-200">
+                          <div><span className="text-gray-500">Employee PF:</span> <Rupee amount={r.pfAmount} /></div>
+                          <div><span className="text-gray-500">Employer PF:</span> <Rupee amount={r.employerPfAmount} /></div>
+                          <div className="font-semibold text-blue-700"><span className="text-gray-500 font-normal">Total PF to Govt:</span> <Rupee amount={Number(r.pfAmount || 0) + Number(r.employerPfAmount || 0)} /></div>
+                          <div></div>
+                          {(Number(r.esiAmount || 0) > 0 || Number(r.employerEsiAmount || 0) > 0) && (<>
+                            <div><span className="text-gray-500">Employee ESI:</span> <Rupee amount={r.esiAmount} /></div>
+                            <div><span className="text-gray-500">Employer ESI:</span> <Rupee amount={r.employerEsiAmount} /></div>
+                            <div className="font-semibold text-blue-700"><span className="text-gray-500 font-normal">Total ESI to Govt:</span> <Rupee amount={Number(r.esiAmount || 0) + Number(r.employerEsiAmount || 0)} /></div>
+                          </>)}
+                        </div>
                       </td>
                     </tr>
                   )}
