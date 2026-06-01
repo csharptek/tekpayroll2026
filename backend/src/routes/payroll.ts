@@ -135,6 +135,8 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
       })
 
       const revisionInput = await getSalaryInputForDate(emp.id, cycle.cycleStart)
+      // TDS is manually set per employee — always use live employee record value, not snapshot
+      const tdsMonthly = Number(emp.tdsMonthly ?? 0) || revisionInput.tdsMonthly
 
       const calc = await calculatePayrollForEmployee({
         employeeId:      emp.id,
@@ -147,7 +149,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         cycleEnd:        cycle.cycleEnd,
         payrollMonth:    cycle.payrollMonth,
         lopDays:         lopEntry?.lopDays || 0,
-        tdsMonthly:      revisionInput.tdsMonthly,
+        tdsMonthly:      tdsMonthly,
         reimbursements:  Number(reimbs._sum.amount || 0),
         employeeStatus:  emp.status,
         prebuiltSalary:  revisionInput.prebuiltSalary,
@@ -306,6 +308,8 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
       }
 
       const revisionInput = await getSalaryInputForDate(emp.id, start)
+      // TDS is manually set per employee — always use live employee record value
+      const empTds = Number((emp as any).tdsMonthly ?? 0) || revisionInput.tdsMonthly
 
       const calc = await calculatePayrollForEmployee({
         employeeId:      emp.id,
@@ -318,7 +322,7 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
         cycleEnd:        end,
         payrollMonth,
         lopDays,
-        tdsMonthly:      revisionInput.tdsMonthly,
+        tdsMonthly:      empTds,
         reimbursements:  reimbAmount,
         employeeStatus:  emp.status,
         esiConfig,

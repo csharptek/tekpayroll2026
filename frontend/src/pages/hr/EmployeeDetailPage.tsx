@@ -430,11 +430,22 @@ function SkipPayrollPanel({ emp }: { emp: any }) {
   const [msg, setMsg] = useState<string | null>(null)
   const [reason, setReason] = useState('')
 
-  const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
+  // Use the open payroll cycle's payrollMonth — not today's calendar month.
+  // Skipping by today's date would miss the currently running/draft cycle.
+  const { data: cyclesData } = useQuery({
+    queryKey: ['payroll-cycles-open'],
+    queryFn:  () => payrollApi.cycles().then(r => {
+      const open = (r.data.data || r.data || []).find((c: any) => ['DRAFT', 'CALCULATED'].includes(c.status))
+      return open
+    }),
+  })
+
+  const currentMonth = cyclesData?.payrollMonth || new Date().toISOString().slice(0, 7)
 
   const { data: skipsData, isLoading: loadingSkips } = useQuery({
     queryKey: ['payroll-skips-emp', emp.id, currentMonth],
     queryFn: () => payrollApi.getSkips(currentMonth).then(r => r.data.data as any[]),
+    enabled: !!currentMonth,
   })
 
   const existingSkip = skipsData?.find((s: any) => s.employeeId === emp.id)
