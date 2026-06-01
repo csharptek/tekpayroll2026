@@ -380,6 +380,24 @@ export default function RunPayrollPage() {
                               </div>
                             </div>
                           </div>
+
+                          {/* Statutory PF / ESI — employee, employer, total */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs mt-3 pt-3 border-t border-slate-200">
+                            <div>
+                              <p className="text-slate-400 mb-1 font-semibold uppercase tracking-wide">Provident Fund</p>
+                              <div className="flex justify-between py-0.5"><span className="text-slate-500">Employee PF</span><Rupee amount={entry.pfAmount} className="font-medium text-slate-700" /></div>
+                              <div className="flex justify-between py-0.5"><span className="text-slate-500">Employer PF</span><Rupee amount={entry.employerPfAmount} className="font-medium text-slate-700" /></div>
+                              <div className="flex justify-between py-0.5 font-semibold border-t border-slate-200 mt-1 text-blue-700"><span>Total PF to Govt</span><Rupee amount={Number(entry.pfAmount || 0) + Number(entry.employerPfAmount || 0)} /></div>
+                            </div>
+                            {(Number(entry.esiAmount || 0) > 0 || Number(entry.employerEsiAmount || 0) > 0) && (
+                              <div>
+                                <p className="text-slate-400 mb-1 font-semibold uppercase tracking-wide">ESI</p>
+                                <div className="flex justify-between py-0.5"><span className="text-slate-500">Employee ESI</span><Rupee amount={entry.esiAmount} className="font-medium text-slate-700" /></div>
+                                <div className="flex justify-between py-0.5"><span className="text-slate-500">Employer ESI</span><Rupee amount={entry.employerEsiAmount} className="font-medium text-slate-700" /></div>
+                                <div className="flex justify-between py-0.5 font-semibold border-t border-slate-200 mt-1 text-blue-700"><span>Total ESI to Govt</span><Rupee amount={Number(entry.esiAmount || 0) + Number(entry.employerEsiAmount || 0)} /></div>
+                              </div>
+                            )}
+                          </div>
                           {entry.adjustmentNote && (
                             <div className="mt-3 text-xs bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-amber-700">
                               <strong>Adjustment note:</strong> {entry.adjustmentNote}
