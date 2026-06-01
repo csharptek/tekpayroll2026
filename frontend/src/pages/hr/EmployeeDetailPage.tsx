@@ -431,16 +431,16 @@ function SkipPayrollPanel({ emp }: { emp: any }) {
   const [reason, setReason] = useState('')
 
   // Use the open payroll cycle's payrollMonth — not today's calendar month.
-  // Skipping by today's date would miss the currently running/draft cycle.
-  const { data: cyclesData } = useQuery({
+  const { data: cyclesData, isLoading: cyclesLoading } = useQuery({
     queryKey: ['payroll-cycles-open'],
     queryFn:  () => payrollApi.cycles().then(r => {
-      const open = (r.data.data || r.data || []).find((c: any) => ['DRAFT', 'CALCULATED'].includes(c.status))
-      return open
+      const list = r.data.data || r.data || []
+      // Everything except DISBURSED is considered the active/open cycle
+      return list.find((c: any) => c.status !== 'DISBURSED') || list[0]
     }),
   })
 
-  const currentMonth = cyclesData?.payrollMonth || new Date().toISOString().slice(0, 7)
+  const currentMonth = cyclesData?.payrollMonth || ''
 
   const { data: skipsData, isLoading: loadingSkips } = useQuery({
     queryKey: ['payroll-skips-emp', emp.id, currentMonth],
@@ -470,7 +470,13 @@ function SkipPayrollPanel({ emp }: { emp: any }) {
     onError: () => setMsg('Failed to re-enable payroll.'),
   })
 
-  const busy = adding || removing || loadingSkips
+  const busy = adding || removing || loadingSkips || cyclesLoading
+
+  if (!currentMonth) return (
+    <div className="mt-5 border border-slate-200 rounded-xl bg-white p-5">
+      <p className="text-xs text-slate-400">Loading payroll cycle...</p>
+    </div>
+  )
 
   return (
     <div className="mt-5 border border-slate-200 rounded-xl bg-white p-5">

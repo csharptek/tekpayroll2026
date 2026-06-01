@@ -71,8 +71,10 @@ function NewCycleModal({ open, onClose }: { open: boolean; onClose: () => void }
 }
 
 export default function PayrollCyclesPage() {
-  const navigate = useNavigate()
+  const navigate    = useNavigate()
+  const qc          = useQueryClient()
   const [newOpen, setNewOpen] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['payroll-cycles'],
@@ -80,6 +82,18 @@ export default function PayrollCyclesPage() {
   })
 
   const cycles: any[] = data || []
+
+  const lockMut = useMutation({
+    mutationFn: (id: string) => payrollApi.lock(id),
+    onSuccess:  () => { setActionError(''); qc.invalidateQueries({ queryKey: ['payroll-cycles'] }) },
+    onError:    (e: any) => setActionError(e?.response?.data?.error || 'Failed to lock cycle'),
+  })
+
+  const disburseMut = useMutation({
+    mutationFn: (id: string) => payrollApi.disburse(id),
+    onSuccess:  () => { setActionError(''); qc.invalidateQueries({ queryKey: ['payroll-cycles'] }) },
+    onError:    (e: any) => setActionError(e?.response?.data?.error || 'Failed to mark as disbursed'),
+  })
 
   const statusActions: Record<string, { label: string; icon: any; to: (id: string) => string; variant?: any }> = {
     DRAFT:      { label: 'Run Payroll', icon: Play,    to: (id) => `/hr/payroll/${id}/run`,    variant: 'primary' },
@@ -118,6 +132,7 @@ export default function PayrollCyclesPage() {
       })()}
 
       <Card>
+        {actionError && <Alert type="error" message={actionError} />}
         {isLoading ? <Skeleton className="h-64 m-4" /> : cycles.length === 0 ? (
           <EmptyState
             icon={<Calendar size={22} />}
@@ -126,59 +141,80 @@ export default function PayrollCyclesPage() {
             action={<Button size="sm" icon={<Plus size={13} />} onClick={() => setNewOpen(true)}>Create First Cycle</Button>}
           />
         ) : (
-          <Table>
-            <thead>
-              <tr className="border-b border-slate-100">
-                <Th>Month</Th>
-                <Th>Cycle Period</Th>
-                <Th className="text-right">Employees</Th>
-                <Th className="text-right">Gross</Th>
-                <Th className="text-right">Net</Th>
-                <Th>Status</Th>
-                <Th>Actions</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {cycles.map((cycle: any) => {
-                const action = statusActions[cycle.status]
-                return (
-                  <Tr key={cycle.id}>
-                    <Td>
-                      <span className="font-semibold text-slate-800">{cycle.payrollMonth}</span>
-                    </Td>
-                    <Td>
-                      <span className="text-xs text-slate-500">
-                        {format(new Date(cycle.cycleStart), 'dd MMM')} – {format(new Date(cycle.cycleEnd), 'dd MMM yyyy')}
-                      </span>
-                    </Td>
-                    <Td className="text-right">{cycle.employeeCount ?? '—'}</Td>
-                    <Td className="text-right">
-                      {cycle.totalGross ? <Rupee amount={cycle.totalGross} /> : <span className="text-slate-300">—</span>}
-                    </Td>
-                    <Td className="text-right font-semibold">
-                      {cycle.totalNet ? <Rupee amount={cycle.totalNet} /> : <span className="text-slate-300">—</span>}
-                    </Td>
-                    <Td><StatusBadge status={cycle.status} /></Td>
-                    <Td>
-                      <div className="flex items-center gap-2">
-                        {action && (
-                          <Button size="sm" variant={action.variant || 'secondary'} icon={<action.icon size={12} />}
-                            onClick={() => navigate(action.to(cycle.id))}>
-                            {action.label}
-                          </Button>
-                        )}
-                        <button onClick={() => navigate(`/hr/payroll/${cycle.id}/detail`)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
-                          <ChevronRight size={15} />
-                        </button>
-                      </div>
-                    </Td>
-                  </Tr>
-                )
-              })}
-            </tbody>
-          </Table>
-        )}
+          <thead>
+            <tr className="border-b border-slate-100">
+              <Th>Month</Th>
+              <Th>Cycle Period</Th>
+              <Th className="text-right">Employees</Th>
+              <Th className="text-right">Gross</Th>
+              <Th className="text-right">Net</Th>
+              <Th>Status</Th>
+              <Th>Actions</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {cycles.map((cycle: any) => {
+              const action = statusActions[cycle.status]
+              return (
+                <Tr key={cycle.id}>
+                  <Td>
+                    <span className="font-semibold text-slate-800">{cycle.payrollMonth}</span>
+                  </Td>
+                  <Td>
+                    <span className="text-xs text-slate-500">
+                      {format(new Date(cycle.cycleStart), 'dd MMM')} – {format(new Date(cycle.cycleEnd), 'dd MMM yyyy')}
+                    </span>
+                  </Td>
+                  <Td className="text-right">{cycle.employeeCount ?? '—'}</Td>
+                  <Td className="text-right">
+                    {cycle.totalGross ? <Rupee amount={cycle.totalGross} /> : <span className="text-slate-300">—</span>}
+                  </Td>
+                  <Td className="text-right font-semibold">
+                    {cycle.totalNet ? <Rupee amount={cycle.totalNet} /> : <span className="text-slate-300">—</span>}
+                  </Td>
+                  <Td><StatusBadge status={cycle.status} /></Td>
+                  <Td>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {action && (
+                        <Button size="sm" variant={action.variant || 'secondary'} icon={<action.icon size={12} />}
+                          onClick={() => navigate(action.to(cycle.id))}>
+                          {action.label}
+                        </Button>
+                      )}
+                      {cycle.status === 'CALCULATED' && (
+                        <Button size="sm" variant="secondary" icon={<Lock size={12} />}
+                          loading={lockMut.isPending}
+                          onClick={() => {
+                            setActionError('')
+                            if (window.confirm(`Lock payroll for ${cycle.payrollMonth}? Salary slips can then be generated.`))
+                              lockMut.mutate(cycle.id)
+                          }}>
+                          Lock
+                        </Button>
+                      )}
+                      {cycle.status === 'LOCKED' && (
+                        <Button size="sm" variant="primary" icon={<Banknote size={12} />}
+                          loading={disburseMut.isPending}
+                          onClick={() => {
+                            setActionError('')
+                            if (window.confirm(`Mark ${cycle.payrollMonth} as Disbursed? This closes the cycle and moves the active cycle forward.`))
+                              disburseMut.mutate(cycle.id)
+                          }}>
+                          Mark Disbursed
+                        </Button>
+                      )}
+                      <button onClick={() => navigate(`/hr/payroll/${cycle.id}/detail`)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                        <ChevronRight size={15} />
+                      </button>
+                    </div>
+                  </Td>
+                </Tr>
+              )
+            })}
+          </tbody>
+        </Table>
+      )}
       </Card>
 
       <NewCycleModal open={newOpen} onClose={() => setNewOpen(false)} />
