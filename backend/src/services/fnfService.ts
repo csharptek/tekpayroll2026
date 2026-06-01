@@ -98,16 +98,20 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
 
     if (salaryDays > 0) {
       const salaryInput = await getSalaryInputForDate(employeeId, mStart)
-      // No HYI — employee on notice for this entire period
-      const salaryInputNoHyi = { ...salaryInput, hasIncentive: false, incentivePercent: 0 }
-      const salary = computeSalaryStructure(salaryInputNoHyi)
 
+      // Use snapshot (prebuiltSalary) when available — avoids recomputation drift.
+      // Explicitly zero HYI: employee is on notice, no incentive for this period.
+      let salary = salaryInput.prebuiltSalary
+        ? { ...salaryInput.prebuiltSalary, hyiMonthly: 0, grandTotalMonthly: salaryInput.prebuiltSalary.grandTotalMonthly - salaryInput.prebuiltSalary.hyiMonthly }
+        : computeSalaryStructure({ ...salaryInput, hasIncentive: false, incentivePercent: 0 })
+
+      const grossMonthly   = salary.grandTotalMonthly
       const proratedSalary = isLwdMonth
-        ? r2((salary.grandTotalMonthly / totalDays) * salaryDays)
-        : salary.grandTotalMonthly
+        ? r2((grossMonthly / totalDays) * salaryDays)
+        : grossMonthly
       const pfAmount  = isLwdMonth ? r2((salary.employeePfMonthly / totalDays) * salaryDays) : salary.employeePfMonthly
       const esiAmount = isLwdMonth ? r2((computeEsi(salary.esiBase) / totalDays) * salaryDays) : computeEsi(salary.esiBase)
-      const ptAmount  = await computePt(salary.grandTotalMonthly, employee.state || '')
+      const ptAmount  = await computePt(grossMonthly, employee.state || '')
       const tdsAmount = isLwdMonth ? r2((salaryInput.tdsMonthly / totalDays) * salaryDays) : salaryInput.tdsMonthly
 
       cycles.push({
@@ -116,7 +120,7 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
         cycleEnd:       mEnd,
         totalDays,
         salaryDays,
-        grossMonthly:   salary.grandTotalMonthly,
+        grossMonthly:   grossMonthly,
         proratedSalary,
         pfAmount,
         esiAmount,
@@ -161,8 +165,10 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   // Use salary as of resignation date for HYI amount.
   let hyiRecovery = 0
   const salaryForHyi = await getSalaryInputForDate(employeeId, resignationDate)
-  const salaryStructForHyi = computeSalaryStructure(salaryForHyi)
-  const hyiMonthly = salaryStructForHyi.hyiMonthly
+  // Use prebuiltSalary (snapshot) hyiMonthly directly — it's the source of truth
+  const hyiMonthly = salaryForHyi.prebuiltSalary
+    ? salaryForHyi.prebuiltSalary.hyiMonthly
+    : computeSalaryStructure(salaryForHyi).hyiMonthly
 
   if (hyiMonthly > 0) {
     const resignMonth = resignationDate.getMonth() // 0-indexed
