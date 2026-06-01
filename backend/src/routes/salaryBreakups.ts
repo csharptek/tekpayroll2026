@@ -48,7 +48,8 @@ async function buildBreakups(
     const input = await getSalaryInputForDate(emp.id, asOf);
     if (!input.annualCtc || Number(input.annualCtc) <= 0) continue;
 
-    const s = computeSalaryStructure({
+    // Use prebuiltSalary from snapshot when available — ensures payroll & breakup match exactly
+    const s = (input as any).prebuiltSalary ?? computeSalaryStructure({
       annualCtc:        Number(input.annualCtc),
       basicPercent:     Number(input.basicPercent),
       hraPercent:       Number(input.hraPercent),
