@@ -213,7 +213,7 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     employeeName:          employee.name,
     resignationDate,
     lastWorkingDay:        lwd,
-    cycleStart:            firstCycle.start,
+    cycleStart:            cycles[0]?.cycleStart || resignationDate,
     salaryDays:            totalSalaryDays,
     totalCycleDays:        cycles.reduce((s, c) => s + c.totalDays, 0),
     grossSalary:           cycles[0]?.grossMonthly || 0,
