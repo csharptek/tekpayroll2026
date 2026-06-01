@@ -292,7 +292,7 @@ function SuperAdminDashboard({
         <StatCard
           label="Tentative Gross / Month"
           value={loadingSalarySummary ? '—' : salarySummary?.totalGross != null ? fmt(salarySummary.totalGross) : '—'}
-          sub={salarySummary ? `${salarySummary.employeeCount} employees on payroll` : undefined}
+          sub={salarySummary ? `${salarySummary.employeeCount} employees · ${salarySummary.cycleStatus ?? ''}` : undefined}
           icon={<CreditCard size={18} />}
           color="green"
           loading={loadingSalarySummary}
@@ -307,40 +307,96 @@ function SuperAdminDashboard({
         />
       </div>
 
-      {/* Row 2 — PF & ESI breakdown */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Employee PF / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployeePf != null ? fmt(salarySummary.totalEmployeePf) : '—'}
-          sub="Deducted from salary"
-          icon={<TrendingUp size={18} />}
-          color="purple"
-          loading={loadingSalarySummary}
-        />
-        <StatCard
-          label="Employer PF / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployerPf != null ? fmt(salarySummary.totalEmployerPf) : '—'}
-          sub="Company contribution"
-          icon={<TrendingUp size={18} />}
-          color="blue"
-          loading={loadingSalarySummary}
-        />
-        <StatCard
-          label="Employee ESI / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployeeEsi != null ? fmt(salarySummary.totalEmployeeEsi) : '—'}
-          sub="Deducted from salary"
-          icon={<TrendingUp size={18} />}
-          color="purple"
-          loading={loadingSalarySummary}
-        />
-        <StatCard
-          label="Employer ESI / Month"
-          value={loadingSalarySummary ? '—' : salarySummary?.totalEmployerEsi != null ? fmt(salarySummary.totalEmployerEsi) : '—'}
-          sub="Company contribution"
-          icon={<TrendingUp size={18} />}
-          color="blue"
-          loading={loadingSalarySummary}
-        />
+      {/* Row 2 — PF & ESI combined cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* PF Card */}
+        <div className="card p-5">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <p className="stat-label">Provident Fund (PF)</p>
+              {loadingSalarySummary
+                ? <div className="h-8 w-32 bg-slate-100 animate-pulse rounded-lg mt-1" />
+                : <p className="stat-value mt-1">{salarySummary?.totalEmployeePf != null ? fmt(Number(salarySummary.totalEmployeePf) + Number(salarySummary.totalEmployerPf)) : '—'}</p>
+              }
+              <p className="stat-sub mt-0.5">Total remittance to Govt</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-purple-50">
+              <span className="text-purple-500"><TrendingUp size={18} /></span>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100">
+            <div>
+              <p className="text-xs text-slate-400 mb-0.5">Employee PF</p>
+              {loadingSalarySummary
+                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
+                : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployeePf != null ? fmt(salarySummary.totalEmployeePf) : '—'}</p>
+              }
+              <p className="text-xs text-slate-400">Deducted from salary</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 mb-0.5">Employer PF</p>
+              {loadingSalarySummary
+                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
+                : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployerPf != null ? fmt(salarySummary.totalEmployerPf) : '—'}</p>
+              }
+              <p className="text-xs text-slate-400">Company contribution</p>
+            </div>
+            <div>
+              <p className="text-xs text-blue-500 mb-0.5">Total to Govt</p>
+              {loadingSalarySummary
+                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
+                : <p className="text-sm font-bold text-blue-700">{salarySummary?.totalEmployeePf != null ? fmt(Number(salarySummary.totalEmployeePf) + Number(salarySummary.totalEmployerPf)) : '—'}</p>
+              }
+              <p className="text-xs text-slate-400">Employee + Employer</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ESI Card */}
+        <div className="card p-5">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <p className="stat-label">Employee State Insurance (ESI)</p>
+              {loadingSalarySummary
+                ? <div className="h-8 w-32 bg-slate-100 animate-pulse rounded-lg mt-1" />
+                : <p className="stat-value mt-1">{salarySummary?.totalEmployeeEsi != null ? fmt(Number(salarySummary.totalEmployeeEsi) + Number(salarySummary.totalEmployerEsi)) : '—'}</p>
+              }
+              <p className="stat-sub mt-0.5">Total remittance to Govt</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-50">
+              <span className="text-emerald-500"><TrendingUp size={18} /></span>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100">
+            <div>
+              <p className="text-xs text-slate-400 mb-0.5">Employee ESI</p>
+              {loadingSalarySummary
+                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
+                : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployeeEsi != null ? fmt(salarySummary.totalEmployeeEsi) : '—'}</p>
+              }
+              <p className="text-xs text-slate-400">Deducted from salary</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 mb-0.5">Employer ESI</p>
+              {loadingSalarySummary
+                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
+                : <p className="text-sm font-semibold text-slate-700">{salarySummary?.totalEmployerEsi != null ? fmt(salarySummary.totalEmployerEsi) : '—'}</p>
+              }
+              <p className="text-xs text-slate-400">Company contribution</p>
+            </div>
+            <div>
+              <p className="text-xs text-blue-500 mb-0.5">Total to Govt</p>
+              {loadingSalarySummary
+                ? <div className="h-5 w-16 bg-slate-100 animate-pulse rounded" />
+                : <p className="text-sm font-bold text-blue-700">{salarySummary?.totalEmployeeEsi != null ? fmt(Number(salarySummary.totalEmployeeEsi) + Number(salarySummary.totalEmployerEsi)) : '—'}</p>
+              }
+              <p className="text-xs text-slate-400">Employee + Employer</p>
+            </div>
+          </div>
+          {(salarySummary?.totalEmployeeEsi === 0 || salarySummary?.totalEmployeeEsi == null) && !loadingSalarySummary && (
+            <p className="text-xs text-slate-400 mt-3 italic">No ESI applicable this cycle</p>
+          )}
+        </div>
       </div>
 
       <MonthCalendar />

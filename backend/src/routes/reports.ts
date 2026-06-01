@@ -32,12 +32,20 @@ reportRouter.get('/payroll-trend', async (_req, res) => {
 // ─── SALARY SUMMARY ───────────────────────────────────────────────────────────
 // Reads from latest locked/disbursed PayrollCycle + PayrollEntry records
 reportRouter.get('/salary-summary', requireSuperAdmin, async (_req, res) => {
-  const latestCycle = await prisma.payrollCycle.findFirst({
-    where: { status: { in: ['LOCKED', 'DISBURSED'] } },
+  // Prefer active cycle (DRAFT/CALCULATED/LOCKED), fall back to last DISBURSED
+  let activeCycle = await prisma.payrollCycle.findFirst({
+    where: { status: { in: ['DRAFT', 'CALCULATED', 'LOCKED'] } },
     orderBy: { cycleStart: 'desc' },
   });
 
-  if (!latestCycle) {
+  if (!activeCycle) {
+    activeCycle = await prisma.payrollCycle.findFirst({
+      where: { status: 'DISBURSED' },
+      orderBy: { cycleStart: 'desc' },
+    });
+  }
+
+  if (!activeCycle) {
     return res.json({
       success: true,
       data: {
@@ -49,13 +57,14 @@ reportRouter.get('/salary-summary', requireSuperAdmin, async (_req, res) => {
         totalEmployerEsi: 0,
         totalNet: 0,
         payrollMonth: null,
-        note: 'No locked payroll cycle found',
+        cycleStatus: null,
+        note: 'No payroll cycle found',
       },
     });
   }
 
   const agg = await prisma.payrollEntry.aggregate({
-    where: { cycleId: latestCycle.id },
+    where: { cycleId: activeCycle.id },
     _sum: {
       grossSalary: true,
       netSalary:   true,
@@ -65,34 +74,40 @@ reportRouter.get('/salary-summary', requireSuperAdmin, async (_req, res) => {
     _count: { id: true },
   });
 
-  // Employer PF: 12% of Basic, capped at 1800 per employee — compute from entries
   const entries = await prisma.payrollEntry.findMany({
-    where: { cycleId: latestCycle.id },
-    select: { basic: true, pfAmount: true, esiAmount: true },
+    where: { cycleId: activeCycle.id },
+    select: { basic: true, pfAmount: true, esiAmount: true, employerPfAmount: true, employerEsiAmount: true },
   });
 
   let totalEmployerPf  = 0;
   let totalEmployerEsi = 0;
   for (const e of entries) {
-    const basic = Number(e.basic);
-    totalEmployerPf  += Math.min(Math.round(basic * 0.12), 1800);
-    // ESI employer: 3.25% of gross — approximate from esiAmount (employee = 0.75%)
-    // if employee ESI > 0, employer = employee * (3.25/0.75)
-    const empEsi = Number(e.esiAmount);
-    if (empEsi > 0) totalEmployerEsi += Math.round(empEsi * (3.25 / 0.75));
+    // Use stored employer amounts if available, else compute
+    if (Number((e as any).employerPfAmount) > 0) {
+      totalEmployerPf  += Number((e as any).employerPfAmount);
+    } else {
+      totalEmployerPf  += Math.min(Math.round(Number(e.basic) * 0.12), 1800);
+    }
+    if (Number((e as any).employerEsiAmount) > 0) {
+      totalEmployerEsi += Number((e as any).employerEsiAmount);
+    } else {
+      const empEsi = Number(e.esiAmount);
+      if (empEsi > 0) totalEmployerEsi += Math.round(empEsi * (3.25 / 0.75));
+    }
   }
 
   res.json({
     success: true,
     data: {
-      payrollMonth:     latestCycle.payrollMonth,
-      employeeCount:    latestCycle.employeeCount ?? agg._count.id,
+      payrollMonth:     activeCycle.payrollMonth,
+      cycleStatus:      activeCycle.status,
+      employeeCount:    activeCycle.employeeCount ?? agg._count.id,
       totalGross:       Math.round(Number(agg._sum.grossSalary ?? 0)),
       totalNet:         Math.round(Number(agg._sum.netSalary   ?? 0)),
       totalEmployeePf:  Math.round(Number(agg._sum.pfAmount    ?? 0)),
-      totalEmployerPf,
+      totalEmployerPf:  Math.round(totalEmployerPf),
       totalEmployeeEsi: Math.round(Number(agg._sum.esiAmount   ?? 0)),
-      totalEmployerEsi,
+      totalEmployerEsi: Math.round(totalEmployerEsi),
     },
   });
 });

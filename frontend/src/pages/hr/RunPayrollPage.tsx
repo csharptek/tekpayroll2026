@@ -130,67 +130,83 @@ export default function RunPayrollPage() {
       />
 
       <Card>
-        <div className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <StatusBadge status={status} />
-              {cycle?.runAt && <span className="text-xs text-slate-400">Last run: {format(new Date(cycle.runAt), 'dd MMM yyyy, HH:mm')}</span>}
-              {cycle?.lockedAt && <span className="text-xs text-slate-400">Locked: {format(new Date(cycle.lockedAt), 'dd MMM yyyy, HH:mm')}</span>}
+        <div className="p-5 space-y-4">
+          {/* Status + action row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <StatusBadge status={status} />
+                {cycle?.runAt && <span className="text-xs text-slate-400">Last run: {format(new Date(cycle.runAt), 'dd MMM yyyy, HH:mm')}</span>}
+                {cycle?.lockedAt && <span className="text-xs text-slate-400">Locked: {format(new Date(cycle.lockedAt), 'dd MMM yyyy, HH:mm')}</span>}
+              </div>
+              <div className="flex flex-wrap gap-6">
+                {[
+                  { label: 'Employees',  value: cycle?.employeeCount ?? entries.length },
+                  { label: 'Total Gross', value: cycle?.totalGross ? <Rupee amount={cycle.totalGross} /> : '—' },
+                  { label: 'Total Net',   value: cycle?.totalNet   ? <Rupee amount={cycle.totalNet} />   : '—' },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <p className="text-xs text-slate-400">{label}</p>
+                    <p className="text-sm font-bold text-slate-800">{value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-4">
-              {[
-                { label: 'Employees',        value: cycle?.employeeCount ?? entries.length },
-                { label: 'Total Gross',      value: cycle?.totalGross ? <Rupee amount={cycle.totalGross} /> : '—' },
-                { label: 'Total Net',        value: cycle?.totalNet   ? <Rupee amount={cycle.totalNet} />   : '—' },
-              ].map(({ label, value }) => (
-                <div key={label}>
-                  <p className="text-xs text-slate-400">{label}</p>
-                  <p className="text-sm font-bold text-slate-800">{value}</p>
-                </div>
-              ))}
-              {/* PF breakdown */}
-              <div className="border-l border-slate-200 pl-4 flex gap-4">
+            <div className="flex flex-wrap gap-2">
+              {canRun      && <Button icon={<RefreshCw size={14} />} onClick={() => setRunConfirm(true)} loading={runMut.isPending}>{status === 'CALCULATED' ? 'Re-run Payroll' : 'Run Payroll'}</Button>}
+              {canLock     && <Button variant="secondary" icon={<Lock size={14} />} onClick={() => setLockConfirm(true)}>Lock Cycle</Button>}
+              {canUnlock   && <Button variant="secondary" icon={<Unlock size={14} />} onClick={() => setUnlockConfirm(true)}>Unlock</Button>}
+              {canDisburse && <Button variant="primary" icon={<Banknote size={14} />} onClick={() => setDisburseConfirm(true)}>Mark Disbursed</Button>}
+            </div>
+          </div>
+
+          {/* PF + ESI prominent cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100">
+            {/* PF Card */}
+            <div className="bg-purple-50 rounded-xl p-4">
+              <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide mb-3">Provident Fund (PF)</p>
+              <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <p className="text-xs text-slate-400">Employee PF</p>
+                  <p className="text-xs text-slate-500 mb-0.5">Employee PF</p>
                   <p className="text-sm font-bold text-slate-800">{cycle?.totalPf ? <Rupee amount={cycle.totalPf} /> : '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Employer PF</p>
+                  <p className="text-xs text-slate-500 mb-0.5">Employer PF</p>
                   <p className="text-sm font-bold text-slate-800">{cycle?.totalEmployerPf ? <Rupee amount={cycle.totalEmployerPf} /> : '—'}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-blue-600">Total PF to Govt</p>
-                  <p className="text-sm font-bold text-blue-700">
+                <div className="bg-white rounded-lg px-3 py-2">
+                  <p className="text-xs text-purple-600 mb-0.5 font-medium">Total to Govt</p>
+                  <p className="text-sm font-bold text-purple-700">
                     {cycle?.totalPf ? <Rupee amount={Number(cycle.totalPf) + Number(cycle.totalEmployerPf || 0)} /> : '—'}
                   </p>
                 </div>
               </div>
-              {/* ESI breakdown — only show if any ESI exists */}
-              {(Number(cycle?.totalEsi || 0) > 0 || Number(cycle?.totalEmployerEsi || 0) > 0) && (
-                <div className="border-l border-slate-200 pl-4 flex gap-4">
+            </div>
+
+            {/* ESI Card */}
+            <div className="bg-emerald-50 rounded-xl p-4">
+              <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-3">Employee State Insurance (ESI)</p>
+              {(Number(cycle?.totalEsi || 0) > 0 || Number(cycle?.totalEmployerEsi || 0) > 0) ? (
+                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <p className="text-xs text-slate-400">Employee ESI</p>
+                    <p className="text-xs text-slate-500 mb-0.5">Employee ESI</p>
                     <p className="text-sm font-bold text-slate-800">{cycle?.totalEsi ? <Rupee amount={cycle.totalEsi} /> : '—'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400">Employer ESI</p>
+                    <p className="text-xs text-slate-500 mb-0.5">Employer ESI</p>
                     <p className="text-sm font-bold text-slate-800">{cycle?.totalEmployerEsi ? <Rupee amount={cycle.totalEmployerEsi} /> : '—'}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-blue-600">Total ESI to Govt</p>
-                    <p className="text-sm font-bold text-blue-700">
+                  <div className="bg-white rounded-lg px-3 py-2">
+                    <p className="text-xs text-emerald-600 mb-0.5 font-medium">Total to Govt</p>
+                    <p className="text-sm font-bold text-emerald-700">
                       <Rupee amount={Number(cycle?.totalEsi || 0) + Number(cycle?.totalEmployerEsi || 0)} />
                     </p>
                   </div>
                 </div>
+              ) : (
+                <p className="text-sm text-slate-400 italic">No ESI applicable this cycle</p>
               )}
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {canRun      && <Button icon={<RefreshCw size={14} />} onClick={() => setRunConfirm(true)} loading={runMut.isPending}>{status === 'CALCULATED' ? 'Re-run Payroll' : 'Run Payroll'}</Button>}
-            {canLock     && <Button variant="secondary" icon={<Lock size={14} />} onClick={() => setLockConfirm(true)}>Lock Cycle</Button>}
-            {canUnlock   && <Button variant="secondary" icon={<Unlock size={14} />} onClick={() => setUnlockConfirm(true)}>Unlock</Button>}
-            {canDisburse && <Button variant="primary" icon={<Banknote size={14} />} onClick={() => setDisburseConfirm(true)}>Mark Disbursed</Button>}
           </div>
         </div>
       </Card>
