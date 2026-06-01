@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import {
   Play, Loader2, CheckCircle, XCircle, AlertCircle,
   CreditCard, FileText, RefreshCw, CalendarDays, Terminal, Database, Package,
-  FileCode2, Eye, ArrowRightLeft
+  FileCode2, Eye, ArrowRightLeft, UserMinus
 } from 'lucide-react'
 import { cronApi, documentsApi } from '../../services/api'
 import { PageHeader, Card } from '../../components/ui'
@@ -53,6 +53,13 @@ const JOBS = [
     icon: Package,
     color: 'indigo',
   },
+  {
+    key: 'backfill-notice-skips',
+    label: 'Backfill Notice Period Payroll Skips',
+    description: 'Creates missing PayrollSkip records for all current ON_NOTICE employees. Run once to ensure salary-on-hold works for existing resignations.',
+    icon: UserMinus,
+    color: 'rose',
+  },
 ]
 
 const COLOR_MAP: Record<string, string> = {
@@ -62,6 +69,7 @@ const COLOR_MAP: Record<string, string> = {
   amber:  'border-amber-200 bg-amber-50 text-amber-700',
   teal:   'border-teal-200 bg-teal-50 text-teal-700',
   indigo: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  rose:   'border-rose-200 bg-rose-50 text-rose-700',
 }
 
 const ICON_COLOR: Record<string, string> = {
@@ -169,6 +177,15 @@ export default function RunTasksPage() {
           return
         }
       }
+
+      if (key === 'backfill-notice-skips') {
+        const d = data?.data?.data
+        if (d) {
+          const msg = `${d.totalEmployees} ON_NOTICE employees found. ${d.totalSkipsCreated} payroll skip records created.`
+          updateState(key, { status: 'success', completedAt: new Date(), message: msg })
+          return
+        }
+      }
       // Job done — do one final poll
       pollLogs(key, states[key].startedAt || new Date())
     },
@@ -184,7 +201,7 @@ export default function RunTasksPage() {
     updateState(key, { status: 'running', startedAt, completedAt: undefined, message: undefined, errorMessage: undefined, meta: undefined, pollCount: 0 })
 
     // Direct-response tasks: no cron log polling
-    const DIRECT = ['migrate-salary-snapshots', 'seed-asset-categories']
+    const DIRECT = ['migrate-salary-snapshots', 'seed-asset-categories', 'backfill-notice-skips']
     if (!DIRECT.includes(key)) {
       pollers.current[key] = setInterval(() => pollLogs(key, startedAt), 2000)
     }

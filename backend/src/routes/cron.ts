@@ -161,6 +161,54 @@ cronRouter.post('/manual/seed-asset-categories', requireSuperAdmin, async (_req,
   }
 })
 
+// ─── BACKFILL NOTICE PERIOD PAYROLL SKIPS ─────────────────────────────────────
+// For existing ON_NOTICE employees who resigned before this feature was deployed.
+
+cronRouter.post('/manual/backfill-notice-skips', requireSuperAdmin, async (req: any, res) => {
+  try {
+    const actorId   = req.employee?.id   || 'system'
+    const actorName = req.employee?.name || 'System'
+
+    const noticeEmployees = await prisma.employee.findMany({
+      where: { status: 'ON_NOTICE', resignationDate: { not: null } },
+      select: { id: true, name: true, resignationDate: true, lastWorkingDay: true, expectedLwd: true },
+    })
+
+    let created = 0
+    const results: { name: string; skipsCreated: number }[] = []
+
+    for (const emp of noticeEmployees) {
+      const lwd = emp.lastWorkingDay || emp.expectedLwd
+      if (!lwd || !emp.resignationDate) continue
+
+      let cursor   = new Date(emp.resignationDate.getFullYear(), emp.resignationDate.getMonth() + 1, 1)
+      const lwdMonth = new Date(lwd.getFullYear(), lwd.getMonth(), 1)
+      let empCreated = 0
+
+      while (cursor <= lwdMonth) {
+        const payrollMonth = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+        const existing = await prisma.payrollSkip.findUnique({
+          where: { employeeId_payrollMonth: { employeeId: emp.id, payrollMonth } },
+        })
+        if (!existing) {
+          await prisma.payrollSkip.create({
+            data: { employeeId: emp.id, payrollMonth, reason: 'Backfill: on notice period — salary via F&F', skippedBy: actorId, skippedByName: actorName },
+          })
+          empCreated++
+          created++
+        }
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+      }
+
+      if (empCreated > 0) results.push({ name: emp.name, skipsCreated: empCreated })
+    }
+
+    res.json({ success: true, data: { totalEmployees: noticeEmployees.length, totalSkipsCreated: created, details: results } })
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
 // ─── CRON LOGS ────────────────────────────────────────────────────────────────
 
 cronRouter.get('/logs', requireSuperAdmin, async (req, res) => {

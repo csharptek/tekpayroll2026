@@ -74,14 +74,16 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   const resignationDate = employee.resignationDate
 
   // ─── BUILD MONTH LIST ─────────────────────────────────────────────────────
-  // Salary is owed from resignation month through LWD month.
-  // Resignation month and all full months in between: FULL calendar-month salary, no HYI.
-  // LWD month: prorated by calendar days worked (1st → LWD day), no HYI.
+  // Resignation month salary is paid via normal payroll (HYI suppressed).
+  // F&F covers: month AFTER resignation → LWD month.
+  // All intermediate months: full salary, no HYI.
+  // LWD month: prorated 1st → LWD day, no HYI.
 
-  const lwdMonthStart = monthStart(lwd)
+  const fnfStartMonth  = new Date(resignationDate.getFullYear(), resignationDate.getMonth() + 1, 1)
+  const lwdMonthStart  = monthStart(lwd)
 
   const cycles: FnfCycleBreakdown[] = []
-  let cursor = monthStart(resignationDate)
+  let cursor = fnfStartMonth
 
   while (cursor <= lwdMonthStart) {
     const mStart = monthStart(cursor)

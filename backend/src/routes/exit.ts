@@ -130,13 +130,8 @@ exitRouter.post('/:id/resign', async (req, res) => {
     update: {},
   })
 
-  // Auto-skip from current month's payroll
-  const payrollMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  await prisma.payrollSkip.upsert({
-    where:  { employeeId_payrollMonth: { employeeId: emp.id, payrollMonth } },
-    create: { employeeId: emp.id, payrollMonth, reason: 'Auto-skipped: employee resigned', skippedBy: me.id, skippedByName: me.name },
-    update: {},
-  })
+  // Auto-skip from next month onwards through LWD month (resignation month paid via normal payroll)
+  await autoSkipNoticeMonths(emp.id, now, expectedLwd, me.id, me.name)
 
   await logHistory(emp.id, 'SUBMITTED', me.id, me.name, me.role, `Self-resignation. Notice: ${noticeDays} days`)
 
@@ -194,13 +189,8 @@ exitRouter.post('/:id/initiate', requireHR, async (req, res) => {
     update: {},
   })
 
-  // Auto-skip from current month's payroll
-  const payrollMonth = `${resDate.getFullYear()}-${String(resDate.getMonth() + 1).padStart(2, '0')}`
-  await prisma.payrollSkip.upsert({
-    where:  { employeeId_payrollMonth: { employeeId: emp.id, payrollMonth } },
-    create: { employeeId: emp.id, payrollMonth, reason: `Auto-skipped: ${exitType.toLowerCase()} initiated`, skippedBy: me.id, skippedByName: me.name },
-    update: {},
-  })
+  // Auto-skip from next month onwards through LWD month (resignation month paid via normal payroll)
+  await autoSkipNoticeMonths(emp.id, resDate, expectedLwd, me.id, me.name)
 
   await logHistory(emp.id, `INITIATED_BY_${me.role}`, me.id, me.name, me.role, `${exitType} — ${reason}`)
 
@@ -248,6 +238,13 @@ exitRouter.patch('/:id/details', requireHR, async (req, res) => {
 
   await prisma.employee.update({ where: { id: req.params.id }, data })
   await logHistory(emp.id, 'UPDATED', me.id, me.name, me.role, 'Exit details updated')
+
+  // Re-sync PayrollSkip records if LWD or noticePeriodDays changed
+  const newLwd = data.lastWorkingDay || data.expectedLwd || emp.lastWorkingDay || emp.expectedLwd
+  const resDate = data.resignationDate || emp.resignationDate
+  if (newLwd && resDate) {
+    await autoSkipNoticeMonths(emp.id, new Date(resDate), new Date(newLwd), me.id, me.name)
+  }
 
   // When LWD is explicitly set, treat as formal acceptance
   if (lastWorkingDay !== undefined) {
@@ -493,3 +490,27 @@ exitRouter.get('/:id/lop-leaves', requireSuperAdmin, async (req, res) => {
 
   res.json({ success: true, data: apps })
 })
+
+// ─── AUTO-SKIP HELPER ─────────────────────────────────────────────────────────
+
+async function autoSkipNoticeMonths(
+  employeeId: string,
+  resignationDate: Date,
+  lwd: Date,
+  actorId: string,
+  actorName: string
+): Promise<void> {
+  // Start from month AFTER resignation (resignation month paid via normal payroll)
+  let cursor = new Date(resignationDate.getFullYear(), resignationDate.getMonth() + 1, 1)
+  const lwdMonth = new Date(lwd.getFullYear(), lwd.getMonth(), 1)
+
+  while (cursor <= lwdMonth) {
+    const payrollMonth = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+    await prisma.payrollSkip.upsert({
+      where:  { employeeId_payrollMonth: { employeeId, payrollMonth } },
+      create: { employeeId, payrollMonth, reason: 'Auto-skipped: on notice period — salary via F&F', skippedBy: actorId, skippedByName: actorName },
+      update: {},
+    })
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+  }
+}
