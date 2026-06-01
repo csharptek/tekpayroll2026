@@ -72,7 +72,7 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
       employeeId,
       resignationDate:   calc.resignationDate,
       lastWorkingDay:    calc.lastWorkingDay,
-      noticePeriosDays:  calc.salaryDays,
+      noticePeriosDays:  calc.cycles?.length ? calc.cycles.reduce((s: number, c: any) => s + c.salaryDays, 0) : calc.salaryDays,
       salaryDays:        calc.salaryDays,
       salaryAmount:      calc.proratedSalary,
       reimbursements:    calc.pendingReimbursements,
@@ -80,10 +80,12 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
       esiAmount:         calc.esiAmount,
       ptAmount:          calc.ptAmount,
       tdsAmount:         calc.tdsAmount,
-      incentiveRecovery: 0, // handled in F&F separately if needed
+      incentiveRecovery: calc.hyiRecovery,
       loanOutstanding:   calc.loanOutstanding,
       otherDeductions:   0,
       netPayable:        calc.netPayable,
+      breakdownJson:     JSON.stringify(calc.breakdown),
+      cyclesJson:        JSON.stringify(calc.cycles || []),
       status:            'INITIATED',
     },
     include: { employee: true },
@@ -144,8 +146,8 @@ fnfRouter.put('/:id', async (req, res) => {
   if (!settlement) throw new AppError('Settlement not found', 404)
   if (settlement.status !== 'INITIATED') throw new AppError('Can only edit INITIATED settlements', 400)
 
-  const newTds   = req.body.tdsAmount       ?? Number(settlement.tdsAmount)
-  const newOther = req.body.otherDeductions ?? Number(settlement.otherDeductions)
+  const newTds   = req.body.tdsAmount       != null ? Number(req.body.tdsAmount)       : Number(settlement.tdsAmount)
+  const newOther = req.body.otherDeductions != null ? Number(req.body.otherDeductions) : Number(settlement.otherDeductions)
   const totalDed = Number(settlement.pfAmount) + Number(settlement.esiAmount) + Number(settlement.ptAmount) +
     newTds + Number(settlement.incentiveRecovery) + Number(settlement.loanOutstanding) + newOther
   const netPayable = Math.max(0, Number(settlement.salaryAmount) + Number(settlement.reimbursements) - totalDed)
@@ -153,6 +155,20 @@ fnfRouter.put('/:id', async (req, res) => {
   const updated = await prisma.fnfSettlement.update({
     where: { id: req.params.id },
     data: { tdsAmount: newTds, otherDeductions: newOther, netPayable, notes: req.body.notes },
+  })
+
+  res.json({ success: true, data: updated })
+})
+
+// Mark as SETTLED (payment done)
+fnfRouter.post('/:id/settle', async (req, res) => {
+  const settlement = await prisma.fnfSettlement.findUnique({ where: { id: req.params.id }, include: { employee: true } })
+  if (!settlement) throw new AppError('Settlement not found', 404)
+  if (settlement.status !== 'APPROVED') throw new AppError('Only APPROVED settlements can be marked settled', 400)
+
+  const updated = await prisma.fnfSettlement.update({
+    where: { id: req.params.id },
+    data:  { status: 'SETTLED', notes: req.body.notes || settlement.notes },
   })
 
   res.json({ success: true, data: updated })

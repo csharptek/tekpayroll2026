@@ -571,6 +571,9 @@ model FnfSettlement {
 
   netPayable          Decimal     @db.Decimal(12, 2)
 
+  breakdownJson       String?     @db.Text  // JSON array of {label, amount, type}
+  cyclesJson          String?     @db.Text  // JSON array of per-month cycle breakdown
+
   status              FnfStatus   @default(INITIATED)
   approvedBy          String?
   approvedByName      String?

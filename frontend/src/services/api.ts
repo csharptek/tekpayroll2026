@@ -208,6 +208,7 @@ export const fnfApi = {
   preview:         (empId: string, lastWorkingDay?: string) => api.post(`/api/fnf/preview/${empId}`, { lastWorkingDay }),
   initiate:        (empId: string) => api.post(`/api/fnf/initiate/${empId}`),
   approve:         (id: string, notes?: string) => api.post(`/api/fnf/${id}/approve`, { notes }),
+  settle:          (id: string, notes?: string) => api.post(`/api/fnf/${id}/settle`, { notes }),
   update:          (id: string, data: any) => api.put(`/api/fnf/${id}`, data),
 }
 
