@@ -28,7 +28,7 @@ payrollRouter.get("/cycles/:id", requireSuperAdmin, async (req, res) => {
       entries: {
         include: {
           employee: { select: { id: true, name: true, employeeCode: true, department: true } },
-          payslip: { select: { status: true } },
+          payslip: { select: { id: true, status: true, pdfUrl: true, generatedAt: true, emailedAt: true } },
         },
       },
     },
