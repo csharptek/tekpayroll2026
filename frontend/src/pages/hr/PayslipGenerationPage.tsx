@@ -12,6 +12,23 @@ export default function PayslipGenerationPage() {
   const [emailAllConfirm, setEmailAllConfirm] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [emailingId, setEmailingId] = useState<string | null>(null)
+  const [previewingId, setPreviewingId] = useState<string | null>(null)
+
+  const handlePreview = async (payslipId: string) => {
+    setPreviewingId(payslipId)
+    // Open the tab synchronously to avoid popup blockers, then navigate it
+    const tab = window.open('', '_blank')
+    try {
+      const res = await payslipApi.previewUrl(payslipId)
+      const url = res.data.data.url
+      if (tab) tab.location.href = url
+      else window.location.href = url
+    } catch {
+      if (tab) tab.close()
+    } finally {
+      setPreviewingId(null)
+    }
+  }
 
   const { data: cycles, isLoading: loadingCycles } = useQuery({
     queryKey: ['payroll-cycles'],
@@ -168,9 +185,15 @@ export default function PayslipGenerationPage() {
                       <Td>
                         <div className="flex items-center gap-1">
                           {haspdf && (
-                            <a href={ps.pdfUrl.replace(/#/g, '%23')} target="_blank" rel="noreferrer">
-                              <Button variant="ghost" size="sm" icon={<Eye size={12} />}>Preview</Button>
-                            </a>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={<Eye size={12} />}
+                              loading={previewingId === ps.id}
+                              onClick={() => handlePreview(ps.id)}
+                            >
+                              Preview
+                            </Button>
                           )}
                           {haspdf && (
                             <Button

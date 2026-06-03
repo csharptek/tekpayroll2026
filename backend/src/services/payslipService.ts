@@ -1,5 +1,6 @@
 import { prisma } from '../utils/prisma'
 import { generatePayslipHTML } from './payslipTemplate'
+import { uploadPayslipPdf, downloadPayslipPdf, payslipSasUrl } from '../utils/payslipBlob'
 
 // ─── PDF GENERATION ──────────────────────────────────────────────────────────
 
@@ -26,42 +27,28 @@ async function generatePDF(html: string): Promise<Buffer> {
 
 // ─── AZURE BLOB UPLOAD ───────────────────────────────────────────────────────
 
-async function uploadToAzureBlob(buffer: Buffer, blobName: string): Promise<string> {
+async function uploadToAzureBlob(buffer: Buffer, blobKey: string): Promise<string> {
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING
-
   if (!connectionString || connectionString === 'PLACEHOLDER') {
-    console.log(`[BLOB] Dev mode — would upload ${blobName} to Azure Blob`)
-    return `/dev-payslips/${blobName}`
+    console.log(`[BLOB] Dev mode — would upload ${blobKey} to Azure Blob`)
+    return `/dev-payslips/${blobKey}`
   }
-
-  const { BlobServiceClient } = await import('@azure/storage-blob')
-  const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString)
-  const containerName = process.env.AZURE_STORAGE_CONTAINER || 'payslips'
-  const containerClient = blobServiceClient.getContainerClient(containerName)
-  await containerClient.createIfNotExists({ access: 'blob' })
-  const blockBlobClient = containerClient.getBlockBlobClient(blobName)
-  await blockBlobClient.uploadData(buffer, {
-    blobHTTPHeaders: { blobContentType: 'application/pdf' },
-  })
-  console.log(`[BLOB] Uploaded: ${blobName}`)
-  // Encode '#' (from employee codes like C#TEK183) so browsers don't treat it as a URL fragment
-  return blockBlobClient.url.replace(/#/g, '%23')
+  const url = await uploadPayslipPdf(buffer, blobKey)
+  console.log(`[BLOB] Uploaded: ${blobKey}`)
+  return url
 }
 
 // ─── DELETE FROM BLOB (for regeneration cleanup) ─────────────────────────────
 
-export async function deleteFromAzureBlob(blobName: string): Promise<void> {
+export async function deleteFromAzureBlob(blobKey: string): Promise<void> {
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING
   if (!connectionString || connectionString === 'PLACEHOLDER') return
-  const { BlobServiceClient } = await import('@azure/storage-blob')
-  const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString)
-  const containerClient = blobServiceClient.getContainerClient(
-    process.env.AZURE_STORAGE_CONTAINER || 'payslips'
-  )
-  await containerClient.getBlockBlobClient(blobName).deleteIfExists()
+  const { deletePayslipPdf } = await import('../utils/payslipBlob')
+  await deletePayslipPdf(blobKey)
 }
 
 // ─── EMAIL ───────────────────────────────────────────────────────────────────
+
 
 export async function sendPayslipEmail(
   toEmail: string,
@@ -169,7 +156,7 @@ export async function generateAndDeliverPayslips(
       const pdfBuffer = await generatePDF(html)
 
       const filename = `payslip-${entry.employee.employeeCode}-${cycle.payrollMonth}.pdf`
-      const blobName = `payslips/${cycle.payrollMonth}/${entry.employee.employeeCode}/${filename}`
+      const blobName = `${cycle.payrollMonth}/${entry.employee.employeeCode}/${filename}`
 
       const pdfUrl = await uploadToAzureBlob(pdfBuffer, blobName)
 
@@ -217,7 +204,7 @@ export async function emailSinglePayslip(payslipId: string): Promise<void> {
     },
   })
   if (!payslip) throw new Error('Payslip not found')
-  if (!payslip.pdfUrl || !payslip.pdfKey) throw new Error('PDF not yet generated')
+  if (!payslip.pdfKey) throw new Error('PDF not yet generated')
 
   // Download from blob to get buffer for attachment
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING
@@ -226,21 +213,13 @@ export async function emailSinglePayslip(payslipId: string): Promise<void> {
   if (!connectionString || connectionString === 'PLACEHOLDER') {
     pdfBuffer = Buffer.from('dev-pdf')
   } else {
-    const { BlobServiceClient } = await import('@azure/storage-blob')
-    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString)
-    const containerClient = blobServiceClient.getContainerClient(
-      process.env.AZURE_STORAGE_CONTAINER || 'payslips'
-    )
-    const blobClient = containerClient.getBlobClient(payslip.pdfKey)
-    const download = await blobClient.download()
-    const chunks: Buffer[] = []
-    for await (const chunk of download.readableStreamBody as any) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-    }
-    pdfBuffer = Buffer.concat(chunks)
+    pdfBuffer = await downloadPayslipPdf(payslip.pdfKey)
   }
 
   const filename = `payslip-${payslip.employee.employeeCode}-${payslip.cycle.payrollMonth}.pdf`
+  const freshUrl = (!connectionString || connectionString === 'PLACEHOLDER')
+    ? (payslip.pdfUrl || '')
+    : payslipSasUrl(payslip.pdfKey)
 
   await sendPayslipEmail(
     payslip.employee.email,
@@ -248,7 +227,7 @@ export async function emailSinglePayslip(payslipId: string): Promise<void> {
     payslip.cycle.payrollMonth,
     pdfBuffer,
     filename,
-    payslip.pdfUrl
+    freshUrl
   )
 
   await prisma.payslip.update({

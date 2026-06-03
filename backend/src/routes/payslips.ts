@@ -5,6 +5,7 @@ import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
 import { AuditAction } from '@prisma/client'
 import { generateAndDeliverPayslips, emailSinglePayslip } from '../services/payslipService'
+import { payslipSasUrl } from '../utils/payslipBlob'
 
 export const payslipRouter = Router()
 payslipRouter.use(authenticate)
@@ -39,6 +40,22 @@ payslipRouter.get('/:id', async (req, res) => {
   }
 
   res.json({ success: true, data: payslip })
+})
+
+// GET fresh preview (SAS) URL for a payslip
+payslipRouter.get('/:id/preview-url', async (req, res) => {
+  const payslip = await prisma.payslip.findUnique({
+    where: { id: req.params.id },
+    select: { employeeId: true, pdfKey: true, pdfUrl: true },
+  })
+  if (!payslip) throw new AppError('Payslip not found', 404)
+  if (req.user!.role === 'EMPLOYEE' && req.user!.id !== payslip.employeeId) {
+    throw new AppError('Access denied', 403)
+  }
+  if (!payslip.pdfKey) throw new AppError('PDF not yet generated', 400)
+
+  const url = payslipSasUrl(payslip.pdfKey)
+  res.json({ success: true, data: { url } })
 })
 
 // POST generate payslips for a cycle (no auto-email)
