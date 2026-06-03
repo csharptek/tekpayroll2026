@@ -1,6 +1,60 @@
 import { prisma } from '../utils/prisma'
-import { generatePayslipHTML } from './payslipTemplate'
+import { generatePayslipHTML, PayslipYtd } from './payslipTemplate'
 import { uploadPayslipPdf, downloadPayslipPdf, payslipSasUrl } from '../utils/payslipBlob'
+
+// ─── YTD (financial year Apr–Mar, inclusive of current month) ────────────────
+
+function fyMonthsUpTo(payrollMonth: string): string[] {
+  const [y, m] = payrollMonth.split('-').map(Number)
+  const fyStartYear = m >= 4 ? y : y - 1
+  const months: string[] = []
+  let yy = fyStartYear, mm = 4
+  while (true) {
+    const key = `${yy}-${String(mm).padStart(2, '0')}`
+    months.push(key)
+    if (key === payrollMonth) break
+    mm++
+    if (mm > 12) { mm = 1; yy++ }
+    if (yy > fyStartYear + 1) break // safety
+  }
+  return months
+}
+
+async function computeYtd(employeeId: string, payrollMonth: string): Promise<PayslipYtd> {
+  const months = fyMonthsUpTo(payrollMonth)
+  const entries = await prisma.payrollEntry.findMany({
+    where: {
+      employeeId,
+      cycle: { payrollMonth: { in: months }, status: { in: ['CALCULATED', 'LOCKED', 'DISBURSED'] } },
+    },
+    select: {
+      basic: true, proratedGross: true, netSalary: true,
+      pfAmount: true, employerPfAmount: true, esiAmount: true,
+      tdsAmount: true, ptAmount: true, lopAmount: true,
+      isProrated: true, totalDays: true, payableDays: true,
+    },
+  })
+
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const acc: PayslipYtd = { basic: 0, gross: 0, net: 0, employeePf: 0, employerPf: 0, esi: 0, tds: 0, pt: 0, lop: 0, months: entries.length }
+
+  for (const e of entries) {
+    const ratio = e.isProrated && Number(e.totalDays) > 0 ? Number(e.payableDays) / Number(e.totalDays) : 1
+    acc.basic      += r2(Number(e.basic) * ratio)
+    acc.gross      += Number(e.proratedGross)
+    acc.net        += Number(e.netSalary)
+    acc.employeePf += Number(e.pfAmount)
+    acc.employerPf += Number((e as any).employerPfAmount || 0)
+    acc.esi        += Number(e.esiAmount)
+    acc.tds        += Number(e.tdsAmount)
+    acc.pt         += Number(e.ptAmount)
+    acc.lop        += Number(e.lopAmount)
+  }
+
+  Object.keys(acc).forEach(k => { if (k !== 'months') (acc as any)[k] = r2((acc as any)[k]) })
+  return acc
+}
+
 
 // ─── PDF GENERATION ──────────────────────────────────────────────────────────
 
@@ -152,7 +206,10 @@ export async function generateAndDeliverPayslips(
         amount: Number(r.amount),
       }))
 
-      const html      = generatePayslipHTML(entry as any, leaveBalance, reimbLines)
+      // Year-to-date totals across financial year (Apr–Mar), inclusive of current month
+      const ytd = await computeYtd(entry.employeeId, cycle.payrollMonth)
+
+      const html      = generatePayslipHTML(entry as any, leaveBalance, reimbLines, ytd)
       const pdfBuffer = await generatePDF(html)
 
       const filename = `payslip-${entry.employee.employeeCode}-${cycle.payrollMonth}.pdf`
