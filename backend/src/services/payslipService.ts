@@ -44,7 +44,8 @@ async function uploadToAzureBlob(buffer: Buffer, blobName: string): Promise<stri
     blobHTTPHeaders: { blobContentType: 'application/pdf' },
   })
   console.log(`[BLOB] Uploaded: ${blobName}`)
-  return blockBlobClient.url
+  // Encode '#' (from employee codes like C#TEK183) so browsers don't treat it as a URL fragment
+  return blockBlobClient.url.replace(/#/g, '%23')
 }
 
 // ─── DELETE FROM BLOB (for regeneration cleanup) ─────────────────────────────

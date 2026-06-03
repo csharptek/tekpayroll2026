@@ -168,7 +168,7 @@ export default function PayslipGenerationPage() {
                       <Td>
                         <div className="flex items-center gap-1">
                           {haspdf && (
-                            <a href={ps.pdfUrl} target="_blank" rel="noreferrer">
+                            <a href={ps.pdfUrl.replace(/#/g, '%23')} target="_blank" rel="noreferrer">
                               <Button variant="ghost" size="sm" icon={<Eye size={12} />}>Preview</Button>
                             </a>
                           )}
