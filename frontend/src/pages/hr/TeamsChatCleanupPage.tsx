@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare, Trash2, Loader2, Users, Search, X } from 'lucide-react'
 import { teamsChatApi } from '../../services/api'
 import { PageHeader, Card } from '../../components/ui'
+import { DatePicker } from '../../components/DatePicker'
 import { format } from 'date-fns'
 
 interface Employee {
@@ -39,6 +40,12 @@ export default function TeamsChatCleanupPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [msgNextLink, setMsgNextLink] = useState<string | null>(null)
   const [msgLoading, setMsgLoading] = useState(false)
+  const [cutoffOpen, setCutoffOpen] = useState(false)
+  const [cutoffDate, setCutoffDate] = useState('')
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanResult, setScanResult] = useState<Chat[] | null>(null)
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const qc = useQueryClient()
 
   const { data: employees = [] } = useQuery<Employee[]>({
@@ -92,6 +99,34 @@ export default function TeamsChatCleanupPage() {
     },
   })
 
+  const runScan = async () => {
+    if (!selectedEntraId || !cutoffDate) return
+    setScanLoading(true)
+    setScanResult(null)
+    try {
+      const { data } = await teamsChatApi.scanBefore(selectedEntraId, cutoffDate)
+      setScanResult(data.chats)
+    } finally {
+      setScanLoading(false)
+    }
+  }
+
+  const runBulkDelete = async () => {
+    if (!scanResult) return
+    setBulkDeleting(true)
+    try {
+      const ids = scanResult.map((c) => c.id)
+      await teamsChatApi.bulkDelete(ids)
+      setChats((prev) => prev.filter((c) => !ids.includes(c.id)))
+      setBulkConfirm(false)
+      setCutoffOpen(false)
+      setScanResult(null)
+      setCutoffDate('')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader title="Teams Chat Cleanup" subtitle="Super Admin only — delete user Teams chats via Microsoft Graph" />
@@ -120,6 +155,14 @@ export default function TeamsChatCleanupPage() {
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             Load Chats
+          </button>
+          <button
+            className="border border-red-300 text-red-600 px-4 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50"
+            disabled={!selectedEntraId}
+            onClick={() => setCutoffOpen(true)}
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Before Date
           </button>
         </div>
       </Card>
@@ -237,6 +280,94 @@ export default function TeamsChatCleanupPage() {
           </div>
         </div>
       )}
+
+      {cutoffOpen && !bulkConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-semibold">Delete Chats Before Date</h3>
+              <button
+                onClick={() => { setCutoffOpen(false); setScanResult(null); setCutoffDate('') }}
+                className="p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <DatePicker label="Delete all chats updated before" value={cutoffDate} onChange={(v) => { setCutoffDate(v); setScanResult(null) }} />
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50 w-full justify-center"
+                disabled={!cutoffDate || scanLoading}
+                onClick={runScan}
+              >
+                {scanLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Scan Chats
+              </button>
+
+              {scanResult !== null && (
+                <div className="border-t pt-4">
+                  {scanResult.length === 0 ? (
+                    <p className="text-sm text-gray-500">No chats found before this date.</p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-700 mb-2 font-medium">
+                        {scanResult.length} chats found
+                      </p>
+                      <div className="max-h-48 overflow-y-auto border rounded-lg divide-y mb-3">
+                        {scanResult.map((c) => (
+                          <div key={c.id} className="px-3 py-2 text-sm">
+                            <span className="font-medium">{c.topic || c.chatType}</span>
+                            {c.lastUpdated && (
+                              <span className="text-gray-400 text-xs ml-2">
+                                {format(new Date(c.lastUpdated), 'dd MMM yyyy')}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 w-full justify-center"
+                        onClick={() => setBulkConfirm(true)}
+                      >
+                        <Trash2 className="w-4 h-4" /> Delete {scanResult.length} Chats
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bulkConfirm && scanResult && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
+            <h3 className="font-semibold text-lg mb-2">Delete {scanResult.length} chats?</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              All chats updated before {cutoffDate} will be permanently deleted from Microsoft Teams for everyone. This cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                className="px-4 py-2 rounded-lg border"
+                onClick={() => setBulkConfirm(false)}
+                disabled={bulkDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg bg-red-600 text-white flex items-center gap-2 disabled:opacity-50"
+                onClick={runBulkDelete}
+                disabled={bulkDeleting}
+              >
+                {bulkDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Delete {scanResult.length}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {confirmChat && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">

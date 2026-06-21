@@ -304,6 +304,9 @@ export const teamsChatApi = {
   messages:   (chatId: string, nextLink?: string) =>
                 api.get(`/api/teams-chat/chats/${chatId}/messages`, { params: { nextLink } }),
   deleteChat: (chatId: string)   => api.delete(`/api/teams-chat/chats/${chatId}`),
+  bulkDelete: (chatIds: string[]) => api.post('/api/teams-chat/chats/bulk-delete', { chatIds }),
+  scanBefore: (entraId: string, before: string) =>
+                api.get('/api/teams-chat/chats/before', { params: { entraId, before } }),
 }
 
 export const assetApi = {
