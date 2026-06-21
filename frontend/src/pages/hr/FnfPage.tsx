@@ -106,6 +106,7 @@ function CalculationDetailsPanel({ calc }: { calc: any }) {
                     <th className="text-right font-medium pb-1">Allowed</th>
                     <th className="text-right font-medium pb-1">Used</th>
                     <th className="text-right font-medium pb-1">Excess</th>
+                    <th className="text-right font-medium pb-1">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -118,9 +119,19 @@ function CalculationDetailsPanel({ calc }: { calc: any }) {
                       <td className={clsx('py-1 text-right font-semibold', r.excessDays > 0 ? 'text-red-600' : 'text-slate-400')}>
                         {r.excessDays > 0 ? r.excessDays : '—'}
                       </td>
+                      <td className={clsx('py-1 text-right font-semibold', r.excessAmount > 0 ? 'text-red-600' : 'text-slate-400')}>
+                        {r.excessAmount > 0 ? `₹${Math.round(r.excessAmount).toLocaleString('en-IN')}` : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="font-semibold text-slate-800 border-t border-slate-100">
+                    <td colSpan={4} className="py-1">Total</td>
+                    <td className="py-1 text-right">{calc.excessLeaveDays}</td>
+                    <td className="py-1 text-right">₹{Math.round(calc.excessLeaveAmount).toLocaleString('en-IN')}</td>
+                  </tr>
+                </tfoot>
               </table>
               <p className="text-[10px] text-slate-400 mt-1.5">
                 Allowed = Annual × months-elapsed (Jan → resignation month) ÷ 12. No encashment for unused leave.
@@ -161,7 +172,7 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
   const deductions = (calc?.breakdown || []).filter((b: any) => b.type === 'deduction')
 
   return (
-    <Modal open={open} onClose={onClose} title={`F&F Calculation — ${employeeName}`}
+    <Modal open={open} onClose={onClose} title={`F&F Calculation — ${employeeName}`} size="xl"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>

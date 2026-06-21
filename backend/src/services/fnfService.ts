@@ -59,6 +59,7 @@ export interface ExcessLeaveDetailRow {
   proratedAllowed:  number
   usedDays:         number
   excessDays:       number
+  excessAmount:     number
 }
 
 export interface HyiRecoveryDetailRow {
@@ -257,12 +258,21 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     where: { employeeId, year: proYear },
   })
 
+  const resignMonthStart = monthStart(resignationDate)
+  const resignMonthEnd   = monthEnd(resignationDate)
+  const resignMonthTotalDays = daysBetween(resignMonthStart, resignMonthEnd)
+  const grossForExcess = salaryForHyi.prebuiltSalary
+    ? salaryForHyi.prebuiltSalary.grandTotalMonthly
+    : computeSalaryStructure(salaryForHyi).grandTotalMonthly
+
   let excessLeaveDays = 0
+  let excessLeaveAmount = 0
   const excessLeaveDetail: ExcessLeaveDetailRow[] = []
   for (const ent of entitlements) {
     const proratedAllowed = (Number(ent.totalDays) * monthsElapsed) / 12
     const usedSoFar        = Number(ent.usedDays)
     const excess           = usedSoFar > proratedAllowed ? usedSoFar - proratedAllowed : 0
+    const excessAmount     = excess > 0 ? computeLop(grossForExcess, resignMonthTotalDays, excess) : 0
     excessLeaveDetail.push({
       leaveKind:         ent.leaveKind,
       annualEntitlement: Number(ent.totalDays),
@@ -270,21 +280,13 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
       proratedAllowed:   r2(proratedAllowed),
       usedDays:          usedSoFar,
       excessDays:        r2(excess),
+      excessAmount:      r2(excessAmount),
     })
-    excessLeaveDays += excess
+    excessLeaveDays   += excess
+    excessLeaveAmount += excessAmount
   }
-  excessLeaveDays = r2(excessLeaveDays)
-
-  let excessLeaveAmount = 0
-  if (excessLeaveDays > 0) {
-    const resignMonthStart = monthStart(resignationDate)
-    const resignMonthEnd   = monthEnd(resignationDate)
-    const resignMonthTotalDays = daysBetween(resignMonthStart, resignMonthEnd)
-    const grossForExcess = salaryForHyi.prebuiltSalary
-      ? salaryForHyi.prebuiltSalary.grandTotalMonthly
-      : computeSalaryStructure(salaryForHyi).grandTotalMonthly
-    excessLeaveAmount = computeLop(grossForExcess, resignMonthTotalDays, excessLeaveDays)
-  }
+  excessLeaveDays   = r2(excessLeaveDays)
+  excessLeaveAmount = r2(excessLeaveAmount)
 
   // ─── NOTICE PERIOD SPAN (display metric — resignation date → LWD, inclusive) ──
   // Distinct from F&F's own salaryDays/cycles, which only cover the months F&F
