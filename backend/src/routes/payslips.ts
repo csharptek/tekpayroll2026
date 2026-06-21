@@ -27,6 +27,32 @@ payslipRouter.get('/employee/:employeeId', async (req, res) => {
   res.json({ success: true, data: payslips })
 })
 
+// GET F&F settlement statement for a specific employee (self-service + HR)
+// Separate from regular monthly payslips — the F&F settlement is a one-time
+// terminal document, not tied to a PayrollCycle/PayrollEntry.
+payslipRouter.get('/fnf-statement/:employeeId', async (req, res) => {
+  if (req.user!.role === 'EMPLOYEE' && req.user!.id !== req.params.employeeId) {
+    throw new AppError('Access denied', 403)
+  }
+
+  const settlement = await prisma.fnfSettlement.findUnique({
+    where: { employeeId: req.params.employeeId },
+    select: {
+      id: true, pdfUrl: true, status: true, netPayable: true,
+      resignationDate: true, lastWorkingDay: true, approvedAt: true, createdAt: true,
+    },
+  })
+
+  // Employees only see it once HR has approved (finalized) the settlement —
+  // an INITIATED settlement is still editable (TDS/other deductions) and
+  // shouldn't be shown as final to the employee.
+  if (req.user!.role === 'EMPLOYEE' && settlement && !['APPROVED', 'SETTLED'].includes(settlement.status)) {
+    return res.json({ success: true, data: null })
+  }
+
+  res.json({ success: true, data: settlement || null })
+})
+
 // GET single payslip
 payslipRouter.get('/:id', async (req, res) => {
   const payslip = await prisma.payslip.findUnique({

@@ -33,6 +33,12 @@ export default function MyPayslipsPage() {
     queryFn: () => payslipApi.passwordStatus().then(r => r.data.data),
   })
 
+  const { data: fnfStatement } = useQuery({
+    queryKey: ['my-fnf-statement', user?.id],
+    queryFn: () => payslipApi.fnfStatement(user!.id).then(r => r.data.data),
+    enabled: !!user?.id,
+  })
+
   const { mutate: verify, isLoading: verifying } = useMutation({
     mutationFn: () => payslipApi.verifyPassword(pwInput),
     onSuccess: () => {
@@ -140,6 +146,28 @@ export default function MyPayslipsPage() {
           </button>
         ))}
       </div>
+
+      {fnfStatement && (
+        <Card>
+          <div className="px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="font-semibold text-slate-800">Full &amp; Final Settlement Statement</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {fnfStatement.lastWorkingDay && `Last working day ${format(new Date(fnfStatement.lastWorkingDay), 'dd MMM yyyy')} · `}
+                Net payable <Rupee amount={fnfStatement.netPayable} />
+              </p>
+            </div>
+            {fnfStatement.pdfUrl ? (
+              <a href={fnfStatement.pdfUrl} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-800 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors">
+                <Download size={12} /> Download PDF
+              </a>
+            ) : (
+              <span className="text-xs text-slate-300">Not ready</span>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card>
         {loadingPayslips ? <Skeleton className="h-64 m-4" /> : !filtered.length ? (

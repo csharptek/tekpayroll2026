@@ -157,6 +157,7 @@ export const reimbursementApi = {
 
 export const payslipApi = {
   forEmployee: (employeeId: string) => api.get(`/api/payslips/employee/${employeeId}`),
+  fnfStatement: (employeeId: string) => api.get(`/api/payslips/fnf-statement/${employeeId}`),
   generate: (cycleId: string) => api.post(`/api/payslips/generate/${cycleId}`),
   previewUrl: (payslipId: string) => api.get(`/api/payslips/${payslipId}/preview-url`),
   emailOne: (payslipId: string) => api.post(`/api/payslips/email/${payslipId}`),
