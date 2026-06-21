@@ -13,6 +13,59 @@ import {
 } from '../../components/ui'
 import clsx from 'clsx'
 
+// ─── BREAKDOWN DETAIL HOVER ────────────────────────────────────────────────
+
+function BreakdownDetailTooltip({ rows }: { rows: any[] }) {
+  return (
+    <div className="absolute z-20 right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-left">
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="text-slate-400 border-b border-slate-100">
+            <th className="text-left font-medium pb-1">Leave</th>
+            <th className="text-right font-medium pb-1">Annual</th>
+            <th className="text-right font-medium pb-1">Allowed</th>
+            <th className="text-right font-medium pb-1">Used</th>
+            <th className="text-right font-medium pb-1">Excess</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.leaveKind} className="text-slate-700">
+              <td className="py-0.5 capitalize">{r.leaveKind.toLowerCase()}</td>
+              <td className="py-0.5 text-right">{r.annualEntitlement}</td>
+              <td className="py-0.5 text-right">{r.proratedAllowed}</td>
+              <td className="py-0.5 text-right">{r.usedDays}</td>
+              <td className={clsx('py-0.5 text-right font-semibold', r.excessDays > 0 ? 'text-red-600' : 'text-slate-400')}>
+                {r.excessDays > 0 ? r.excessDays : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-100">
+        Allowed = Annual × {rows[0]?.monthsElapsed ?? ''} months ÷ 12 (Jan → resignation month)
+      </p>
+    </div>
+  )
+}
+
+function DeductionRow({ b }: { b: any }) {
+  const [hover, setHover] = useState(false)
+  const hasDetail = Array.isArray(b.detail) && b.detail.length > 0
+
+  return (
+    <div
+      className="relative flex justify-between text-xs"
+      onMouseEnter={() => hasDetail && setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <span className={clsx('text-slate-600', hasDetail && 'underline decoration-dotted cursor-help')}>{b.label}</span>
+      <span className="font-semibold text-red-700">−₹{Number(b.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+      {hasDetail && hover && <BreakdownDetailTooltip rows={b.detail} />}
+    </div>
+  )
+}
+
 // ─── CALCULATION PREVIEW MODAL ────────────────────────────────────────────────
 
 function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitiate }: {
@@ -73,7 +126,7 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
           </div>
 
           {/* Breakdown grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 border border-slate-200 rounded-xl overflow-hidden">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 border border-slate-200 rounded-xl">
             <div className="px-4 py-3 border-b sm:border-b-0 sm:border-r border-slate-200">
               <p className="text-xs font-semibold text-emerald-700 mb-2">Earnings</p>
               <div className="space-y-1.5">
@@ -94,12 +147,7 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
               <div className="space-y-1.5">
                 {deductions.length === 0
                   ? <p className="text-xs text-slate-400">No deductions</p>
-                  : deductions.map((b: any) => (
-                    <div key={b.label} className="flex justify-between text-xs">
-                      <span className="text-slate-600">{b.label}</span>
-                      <span className="font-semibold text-red-700">−₹{Number(b.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                    </div>
-                  ))}
+                  : deductions.map((b: any) => <DeductionRow key={b.label} b={b} />)}
               </div>
               <div className="flex justify-between text-xs font-bold text-red-600 mt-2 pt-2 border-t border-slate-100">
                 <span>Total Deductions</span>

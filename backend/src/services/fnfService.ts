@@ -44,8 +44,16 @@ export interface FnfCalculation {
   totalDeductions:   number
   netPayable:        number
   cycles:            FnfCycleBreakdown[]
-  breakdown: { label: string; amount: number; type: 'addition' | 'deduction' }[]
+  breakdown: { label: string; amount: number; type: 'addition' | 'deduction'; detail?: ExcessLeaveDetailRow[] }[]
 }
+
+export interface ExcessLeaveDetailRow {
+  leaveKind:        string
+  annualEntitlement:number
+  monthsElapsed:    number
+  proratedAllowed:  number
+  usedDays:         number
+  excessDays:       number
 
 function daysBetween(start: Date, end: Date): number {
   return Math.round(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -233,12 +241,20 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   })
 
   let excessLeaveDays = 0
+  const excessLeaveDetail: ExcessLeaveDetailRow[] = []
   for (const ent of entitlements) {
     const proratedAllowed = (Number(ent.totalDays) * monthsElapsed) / 12
     const usedSoFar        = Number(ent.usedDays)
-    if (usedSoFar > proratedAllowed) {
-      excessLeaveDays += usedSoFar - proratedAllowed
-    }
+    const excess           = usedSoFar > proratedAllowed ? usedSoFar - proratedAllowed : 0
+    excessLeaveDetail.push({
+      leaveKind:         ent.leaveKind,
+      annualEntitlement: Number(ent.totalDays),
+      monthsElapsed,
+      proratedAllowed:   r2(proratedAllowed),
+      usedDays:          usedSoFar,
+      excessDays:        r2(excess),
+    })
+    excessLeaveDays += excess
   }
   excessLeaveDays = r2(excessLeaveDays)
 
@@ -286,7 +302,7 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   if (loanOutstanding > 0)    breakdown.push({ label: 'Loan Outstanding',  amount: loanOutstanding, type: 'deduction' })
   if (hyiRecovery > 0)        breakdown.push({ label: 'HYI Recovery',      amount: hyiRecovery, type: 'deduction' })
   if (totalLopAmount > 0)     breakdown.push({ label: `LOP (${totalLopDays} days)`, amount: totalLopAmount, type: 'deduction' })
-  if (excessLeaveAmount > 0)  breakdown.push({ label: `Excess Leave Recovery (${excessLeaveDays} days)`, amount: excessLeaveAmount, type: 'deduction' })
+  if (excessLeaveAmount > 0)  breakdown.push({ label: `Excess Leave Recovery (${excessLeaveDays} days)`, amount: excessLeaveAmount, type: 'deduction', detail: excessLeaveDetail.filter(d => d.excessDays > 0 || d.usedDays > 0) })
 
   return {
     employeeId,
