@@ -213,6 +213,7 @@ export const fnfApi = {
   approve:         (id: string, notes?: string) => api.post(`/api/fnf/${id}/approve`, { notes }),
   settle:          (id: string, notes?: string) => api.post(`/api/fnf/${id}/settle`, { notes }),
   update:          (id: string, data: any) => api.put(`/api/fnf/${id}`, data),
+  generatePdf:     (id: string) => api.post(`/api/fnf/${id}/generate-pdf`),
 }
 
 export const leaveApi = {

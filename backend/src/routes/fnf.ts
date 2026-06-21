@@ -100,7 +100,43 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
     description: `F&F initiated for ${calc.employeeName} — Net payable ₹${calc.netPayable}`,
   })
 
-  res.status(201).json({ success: true, data: { settlement, calculation: calc } })
+  // Generate the F&F settlement statement PDF. Non-blocking — a PDF failure
+  // (e.g. Azure not configured) must not block F&F initiation itself.
+  let finalSettlement = settlement
+  try {
+    const { generateFnfStatementPdf } = await import('../services/fnfPdfService')
+    const { pdfUrl, pdfKey } = await generateFnfStatementPdf(calc, settlement.employee)
+    finalSettlement = await prisma.fnfSettlement.update({
+      where: { id: settlement.id },
+      data:  { pdfUrl, pdfKey },
+      include: { employee: true },
+    })
+  } catch (e: any) {
+    console.error('[FNF PDF] Generation failed:', e.message)
+  }
+
+  res.status(201).json({ success: true, data: { settlement: finalSettlement, calculation: calc } })
+})
+
+// Regenerate the F&F statement PDF (after PUT edits, or if generation failed earlier)
+fnfRouter.post('/:id/generate-pdf', async (req, res) => {
+  const settlement = await prisma.fnfSettlement.findUnique({
+    where: { id: req.params.id },
+    include: { employee: true },
+  })
+  if (!settlement) throw new AppError('Settlement not found', 404)
+
+  const calc = await calculateFnf(settlement.employeeId, settlement.lastWorkingDay)
+  const { generateFnfStatementPdf } = await import('../services/fnfPdfService')
+  const { pdfUrl, pdfKey } = await generateFnfStatementPdf(calc, settlement.employee)
+
+  const updated = await prisma.fnfSettlement.update({
+    where: { id: settlement.id },
+    data:  { pdfUrl, pdfKey },
+    include: { employee: true },
+  })
+
+  res.json({ success: true, data: updated })
 })
 
 fnfRouter.post('/:id/approve', async (req, res) => {

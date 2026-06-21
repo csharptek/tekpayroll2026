@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   GitMerge, Calculator, CheckCircle2, Eye,
-  Calendar, AlertTriangle, Banknote, IndianRupee,
+  Calendar, AlertTriangle, Banknote, IndianRupee, FileText,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { fnfApi } from '../../services/api'
@@ -380,6 +380,35 @@ function SettleModal({ settlement, open, onClose }: { settlement: any; open: boo
   )
 }
 
+// ─── STATEMENT DOWNLOAD / GENERATE BUTTON ─────────────────────────────────
+
+function StatementButton({ settlement }: { settlement: any }) {
+  const qc = useQueryClient()
+  const genMut = useMutation({
+    mutationFn: () => fnfApi.generatePdf(settlement.id),
+    onSuccess:  (res) => {
+      qc.invalidateQueries({ queryKey: ['fnf-list'] })
+      const url = res?.data?.data?.pdfUrl
+      if (url) window.open(url, '_blank')
+    },
+  })
+
+  if (settlement.pdfUrl) {
+    return (
+      <Button variant="secondary" size="sm" icon={<FileText size={12} />}
+        onClick={() => window.open(settlement.pdfUrl, '_blank')}>
+        Statement
+      </Button>
+    )
+  }
+  return (
+    <Button variant="secondary" size="sm" icon={<FileText size={12} />}
+      loading={genMut.isPending} onClick={() => genMut.mutate()}>
+      Generate Statement
+    </Button>
+  )
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function FnfPage() {
@@ -489,6 +518,7 @@ export default function FnfPage() {
                           onClick={() => navigate(`/hr/employees/${s.employeeId}`)}>
                           View
                         </Button>
+                        <StatementButton settlement={s} />
                         <Button size="sm" icon={<CheckCircle2 size={12} />} onClick={() => setApproveTarget(s)}>
                           Approve
                         </Button>
@@ -526,9 +556,12 @@ export default function FnfPage() {
                   <Td>{s.approvedAt ? format(new Date(s.approvedAt), 'dd MMM yyyy') : '—'}</Td>
                   <Td className="text-right font-bold text-brand-700"><Rupee amount={s.netPayable} /></Td>
                   <Td>
-                    <Button size="sm" icon={<Banknote size={12} />} onClick={() => setSettleTarget(s)}>
-                      Mark Settled
-                    </Button>
+                    <div className="flex gap-2">
+                      <StatementButton settlement={s} />
+                      <Button size="sm" icon={<Banknote size={12} />} onClick={() => setSettleTarget(s)}>
+                        Mark Settled
+                      </Button>
+                    </div>
                   </Td>
                 </Tr>
               ))}
@@ -551,6 +584,7 @@ export default function FnfPage() {
                 <Th>Approved On</Th>
                 <Th className="text-right">Net Paid</Th>
                 <Th>Notes</Th>
+                <Th>Statement</Th>
               </tr>
             </thead>
             <tbody>
@@ -564,6 +598,7 @@ export default function FnfPage() {
                   <Td>{s.approvedAt ? format(new Date(s.approvedAt), 'dd MMM yyyy') : '—'}</Td>
                   <Td className="text-right font-bold"><Rupee amount={s.netPayable} /></Td>
                   <Td className="text-xs text-slate-400">{s.notes || '—'}</Td>
+                  <Td><StatementButton settlement={s} /></Td>
                 </Tr>
               ))}
             </tbody>
