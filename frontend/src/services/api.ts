@@ -299,7 +299,10 @@ export const cronApi = {
 
 export const teamsChatApi = {
   employees:  ()                 => api.get('/api/teams-chat/employees'),
-  chats:      (entraId: string)  => api.get('/api/teams-chat/chats', { params: { entraId } }),
+  chats:      (entraId: string, nextLink?: string) =>
+                api.get('/api/teams-chat/chats', { params: { entraId, nextLink } }),
+  messages:   (chatId: string, nextLink?: string) =>
+                api.get(`/api/teams-chat/chats/${chatId}/messages`, { params: { nextLink } }),
   deleteChat: (chatId: string)   => api.delete(`/api/teams-chat/chats/${chatId}`),
 }
 
