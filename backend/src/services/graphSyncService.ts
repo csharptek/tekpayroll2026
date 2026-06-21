@@ -4,7 +4,7 @@ const EMPLOYER_PF = 21600
 
 // ─── GRAPH TOKEN ─────────────────────────────────────────────────────────────
 
-async function getGraphToken(): Promise<string> {
+export async function getGraphToken(): Promise<string> {
   const { AZURE_TENANT_ID: tid, AZURE_CLIENT_ID: cid, AZURE_CLIENT_SECRET: sec } = process.env
   if (!tid || !cid || !sec || tid === 'PLACEHOLDER') throw new Error('Azure credentials not configured')
 

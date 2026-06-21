@@ -297,6 +297,12 @@ export const cronApi = {
   triggerManual:   (job: string)  => api.post(`/api/cron/manual/${job}`),
 }
 
+export const teamsChatApi = {
+  employees:  ()                 => api.get('/api/teams-chat/employees'),
+  chats:      (entraId: string)  => api.get('/api/teams-chat/chats', { params: { entraId } }),
+  deleteChat: (chatId: string)   => api.delete(`/api/teams-chat/chats/${chatId}`),
+}
+
 export const assetApi = {
   // Config
   categories:          ()                        => api.get('/api/assets/config/categories'),
