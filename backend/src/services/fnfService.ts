@@ -1,6 +1,6 @@
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
-import { computeSalaryStructure, computeEsi, computePt, getSalaryInputForDate, getHyiSlab } from './payrollEngine'
+import { computeSalaryStructure, computeEsi, computePt, computeLop, getSalaryInputForDate, getHyiSlab } from './payrollEngine'
 
 export interface FnfCycleBreakdown {
   cycleLabel:    string
@@ -14,6 +14,8 @@ export interface FnfCycleBreakdown {
   esiAmount:     number
   ptAmount:      number
   tdsAmount:     number
+  lopDays:       number
+  lopAmount:     number
 }
 
 export interface FnfCalculation {
@@ -34,6 +36,8 @@ export interface FnfCalculation {
   loanOutstanding:   number
   otherDeductions:   number
   hyiRecovery:       number
+  lopDays:           number
+  lopAmount:         number
   totalAdditions:    number
   totalDeductions:   number
   netPayable:        number
@@ -85,6 +89,21 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   const cycles: FnfCycleBreakdown[] = []
   let cursor = fnfStartMonth
 
+  // ─── LOP-RELEVANT LEAVE (notice-period rule) ──────────────────────────────
+  // Only leave applications dated within fnfStartMonth..lwd are relevant — resignation
+  // month is paid via normal payroll and tracked there via LopEntry, not here.
+  // Rule: pre-resignation approved leave stays paid as originally approved.
+  //       Leave applied (createdAt) AFTER resignationDate during notice → forced full LOP,
+  //       since leave is not allowed during notice.
+  //       Leave already flagged isLop (entitlement exceeded) → use its stored lopDays as-is.
+  const fnfRangeApps = await prisma.lvApplication.findMany({
+    where: {
+      employeeId,
+      status:    { in: ['APPROVED', 'AUTO_APPROVED'] },
+      startDate: { gte: fnfStartMonth, lte: monthEnd(lwd) },
+    },
+  })
+
   while (cursor <= lwdMonthStart) {
     const mStart = monthStart(cursor)
     const mEnd   = monthEnd(cursor)
@@ -114,6 +133,17 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
       const ptAmount  = await computePt(grossMonthly, employee.state || '')
       const tdsAmount = isLwdMonth ? r2((salaryInput.tdsMonthly / totalDays) * salaryDays) : salaryInput.tdsMonthly
 
+      let lopDaysForCycle = 0
+      for (const app of fnfRangeApps) {
+        if (app.startDate < mStart || app.startDate > mEnd) continue
+        if (app.isLop) {
+          lopDaysForCycle += Number(app.lopDays)
+        } else if (app.createdAt >= resignationDate) {
+          lopDaysForCycle += Number(app.totalDays)
+        }
+      }
+      const lopAmount = computeLop(grossMonthly, totalDays, lopDaysForCycle)
+
       cycles.push({
         cycleLabel:     monthLabel(mStart),
         cycleStart:     mStart,
@@ -126,6 +156,8 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
         esiAmount,
         ptAmount,
         tdsAmount,
+        lopDays:        lopDaysForCycle,
+        lopAmount,
       })
     }
 
@@ -139,6 +171,8 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   const totalEsi           = r2(cycles.reduce((s, c) => s + c.esiAmount, 0))
   const totalPt            = r2(cycles.reduce((s, c) => s + c.ptAmount, 0))
   const totalTds           = r2(cycles.reduce((s, c) => s + c.tdsAmount, 0))
+  const totalLopDays       = r2(cycles.reduce((s, c) => s + c.lopDays, 0))
+  const totalLopAmount     = r2(cycles.reduce((s, c) => s + c.lopAmount, 0))
 
   // ─── LOAN OUTSTANDING ────────────────────────────────────────────────────
   const loanOutstanding = r2(
@@ -160,9 +194,11 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   }
 
   // ─── HYI RECOVERY ────────────────────────────────────────────────────────
-  // Recover HYI already paid in current slab BEFORE resignation month.
-  // Slabs: Jan–Jun (0), Jul–Dec (1).
-  // Use salary as of resignation date for HYI amount.
+  // Policy: ongoing (resignation) slab is entirely forfeited; if notice period
+  // overlaps into the next slab, that overlap is also recovered. Previously
+  // completed slabs are never touched. Since F&F always uses the actual LWD,
+  // recovery = HYI for every month from the resignation slab's start through
+  // the LWD month, inclusive — this matches all policy examples exactly.
   let hyiRecovery = 0
   const salaryForHyi = await getSalaryInputForDate(employeeId, resignationDate)
   // Use prebuiltSalary (snapshot) hyiMonthly directly — it's the source of truth
@@ -171,21 +207,19 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     : computeSalaryStructure(salaryForHyi).hyiMonthly
 
   if (hyiMonthly > 0) {
-    const resignMonth = resignationDate.getMonth() // 0-indexed
-    const resignSlab  = getHyiSlab(resignMonth)
-    // Slab starts: Jan (0) for slab 0, Jul (6) for slab 1
+    const resignSlab     = getHyiSlab(resignationDate.getMonth())
     const slabStartMonth = resignSlab === 0 ? 0 : 6
-    // Months already paid in this slab before resignation month
-    // e.g. resign May (month 4): Jan=0, Feb=1, Mar=2, Apr=3 → 4 months paid
-    const paidMonths = resignMonth - slabStartMonth
-    if (paidMonths > 0) {
-      hyiRecovery = r2(hyiMonthly * paidMonths)
+    const cycleStartAbs  = resignationDate.getFullYear() * 12 + slabStartMonth
+    const lwdAbs         = lwd.getFullYear() * 12 + lwd.getMonth()
+    const recoveryMonths = lwdAbs - cycleStartAbs + 1
+    if (recoveryMonths > 0) {
+      hyiRecovery = r2(hyiMonthly * recoveryMonths)
     }
   }
 
   // ─── TOTALS ────────────────────────────────────────────────────────────────
   const totalAdditions  = r2(totalProratedSalary + pendingReimbursements)
-  const totalDeductions = r2(totalPf + totalEsi + totalPt + totalTds + loanOutstanding + hyiRecovery)
+  const totalDeductions = r2(totalPf + totalEsi + totalPt + totalTds + loanOutstanding + hyiRecovery + totalLopAmount)
   const netPayable      = r2(Math.max(0, totalAdditions - totalDeductions))
 
   // ─── BREAKDOWN ────────────────────────────────────────────────────────────
@@ -215,6 +249,7 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   if (totalTds > 0)           breakdown.push({ label: 'TDS',               amount: totalTds,  type: 'deduction' })
   if (loanOutstanding > 0)    breakdown.push({ label: 'Loan Outstanding',  amount: loanOutstanding, type: 'deduction' })
   if (hyiRecovery > 0)        breakdown.push({ label: 'HYI Recovery',      amount: hyiRecovery, type: 'deduction' })
+  if (totalLopAmount > 0)     breakdown.push({ label: `LOP (${totalLopDays} days)`, amount: totalLopAmount, type: 'deduction' })
 
   return {
     employeeId,
@@ -234,6 +269,8 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     loanOutstanding,
     otherDeductions:       0,
     hyiRecovery,
+    lopDays:               totalLopDays,
+    lopAmount:             totalLopAmount,
     totalAdditions,
     totalDeductions,
     netPayable,
