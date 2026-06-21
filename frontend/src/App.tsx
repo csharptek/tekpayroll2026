@@ -66,6 +66,7 @@ import PayrollReportsPage from './pages/management/PayrollReportsPage'
 import CostReportPage from './pages/management/CostReportPage'
 import TdsManagementPage from './pages/hr/TdsManagementPage'
 import TeamsChatCleanupPage from './pages/hr/TeamsChatCleanupPage'
+import DeletedChatsPage from './pages/hr/DeletedChatsPage'
 
 // Guard
 function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
@@ -140,6 +141,7 @@ export default function App() {
           <Route path="fnf" element={<RequireAuth roles={['SUPER_ADMIN']}><FnfPage /></RequireAuth>} />
           <Route path="tds" element={<RequireAuth roles={['SUPER_ADMIN']}><TdsManagementPage /></RequireAuth>} />
           <Route path="teams-chat-cleanup" element={<RequireAuth roles={['SUPER_ADMIN']}><TeamsChatCleanupPage /></RequireAuth>} />
+          <Route path="deleted-chats" element={<RequireAuth roles={['SUPER_ADMIN']}><DeletedChatsPage /></RequireAuth>} />
         </Route>
 
         {/* Employee self-service */}

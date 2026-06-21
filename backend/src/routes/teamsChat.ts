@@ -83,6 +83,41 @@ teamsChatRouter.get('/chats/:chatId/messages', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ─── LIST DELETED CHATS (7-day window) ───────────────────────────────────────
+
+teamsChatRouter.get('/deleted-chats', async (req, res, next) => {
+  try {
+    const token = await getGraphToken();
+    const r = await fetch(`https://graph.microsoft.com/v1.0/teamwork/deletedChats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) {
+      const e = await r.json() as any;
+      throw new AppError(`Graph error: ${e.error?.message || r.statusText}`, r.status);
+    }
+    const data = await r.json() as any;
+    res.json({ chats: data.value || [] });
+  } catch (e) { next(e); }
+});
+
+// ─── RESTORE A DELETED CHAT ───────────────────────────────────────────────────
+
+teamsChatRouter.post('/deleted-chats/:chatId/restore', async (req, res, next) => {
+  try {
+    const { chatId } = req.params;
+    const token = await getGraphToken();
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/teamwork/deletedChats/${chatId}/undoDelete`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!r.ok && r.status !== 204) {
+      const e = await r.json() as any;
+      throw new AppError(`Graph restore failed: ${e.error?.message || r.statusText}`, r.status);
+    }
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
+
 // ─── SCAN CHATS BEFORE A DATE ────────────────────────────────────────────────
 
 teamsChatRouter.get('/chats/before', async (req, res, next) => {

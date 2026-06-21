@@ -9,7 +9,7 @@ import {
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
-  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package, Bell, Percent, MessageSquareOff
+  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package, Bell, Percent, MessageSquareOff, RotateCcw
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -133,6 +133,7 @@ const SUPER_ADMIN_NAV = [
       { label: 'Notifications', icon: Bell,       to: '/hr/notifications' },
       { label: 'Audit Log',     icon: ScrollText, to: '/hr/audit' },
       { label: 'Teams Chat Cleanup', icon: MessageSquareOff, to: '/hr/teams-chat-cleanup' },
+      { label: 'Deleted Chats',      icon: RotateCcw, to: '/hr/deleted-chats' },
     ]
   },
   {

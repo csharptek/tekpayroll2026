@@ -157,7 +157,6 @@ export const reimbursementApi = {
 
 export const payslipApi = {
   forEmployee: (employeeId: string) => api.get(`/api/payslips/employee/${employeeId}`),
-  fnfStatement: (employeeId: string) => api.get(`/api/payslips/fnf-statement/${employeeId}`),
   generate: (cycleId: string) => api.post(`/api/payslips/generate/${cycleId}`),
   previewUrl: (payslipId: string) => api.get(`/api/payslips/${payslipId}/preview-url`),
   emailOne: (payslipId: string) => api.post(`/api/payslips/email/${payslipId}`),
@@ -208,13 +207,12 @@ export const fnfApi = {
   eligible:        ()           => api.get('/api/fnf/eligible'),
   byEmployee:      (id: string) => api.get(`/api/fnf/employee/${id}`),
   get:             (id: string) => api.get(`/api/fnf/${id}`),
-  calculate:       (empId: string, hyiOverrides?: Record<string, number>) => api.post(`/api/fnf/calculate/${empId}`, { hyiOverrides }),
-  preview:         (empId: string, lastWorkingDay?: string, hyiOverrides?: Record<string, number>) => api.post(`/api/fnf/preview/${empId}`, { lastWorkingDay, hyiOverrides }),
-  initiate:        (empId: string, hyiOverrides?: Record<string, number>) => api.post(`/api/fnf/initiate/${empId}`, { hyiOverrides }),
+  calculate:       (empId: string) => api.post(`/api/fnf/calculate/${empId}`),
+  preview:         (empId: string, lastWorkingDay?: string) => api.post(`/api/fnf/preview/${empId}`, { lastWorkingDay }),
+  initiate:        (empId: string) => api.post(`/api/fnf/initiate/${empId}`),
   approve:         (id: string, notes?: string) => api.post(`/api/fnf/${id}/approve`, { notes }),
   settle:          (id: string, notes?: string) => api.post(`/api/fnf/${id}/settle`, { notes }),
   update:          (id: string, data: any) => api.put(`/api/fnf/${id}`, data),
-  generatePdf:     (id: string) => api.post(`/api/fnf/${id}/generate-pdf`),
 }
 
 export const leaveApi = {
@@ -309,6 +307,8 @@ export const teamsChatApi = {
   bulkDelete: (chatIds: string[]) => api.post('/api/teams-chat/chats/bulk-delete', { chatIds }),
   scanBefore: (entraId: string, before: string) =>
                 api.get('/api/teams-chat/chats/before', { params: { entraId, before } }),
+  deletedChats: () => api.get('/api/teams-chat/deleted-chats'),
+  restoreChat: (chatId: string) => api.post(`/api/teams-chat/deleted-chats/${encodeURIComponent(chatId)}/restore`),
 }
 
 export const assetApi = {
