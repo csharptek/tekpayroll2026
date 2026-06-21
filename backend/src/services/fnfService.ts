@@ -63,8 +63,11 @@ export interface ExcessLeaveDetailRow {
 }
 
 export interface HyiRecoveryDetailRow {
-  monthLabel: string
-  amount:     number
+  monthLabel:   string
+  monthKey:     string  // 'YYYY-MM' — used to key manual overrides
+  amount:       number  // amount actually used (override if provided, else system value)
+  systemAmount: number  // what the system would compute from salary history, for comparison
+  isOverridden: boolean
 }
 
 function daysBetween(start: Date, end: Date): number {
@@ -85,7 +88,11 @@ function monthLabel(date: Date): string {
   return date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
 }
 
-export async function calculateFnf(employeeId: string, overrideLwd?: Date): Promise<FnfCalculation> {
+export async function calculateFnf(
+  employeeId: string,
+  overrideLwd?: Date,
+  hyiOverrides?: Record<string, number>
+): Promise<FnfCalculation> {
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
     include: { loans: { where: { status: 'ACTIVE' } } },
@@ -221,28 +228,50 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   // completed slabs are never touched. Since F&F always uses the actual LWD,
   // recovery = HYI for every month from the resignation slab's start through
   // the LWD month, inclusive — this matches all policy examples exactly.
+  //
+  // IMPORTANT: each month's rate is looked up historically via
+  // getSalaryInputForDate(employeeId, thatMonth) — NOT a single flat rate as
+  // of resignationDate. A mid-slab salary revision (e.g. effective April)
+  // means Jan–Mar legitimately had a different HYI than Apr onwards; using
+  // one flat rate for the whole slab silently overcharges/undercharges the
+  // pre-revision months. hyiOverrides lets HR manually correct a month's
+  // figure if the system's historical snapshot for that period is wrong.
   let hyiRecovery = 0
   const hyiRecoveryDetail: HyiRecoveryDetailRow[] = []
-  const salaryForHyi = await getSalaryInputForDate(employeeId, resignationDate)
-  // Use prebuiltSalary (snapshot) hyiMonthly directly — it's the source of truth
-  const hyiMonthly = salaryForHyi.prebuiltSalary
-    ? salaryForHyi.prebuiltSalary.hyiMonthly
-    : computeSalaryStructure(salaryForHyi).hyiMonthly
 
-  if (hyiMonthly > 0) {
-    const resignSlab     = getHyiSlab(resignationDate.getMonth())
-    const slabStartMonth = resignSlab === 0 ? 0 : 6
-    const cycleStartAbs  = resignationDate.getFullYear() * 12 + slabStartMonth
-    const lwdAbs         = lwd.getFullYear() * 12 + lwd.getMonth()
-    const recoveryMonths = lwdAbs - cycleStartAbs + 1
-    if (recoveryMonths > 0) {
-      hyiRecovery = r2(hyiMonthly * recoveryMonths)
-      for (let i = 0; i < recoveryMonths; i++) {
-        const abs = cycleStartAbs + i
-        const d   = new Date(Math.floor(abs / 12), abs % 12, 1)
-        hyiRecoveryDetail.push({ monthLabel: monthLabel(d), amount: hyiMonthly })
-      }
+  const resignSlab     = getHyiSlab(resignationDate.getMonth())
+  const slabStartMonth = resignSlab === 0 ? 0 : 6
+  const cycleStartAbs  = resignationDate.getFullYear() * 12 + slabStartMonth
+  const lwdAbs          = lwd.getFullYear() * 12 + lwd.getMonth()
+  const recoveryMonths = lwdAbs - cycleStartAbs + 1
+
+  // Still needed below for excess-leave valuation
+  const salaryForHyi = await getSalaryInputForDate(employeeId, resignationDate)
+
+  if (recoveryMonths > 0) {
+    for (let i = 0; i < recoveryMonths; i++) {
+      const abs = cycleStartAbs + i
+      const d   = new Date(Math.floor(abs / 12), abs % 12, 1)
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+
+      const monthSalaryInput = await getSalaryInputForDate(employeeId, d)
+      const systemAmount = monthSalaryInput.prebuiltSalary
+        ? monthSalaryInput.prebuiltSalary.hyiMonthly
+        : computeSalaryStructure(monthSalaryInput).hyiMonthly
+
+      const isOverridden = hyiOverrides ? hyiOverrides[monthKey] !== undefined : false
+      const amount = isOverridden ? Number(hyiOverrides![monthKey]) : systemAmount
+
+      hyiRecoveryDetail.push({
+        monthLabel: monthLabel(d),
+        monthKey,
+        amount:       r2(amount),
+        systemAmount: r2(systemAmount),
+        isOverridden,
+      })
+      hyiRecovery += amount
     }
+    hyiRecovery = r2(hyiRecovery)
   }
 
   // ─── LEAVE PRORATION RECOVERY ─────────────────────────────────────────────

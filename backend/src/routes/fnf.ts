@@ -50,14 +50,14 @@ fnfRouter.get('/:id', async (req, res) => {
 })
 
 fnfRouter.post('/calculate/:employeeId', async (req, res) => {
-  const calc = await calculateFnf(req.params.employeeId)
+  const calc = await calculateFnf(req.params.employeeId, undefined, req.body.hyiOverrides)
   res.json({ success: true, data: calc })
 })
 
-// Preview with optional custom LWD — does NOT save anything
+// Preview with optional custom LWD and HYI overrides — does NOT save anything
 fnfRouter.post('/preview/:employeeId', async (req, res) => {
   const overrideLwd = req.body.lastWorkingDay ? new Date(req.body.lastWorkingDay) : undefined
-  const calc = await calculateFnf(req.params.employeeId, overrideLwd)
+  const calc = await calculateFnf(req.params.employeeId, overrideLwd, req.body.hyiOverrides)
   res.json({ success: true, data: calc })
 })
 
@@ -66,7 +66,8 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
   const existing = await prisma.fnfSettlement.findUnique({ where: { employeeId } })
   if (existing) throw new AppError('F&F already initiated for this employee', 409)
 
-  const calc = await calculateFnf(employeeId)
+  const hyiOverrides: Record<string, number> | undefined = req.body.hyiOverrides
+  const calc = await calculateFnf(employeeId, undefined, hyiOverrides)
   const settlement = await prisma.fnfSettlement.create({
     data: {
       employeeId,
@@ -86,6 +87,7 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
       netPayable:        calc.netPayable,
       breakdownJson:     JSON.stringify(calc.breakdown),
       cyclesJson:        JSON.stringify(calc.cycles || []),
+      hyiOverridesJson:  hyiOverrides ? JSON.stringify(hyiOverrides) : null,
       status:            'INITIATED',
     },
     include: { employee: true },
@@ -126,7 +128,8 @@ fnfRouter.post('/:id/generate-pdf', async (req, res) => {
   })
   if (!settlement) throw new AppError('Settlement not found', 404)
 
-  const calc = await calculateFnf(settlement.employeeId, settlement.lastWorkingDay)
+  const storedOverrides = settlement.hyiOverridesJson ? JSON.parse(settlement.hyiOverridesJson) : undefined
+  const calc = await calculateFnf(settlement.employeeId, settlement.lastWorkingDay, storedOverrides)
   const { generateFnfStatementPdf } = await import('../services/fnfPdfService')
   const { pdfUrl, pdfKey } = await generateFnfStatementPdf(calc, settlement.employee)
 

@@ -15,9 +15,14 @@ import clsx from 'clsx'
 
 // ─── EXPANDABLE CALCULATION DETAILS PANEL ─────────────────────────────────
 
-function CalculationDetailsPanel({ calc }: { calc: any }) {
+function CalculationDetailsPanel({ calc, hyiOverrides, onHyiOverrideChange }: {
+  calc: any
+  hyiOverrides?: Record<string, number>
+  onHyiOverrideChange?: (next: Record<string, number>) => void
+}) {
   const [open, setOpen] = useState(false)
   const cycles = calc.cycles || []
+  const editable = !!onHyiOverrideChange
 
   return (
     <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -69,18 +74,59 @@ function CalculationDetailsPanel({ calc }: { calc: any }) {
           {calc.hyiRecoveryDetail?.length > 0 && (
             <div>
               <p className="font-semibold text-slate-700 mb-1.5">HYI Recovery by month</p>
+              {editable && (
+                <p className="text-[10px] text-slate-400 mb-1.5">
+                  Figures are pulled from each month's salary history. If a mid-year revision means the system's value is wrong for a month, edit it directly.
+                </p>
+              )}
               <table className="w-full text-[11px]">
                 <thead>
                   <tr className="text-slate-400 border-b border-slate-100">
                     <th className="text-left font-medium pb-1">Month</th>
                     <th className="text-right font-medium pb-1">HYI Recovered</th>
+                    {editable && <th className="text-right font-medium pb-1"></th>}
                   </tr>
                 </thead>
                 <tbody>
                   {calc.hyiRecoveryDetail.map((r: any, i: number) => (
                     <tr key={i} className="text-slate-700">
                       <td className="py-1">{r.monthLabel}</td>
-                      <td className="py-1 text-right">₹{Math.round(r.amount).toLocaleString('en-IN')}</td>
+                      <td className="py-1 text-right">
+                        {editable ? (
+                          <input
+                            type="number"
+                            value={r.amount}
+                            onChange={e => {
+                              const val = e.target.value === '' ? r.systemAmount : Number(e.target.value)
+                              onHyiOverrideChange!({ ...hyiOverrides, [r.monthKey]: val })
+                            }}
+                            className={clsx(
+                              'w-24 text-right border rounded px-1.5 py-0.5 text-[11px]',
+                              r.isOverridden ? 'border-amber-400 bg-amber-50 text-amber-800 font-semibold' : 'border-slate-200'
+                            )}
+                          />
+                        ) : (
+                          `₹${Math.round(r.amount).toLocaleString('en-IN')}`
+                        )}
+                      </td>
+                      {editable && (
+                        <td className="py-1 text-right">
+                          {r.isOverridden && (
+                            <button
+                              type="button"
+                              title={`Reset to system value ₹${Math.round(r.systemAmount).toLocaleString('en-IN')}`}
+                              onClick={() => {
+                                const next = { ...hyiOverrides }
+                                delete next[r.monthKey]
+                                onHyiOverrideChange!(next)
+                              }}
+                              className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -88,6 +134,7 @@ function CalculationDetailsPanel({ calc }: { calc: any }) {
                   <tr className="font-semibold text-slate-800 border-t border-slate-100">
                     <td className="py-1">Total</td>
                     <td className="py-1 text-right">₹{Math.round(calc.hyiRecovery).toLocaleString('en-IN')}</td>
+                    {editable && <td></td>}
                   </tr>
                 </tfoot>
               </table>
@@ -150,16 +197,17 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
   employeeId: string; employeeName: string; open: boolean; onClose: () => void; onInitiate: () => void
 }) {
   const qc = useQueryClient()
+  const [hyiOverrides, setHyiOverrides] = useState<Record<string, number>>({})
 
   const { data: calc, isLoading, error } = useQuery({
-    queryKey: ['fnf-calc', employeeId],
-    queryFn:  () => fnfApi.calculate(employeeId).then(r => r.data.data),
+    queryKey: ['fnf-calc', employeeId, hyiOverrides],
+    queryFn:  () => fnfApi.calculate(employeeId, hyiOverrides).then(r => r.data.data),
     enabled:  open && !!employeeId,
     retry:    false,
   })
 
   const initiateMut = useMutation({
-    mutationFn: () => fnfApi.initiate(employeeId),
+    mutationFn: () => fnfApi.initiate(employeeId, hyiOverrides),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fnf-list'] })
       qc.invalidateQueries({ queryKey: ['fnf-eligible'] })
@@ -243,7 +291,7 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
           </div>
 
           {/* Calculation details (expandable) */}
-          <CalculationDetailsPanel calc={calc} />
+          <CalculationDetailsPanel calc={calc} hyiOverrides={hyiOverrides} onHyiOverrideChange={setHyiOverrides} />
 
           {/* Net */}
           <div className={clsx(

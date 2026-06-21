@@ -577,6 +577,7 @@ model FnfSettlement {
 
   breakdownJson       String?     @db.Text  // JSON array of {label, amount, type}
   cyclesJson          String?     @db.Text  // JSON array of per-month cycle breakdown
+  hyiOverridesJson     String?     @db.Text  // JSON map of {"YYYY-MM": amount} — manual HYI overrides used at initiation
 
   status              FnfStatus   @default(INITIATED)
   approvedBy          String?
