@@ -83,20 +83,22 @@ teamsChatRouter.get('/chats/:chatId/messages', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ─── LIST DELETED CHATS (7-day window) ───────────────────────────────────────
+// ─── CHECK IF A CHAT ID IS RESTORABLE ────────────────────────────────────────
 
-teamsChatRouter.get('/deleted-chats', async (req, res, next) => {
+teamsChatRouter.get('/deleted-chats/:chatId', async (req, res, next) => {
   try {
+    const { chatId } = req.params;
     const token = await getGraphToken();
-    const r = await fetch(`https://graph.microsoft.com/v1.0/teamwork/deletedChats`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/teamwork/deletedChats/${chatId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     if (!r.ok) {
       const e = await r.json() as any;
       throw new AppError(`Graph error: ${e.error?.message || r.statusText}`, r.status);
     }
     const data = await r.json() as any;
-    res.json({ chats: data.value || [] });
+    res.json(data);
   } catch (e) { next(e); }
 });
 

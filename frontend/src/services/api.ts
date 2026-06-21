@@ -307,7 +307,7 @@ export const teamsChatApi = {
   bulkDelete: (chatIds: string[]) => api.post('/api/teams-chat/chats/bulk-delete', { chatIds }),
   scanBefore: (entraId: string, before: string) =>
                 api.get('/api/teams-chat/chats/before', { params: { entraId, before } }),
-  deletedChats: () => api.get('/api/teams-chat/deleted-chats'),
+  checkDeletedChat: (chatId: string) => api.get(`/api/teams-chat/deleted-chats/${encodeURIComponent(chatId)}`),
   restoreChat: (chatId: string) => api.post(`/api/teams-chat/deleted-chats/${encodeURIComponent(chatId)}/restore`),
 }
 
