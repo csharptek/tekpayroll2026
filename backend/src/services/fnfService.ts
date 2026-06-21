@@ -54,6 +54,7 @@ export interface ExcessLeaveDetailRow {
   proratedAllowed:  number
   usedDays:         number
   excessDays:       number
+}
 
 function daysBetween(start: Date, end: Date): number {
   return Math.round(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
