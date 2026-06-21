@@ -21,8 +21,19 @@ function CalculationDetailsPanel({ calc, hyiOverrides, onHyiOverrideChange }: {
   onHyiOverrideChange?: (next: Record<string, number>) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<Record<string, string>>({})
   const cycles = calc.cycles || []
   const editable = !!onHyiOverrideChange
+
+  const commitDraft = (monthKey: string, systemAmount: number) => {
+    const raw = draft[monthKey]
+    if (raw === undefined) return
+    setDraft(d => { const next = { ...d }; delete next[monthKey]; return next })
+    if (raw.trim() === '') return
+    const val = Number(raw)
+    if (Number.isNaN(val)) return
+    onHyiOverrideChange!({ ...hyiOverrides, [monthKey]: val })
+  }
 
   return (
     <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -95,11 +106,10 @@ function CalculationDetailsPanel({ calc, hyiOverrides, onHyiOverrideChange }: {
                         {editable ? (
                           <input
                             type="number"
-                            value={r.amount}
-                            onChange={e => {
-                              const val = e.target.value === '' ? r.systemAmount : Number(e.target.value)
-                              onHyiOverrideChange!({ ...hyiOverrides, [r.monthKey]: val })
-                            }}
+                            value={draft[r.monthKey] !== undefined ? draft[r.monthKey] : r.amount}
+                            onChange={e => setDraft(d => ({ ...d, [r.monthKey]: e.target.value }))}
+                            onBlur={() => commitDraft(r.monthKey, r.systemAmount)}
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
                             className={clsx(
                               'w-24 text-right border rounded px-1.5 py-0.5 text-[11px]',
                               r.isOverridden ? 'border-amber-400 bg-amber-50 text-amber-800 font-semibold' : 'border-slate-200'
@@ -116,6 +126,7 @@ function CalculationDetailsPanel({ calc, hyiOverrides, onHyiOverrideChange }: {
                               type="button"
                               title={`Reset to system value ₹${Math.round(r.systemAmount).toLocaleString('en-IN')}`}
                               onClick={() => {
+                                setDraft(d => { const next = { ...d }; delete next[r.monthKey]; return next })
                                 const next = { ...hyiOverrides }
                                 delete next[r.monthKey]
                                 onHyiOverrideChange!(next)
@@ -204,6 +215,7 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
     queryFn:  () => fnfApi.calculate(employeeId, hyiOverrides).then(r => r.data.data),
     enabled:  open && !!employeeId,
     retry:    false,
+    placeholderData: (prev: any) => prev,
   })
 
   const initiateMut = useMutation({
