@@ -333,7 +333,7 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
 
 // ─── APPROVE MODAL ────────────────────────────────────────────────────────────
 
-function ApproveModal({ settlement, open, onClose }: { settlement: any; open: boolean; onClose: () => void }) {
+function ApproveModal({ settlement, open, onClose, viewOnly = false }: { settlement: any; open: boolean; onClose: () => void; viewOnly?: boolean }) {
   const qc = useQueryClient()
   const [notes, setNotes] = useState('')
 
@@ -368,19 +368,25 @@ function ApproveModal({ settlement, open, onClose }: { settlement: any; open: bo
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Approve F&F — ${settlement.employee?.name}`} size="lg"
+    <Modal open={open} onClose={onClose} title={viewOnly ? `F&F Settlement — ${settlement.employee?.name}` : `Approve F&F — ${settlement.employee?.name}`} size="lg"
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button loading={approveMut.isPending} onClick={() => approveMut.mutate()} icon={<CheckCircle2 size={13} />}>
-            Approve & Mark Separated
-          </Button>
-        </>
+        viewOnly ? (
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button loading={approveMut.isPending} onClick={() => approveMut.mutate()} icon={<CheckCircle2 size={13} />}>
+              Approve & Mark Separated
+            </Button>
+          </>
+        )
       }
     >
       <div className="space-y-4">
-        <Alert type="warning" title="This action is irreversible"
-          message="Approving will mark the employee as SEPARATED and finalise the settlement amount." />
+        {!viewOnly && (
+          <Alert type="warning" title="This action is irreversible"
+            message="Approving will mark the employee as SEPARATED and finalise the settlement amount." />
+        )}
 
         <div className="space-y-1">
           {breakdown.map((item: any) => (
@@ -487,6 +493,7 @@ export default function FnfPage() {
   const [calcEmployee, setCalcEmployee]   = useState<any>(null)
   const [approveTarget, setApproveTarget] = useState<any>(null)
   const [settleTarget, setSettleTarget]   = useState<any>(null)
+  const [viewTarget, setViewTarget]       = useState<any>(null)
 
   const { data: settlements, isLoading: loadingSettlements } = useQuery({
     queryKey: ['fnf-list'],
@@ -656,6 +663,7 @@ export default function FnfPage() {
                 <Th className="text-right">Net Paid</Th>
                 <Th>Notes</Th>
                 <Th>Statement</Th>
+                <Th>Details</Th>
               </tr>
             </thead>
             <tbody>
@@ -670,6 +678,11 @@ export default function FnfPage() {
                   <Td className="text-right font-bold"><Rupee amount={s.netPayable} /></Td>
                   <Td className="text-xs text-slate-400">{s.notes || '—'}</Td>
                   <Td><StatementButton settlement={s} /></Td>
+                  <Td>
+                    <Button variant="secondary" size="sm" icon={<Eye size={12} />} onClick={() => setViewTarget(s)}>
+                      View
+                    </Button>
+                  </Td>
                 </Tr>
               ))}
             </tbody>
@@ -687,6 +700,7 @@ export default function FnfPage() {
         />
       )}
       <ApproveModal settlement={approveTarget} open={!!approveTarget} onClose={() => setApproveTarget(null)} />
+      <ApproveModal settlement={viewTarget} open={!!viewTarget} onClose={() => setViewTarget(null)} viewOnly />
       <SettleModal  settlement={settleTarget}  open={!!settleTarget}  onClose={() => setSettleTarget(null)} />
     </div>
   )
