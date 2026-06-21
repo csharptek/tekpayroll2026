@@ -578,6 +578,8 @@ model FnfSettlement {
   breakdownJson       String?     @db.Text  // JSON array of {label, amount, type}
   cyclesJson          String?     @db.Text  // JSON array of per-month cycle breakdown
   hyiOverridesJson     String?     @db.Text  // JSON map of {"YYYY-MM": amount} — manual HYI overrides used at initiation
+  hyiRecoveryDetailJson    String? @db.Text  // JSON array of HyiRecoveryDetailRow — frozen at initiation, avoids drift
+  excessLeaveDetailJson    String? @db.Text  // JSON array of ExcessLeaveDetailRow — frozen at initiation, avoids drift
 
   status              FnfStatus   @default(INITIATED)
   approvedBy          String?

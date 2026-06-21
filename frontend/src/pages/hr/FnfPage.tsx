@@ -358,8 +358,17 @@ function ApproveModal({ settlement, open, onClose }: { settlement: any; open: bo
         ...(Number(settlement.loanOutstanding) > 0   ? [{ label: 'Loan Outstanding', amount: settlement.loanOutstanding,   type: 'deduction' }] : []),
       ]
 
+  // Frozen detail tables from initiation — same data CalculationDetailsPanel
+  // shows in the live preview, but read-only and never recomputed (no drift).
+  const detailCalc = {
+    cycles:            settlement.cyclesJson ? JSON.parse(settlement.cyclesJson) : [],
+    hyiRecovery:       settlement.incentiveRecovery,
+    hyiRecoveryDetail: settlement.hyiRecoveryDetailJson ? JSON.parse(settlement.hyiRecoveryDetailJson) : [],
+    excessLeaveDetail: settlement.excessLeaveDetailJson ? JSON.parse(settlement.excessLeaveDetailJson) : [],
+  }
+
   return (
-    <Modal open={open} onClose={onClose} title={`Approve F&F — ${settlement.employee?.name}`}
+    <Modal open={open} onClose={onClose} title={`Approve F&F — ${settlement.employee?.name}`} size="lg"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
@@ -387,6 +396,8 @@ function ApproveModal({ settlement, open, onClose }: { settlement: any; open: bo
             <Rupee amount={settlement.netPayable} className="text-base" />
           </div>
         </div>
+
+        <CalculationDetailsPanel calc={detailCalc} />
 
         <div className="flex flex-col gap-1">
           <label className="label">Notes (optional)</label>

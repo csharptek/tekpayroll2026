@@ -88,6 +88,8 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
       breakdownJson:     JSON.stringify(calc.breakdown),
       cyclesJson:        JSON.stringify(calc.cycles || []),
       hyiOverridesJson:  hyiOverrides ? JSON.stringify(hyiOverrides) : null,
+      hyiRecoveryDetailJson: JSON.stringify(calc.hyiRecoveryDetail || []),
+      excessLeaveDetailJson: JSON.stringify(calc.excessLeaveDetail || []),
       status:            'INITIATED',
     },
     include: { employee: true },
