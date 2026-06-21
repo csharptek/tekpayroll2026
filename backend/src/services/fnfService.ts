@@ -38,6 +38,8 @@ export interface FnfCalculation {
   hyiRecovery:       number
   lopDays:           number
   lopAmount:         number
+  excessLeaveDays:   number
+  excessLeaveAmount: number
   totalAdditions:    number
   totalDeductions:   number
   netPayable:        number
@@ -217,9 +219,43 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     }
   }
 
+  // ─── LEAVE PRORATION RECOVERY ─────────────────────────────────────────────
+  // Annual entitlement (Sick 4 / Casual 8 / Planned 8) is granted in full each
+  // Jan rollover. An employee who exits mid-year only "earns" a prorated share
+  // (months Jan → resignation month, inclusive). Each leave was approved
+  // against the FULL annual balance, so no single approval ever looked like
+  // LOP — but if cumulative usedDays this year exceeds the prorated share,
+  // the excess is unearned and recovered here. (No encashment for unused leave.)
+  const proYear         = resignationDate.getFullYear()
+  const monthsElapsed   = resignationDate.getMonth() + 1 // Jan=1 ... Dec=12
+  const entitlements    = await prisma.leaveEntitlement.findMany({
+    where: { employeeId, year: proYear },
+  })
+
+  let excessLeaveDays = 0
+  for (const ent of entitlements) {
+    const proratedAllowed = (Number(ent.totalDays) * monthsElapsed) / 12
+    const usedSoFar        = Number(ent.usedDays)
+    if (usedSoFar > proratedAllowed) {
+      excessLeaveDays += usedSoFar - proratedAllowed
+    }
+  }
+  excessLeaveDays = r2(excessLeaveDays)
+
+  let excessLeaveAmount = 0
+  if (excessLeaveDays > 0) {
+    const resignMonthStart = monthStart(resignationDate)
+    const resignMonthEnd   = monthEnd(resignationDate)
+    const resignMonthTotalDays = daysBetween(resignMonthStart, resignMonthEnd)
+    const grossForExcess = salaryForHyi.prebuiltSalary
+      ? salaryForHyi.prebuiltSalary.grandTotalMonthly
+      : computeSalaryStructure(salaryForHyi).grandTotalMonthly
+    excessLeaveAmount = computeLop(grossForExcess, resignMonthTotalDays, excessLeaveDays)
+  }
+
   // ─── TOTALS ────────────────────────────────────────────────────────────────
   const totalAdditions  = r2(totalProratedSalary + pendingReimbursements)
-  const totalDeductions = r2(totalPf + totalEsi + totalPt + totalTds + loanOutstanding + hyiRecovery + totalLopAmount)
+  const totalDeductions = r2(totalPf + totalEsi + totalPt + totalTds + loanOutstanding + hyiRecovery + totalLopAmount + excessLeaveAmount)
   const netPayable      = r2(Math.max(0, totalAdditions - totalDeductions))
 
   // ─── BREAKDOWN ────────────────────────────────────────────────────────────
@@ -250,6 +286,7 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   if (loanOutstanding > 0)    breakdown.push({ label: 'Loan Outstanding',  amount: loanOutstanding, type: 'deduction' })
   if (hyiRecovery > 0)        breakdown.push({ label: 'HYI Recovery',      amount: hyiRecovery, type: 'deduction' })
   if (totalLopAmount > 0)     breakdown.push({ label: `LOP (${totalLopDays} days)`, amount: totalLopAmount, type: 'deduction' })
+  if (excessLeaveAmount > 0)  breakdown.push({ label: `Excess Leave Recovery (${excessLeaveDays} days)`, amount: excessLeaveAmount, type: 'deduction' })
 
   return {
     employeeId,
@@ -271,6 +308,8 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     hyiRecovery,
     lopDays:               totalLopDays,
     lopAmount:             totalLopAmount,
+    excessLeaveDays,
+    excessLeaveAmount,
     totalAdditions,
     totalDeductions,
     netPayable,
