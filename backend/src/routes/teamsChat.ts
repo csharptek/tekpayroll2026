@@ -25,25 +25,21 @@ teamsChatRouter.get('/employees', async (req, res, next) => {
 teamsChatRouter.get('/chats', async (req, res, next) => {
   try {
     const entraId = req.query.entraId as string;
+    const nextLink = req.query.nextLink as string | undefined;
     if (!entraId) throw new AppError('entraId is required', 400);
 
     const token = await getGraphToken();
-    let url: string | null =
-      `https://graph.microsoft.com/v1.0/users/${entraId}/chats?$expand=members&$top=50`;
+    const url = nextLink ||
+      `https://graph.microsoft.com/v1.0/users/${entraId}/chats?$expand=members&$top=10`;
 
-    const chats: any[] = [];
-    while (url) {
-      const r: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) {
-        const e = await r.json() as any;
-        throw new AppError(`Graph error: ${e.error?.message || r.statusText}`, r.status);
-      }
-      const data = await r.json() as any;
-      chats.push(...data.value);
-      url = data['@odata.nextLink'] || null;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) {
+      const e = await r.json() as any;
+      throw new AppError(`Graph error: ${e.error?.message || r.statusText}`, r.status);
     }
+    const data = await r.json() as any;
 
-    const formatted = chats.map((c) => ({
+    const chats = (data.value || []).map((c: any) => ({
       id: c.id,
       topic: c.topic || null,
       chatType: c.chatType,
@@ -51,7 +47,39 @@ teamsChatRouter.get('/chats', async (req, res, next) => {
       members: (c.members || []).map((m: any) => m.displayName).filter(Boolean),
     }));
 
-    res.json(formatted);
+    res.json({ chats, nextLink: data['@odata.nextLink'] || null });
+  } catch (e) { next(e); }
+});
+
+// ─── LIST MESSAGES IN A CHAT ─────────────────────────────────────────────────
+
+teamsChatRouter.get('/chats/:chatId/messages', async (req, res, next) => {
+  try {
+    const { chatId } = req.params;
+    const nextLink = req.query.nextLink as string | undefined;
+    const token = await getGraphToken();
+
+    const url = nextLink ||
+      `https://graph.microsoft.com/v1.0/chats/${chatId}/messages?$top=50`;
+
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) {
+      const e = await r.json() as any;
+      throw new AppError(`Graph error: ${e.error?.message || r.statusText}`, r.status);
+    }
+    const data = await r.json() as any;
+
+    const messages = (data.value || [])
+      .filter((m: any) => m.messageType === 'message' && m.body?.content)
+      .map((m: any) => ({
+        id: m.id,
+        from: m.from?.user?.displayName || m.from?.application?.displayName || 'Unknown',
+        createdDateTime: m.createdDateTime,
+        contentType: m.body?.contentType,
+        content: m.body?.content,
+      }));
+
+    res.json({ messages, nextLink: data['@odata.nextLink'] || null });
   } catch (e) { next(e); }
 });
 
