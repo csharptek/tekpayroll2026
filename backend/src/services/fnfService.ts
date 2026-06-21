@@ -276,7 +276,7 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   const netPayable      = r2(Math.max(0, totalAdditions - totalDeductions))
 
   // ─── BREAKDOWN ────────────────────────────────────────────────────────────
-  const breakdown: { label: string; amount: number; type: 'addition' | 'deduction' }[] = []
+  const breakdown: { label: string; amount: number; type: 'addition' | 'deduction'; detail?: ExcessLeaveDetailRow[] }[] = []
 
   if (cycles.length === 1) {
     const c = cycles[0]
