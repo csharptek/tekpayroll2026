@@ -13,55 +13,122 @@ import {
 } from '../../components/ui'
 import clsx from 'clsx'
 
-// ─── BREAKDOWN DETAIL HOVER ────────────────────────────────────────────────
+// ─── EXPANDABLE CALCULATION DETAILS PANEL ─────────────────────────────────
 
-function BreakdownDetailTooltip({ rows }: { rows: any[] }) {
-  return (
-    <div className="absolute z-20 right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-left">
-      <table className="w-full text-[11px]">
-        <thead>
-          <tr className="text-slate-400 border-b border-slate-100">
-            <th className="text-left font-medium pb-1">Leave</th>
-            <th className="text-right font-medium pb-1">Annual</th>
-            <th className="text-right font-medium pb-1">Allowed</th>
-            <th className="text-right font-medium pb-1">Used</th>
-            <th className="text-right font-medium pb-1">Excess</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(r => (
-            <tr key={r.leaveKind} className="text-slate-700">
-              <td className="py-0.5 capitalize">{r.leaveKind.toLowerCase()}</td>
-              <td className="py-0.5 text-right">{r.annualEntitlement}</td>
-              <td className="py-0.5 text-right">{r.proratedAllowed}</td>
-              <td className="py-0.5 text-right">{r.usedDays}</td>
-              <td className={clsx('py-0.5 text-right font-semibold', r.excessDays > 0 ? 'text-red-600' : 'text-slate-400')}>
-                {r.excessDays > 0 ? r.excessDays : '—'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-100">
-        Allowed = Annual × {rows[0]?.monthsElapsed ?? ''} months ÷ 12 (Jan → resignation month)
-      </p>
-    </div>
-  )
-}
-
-function DeductionRow({ b }: { b: any }) {
-  const [hover, setHover] = useState(false)
-  const hasDetail = Array.isArray(b.detail) && b.detail.length > 0
+function CalculationDetailsPanel({ calc }: { calc: any }) {
+  const [open, setOpen] = useState(false)
+  const cycles = calc.cycles || []
 
   return (
-    <div
-      className="relative flex justify-between text-xs"
-      onMouseEnter={() => hasDetail && setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
-      <span className={clsx('text-slate-600', hasDetail && 'underline decoration-dotted cursor-help')}>{b.label}</span>
-      <span className="font-semibold text-red-700">−₹{Number(b.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-      {hasDetail && hover && <BreakdownDetailTooltip rows={b.detail} />}
+    <div className="border border-slate-200 rounded-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex justify-between items-center px-4 py-2.5 text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100"
+      >
+        <span>{open ? 'Hide' : 'Show'} Calculation Details</span>
+        <span className="text-slate-400">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="p-4 space-y-5 text-xs">
+          {/* Per-month salary / PF / ESI / LOP */}
+          {cycles.length > 0 && (
+            <div>
+              <p className="font-semibold text-slate-700 mb-1.5">Salary, PF, ESI & LOP by month</p>
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="text-slate-400 border-b border-slate-100">
+                    <th className="text-left font-medium pb-1">Month</th>
+                    <th className="text-right font-medium pb-1">Days</th>
+                    <th className="text-right font-medium pb-1">Gross</th>
+                    <th className="text-right font-medium pb-1">Prorated</th>
+                    <th className="text-right font-medium pb-1">PF</th>
+                    <th className="text-right font-medium pb-1">ESI</th>
+                    <th className="text-right font-medium pb-1">LOP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cycles.map((c: any) => (
+                    <tr key={c.cycleLabel} className="text-slate-700">
+                      <td className="py-1">{c.cycleLabel}</td>
+                      <td className="py-1 text-right">{c.salaryDays}/{c.totalDays}</td>
+                      <td className="py-1 text-right">₹{Math.round(c.grossMonthly).toLocaleString('en-IN')}</td>
+                      <td className="py-1 text-right">₹{Math.round(c.proratedSalary).toLocaleString('en-IN')}</td>
+                      <td className="py-1 text-right">₹{Math.round(c.pfAmount).toLocaleString('en-IN')}</td>
+                      <td className="py-1 text-right">₹{Math.round(c.esiAmount).toLocaleString('en-IN')}</td>
+                      <td className="py-1 text-right">{c.lopDays > 0 ? `${c.lopDays}d / ₹${Math.round(c.lopAmount).toLocaleString('en-IN')}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* HYI recovery */}
+          {calc.hyiRecoveryDetail?.length > 0 && (
+            <div>
+              <p className="font-semibold text-slate-700 mb-1.5">HYI Recovery by month</p>
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="text-slate-400 border-b border-slate-100">
+                    <th className="text-left font-medium pb-1">Month</th>
+                    <th className="text-right font-medium pb-1">HYI Recovered</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calc.hyiRecoveryDetail.map((r: any, i: number) => (
+                    <tr key={i} className="text-slate-700">
+                      <td className="py-1">{r.monthLabel}</td>
+                      <td className="py-1 text-right">₹{Math.round(r.amount).toLocaleString('en-IN')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold text-slate-800 border-t border-slate-100">
+                    <td className="py-1">Total</td>
+                    <td className="py-1 text-right">₹{Math.round(calc.hyiRecovery).toLocaleString('en-IN')}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* Excess leave recovery */}
+          {calc.excessLeaveDetail?.length > 0 && (
+            <div>
+              <p className="font-semibold text-slate-700 mb-1.5">Excess Leave Recovery</p>
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="text-slate-400 border-b border-slate-100">
+                    <th className="text-left font-medium pb-1">Leave</th>
+                    <th className="text-right font-medium pb-1">Annual</th>
+                    <th className="text-right font-medium pb-1">Allowed</th>
+                    <th className="text-right font-medium pb-1">Used</th>
+                    <th className="text-right font-medium pb-1">Excess</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calc.excessLeaveDetail.map((r: any) => (
+                    <tr key={r.leaveKind} className="text-slate-700">
+                      <td className="py-1 capitalize">{r.leaveKind.toLowerCase()}</td>
+                      <td className="py-1 text-right">{r.annualEntitlement}</td>
+                      <td className="py-1 text-right">{r.proratedAllowed}</td>
+                      <td className="py-1 text-right">{r.usedDays}</td>
+                      <td className={clsx('py-1 text-right font-semibold', r.excessDays > 0 ? 'text-red-600' : 'text-slate-400')}>
+                        {r.excessDays > 0 ? r.excessDays : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[10px] text-slate-400 mt-1.5">
+                Allowed = Annual × months-elapsed (Jan → resignation month) ÷ 12. No encashment for unused leave.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -115,8 +182,8 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
             {[
               { label: 'Resignation Date', value: format(new Date(calc.resignationDate), 'dd MMM yyyy') },
               { label: 'Last Working Day', value: format(new Date(calc.lastWorkingDay),  'dd MMM yyyy') },
-              { label: 'Total Salary Days', value: `${calc.salaryDays} days` },
-              { label: 'Months Covered',   value: `${calc.cycles?.length || 1} month(s)` },
+              { label: 'Notice Period',    value: `${calc.noticePeriodDays} days` },
+              { label: 'Months Covered',   value: `${calc.noticePeriodMonths} month(s)` },
             ].map(({ label, value }) => (
               <div key={label} className="bg-slate-50 rounded-xl p-3">
                 <p className="text-xs text-slate-400 mb-0.5">{label}</p>
@@ -124,6 +191,9 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
               </div>
             ))}
           </div>
+          <p className="text-[11px] text-slate-400 -mt-1">
+            Resignation month salary is paid via the normal monthly payroll, not F&F — earnings below cover only {(calc.cycles || []).map((c: any) => c.cycleLabel).join(', ')}.
+          </p>
 
           {/* Breakdown grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 border border-slate-200 rounded-xl">
@@ -147,7 +217,12 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
               <div className="space-y-1.5">
                 {deductions.length === 0
                   ? <p className="text-xs text-slate-400">No deductions</p>
-                  : deductions.map((b: any) => <DeductionRow key={b.label} b={b} />)}
+                  : deductions.map((b: any) => (
+                    <div key={b.label} className="flex justify-between text-xs">
+                      <span className="text-slate-600">{b.label}</span>
+                      <span className="font-semibold text-red-700">−₹{Number(b.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  ))}
               </div>
               <div className="flex justify-between text-xs font-bold text-red-600 mt-2 pt-2 border-t border-slate-100">
                 <span>Total Deductions</span>
@@ -156,11 +231,25 @@ function FnfCalculationModal({ employeeId, employeeName, open, onClose, onInitia
             </div>
           </div>
 
+          {/* Calculation details (expandable) */}
+          <CalculationDetailsPanel calc={calc} />
+
           {/* Net */}
-          <div className="flex justify-between items-center bg-brand-50 border border-brand-200 rounded-xl px-4 py-3">
-            <span className="text-sm font-bold text-brand-700">Net Payable to Employee</span>
-            <Rupee amount={calc.netPayable} className="text-lg font-display font-bold text-brand-800" />
+          <div className={clsx(
+            'flex justify-between items-center rounded-xl px-4 py-3 border',
+            calc.isNegative ? 'bg-red-50 border-red-200' : 'bg-brand-50 border-brand-200'
+          )}>
+            <span className={clsx('text-sm font-bold', calc.isNegative ? 'text-red-700' : 'text-brand-700')}>
+              {calc.isNegative ? 'Recoverable from Employee' : 'Net Payable to Employee'}
+            </span>
+            <Rupee
+              amount={Math.abs(calc.netPayable)}
+              className={clsx('text-lg font-display font-bold', calc.isNegative ? 'text-red-800' : 'text-brand-800')}
+            />
           </div>
+          {calc.isNegative && (
+            <Alert type="warning" message="Deductions exceed earnings. Employee owes this amount to the company — does not auto-recover anywhere." />
+          )}
 
           {initiateMut.isError && (
             <Alert type="error" message={(initiateMut.error as any)?.response?.data?.error || 'Failed to initiate F&F'} />

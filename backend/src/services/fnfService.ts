@@ -24,8 +24,10 @@ export interface FnfCalculation {
   resignationDate:   Date
   lastWorkingDay:    Date
   cycleStart:        Date   // first cycle start (for compat)
-  salaryDays:        number // total days across all cycles
+  salaryDays:        number // total days across F&F-paid cycles only (Jul/Aug-style months)
   totalCycleDays:    number // total cycle days (for compat)
+  noticePeriodDays:  number // full span: resignation date → LWD, inclusive
+  noticePeriodMonths:number // distinct calendar months touched, resignation → LWD
   grossSalary:       number
   proratedSalary:    number
   pendingReimbursements: number
@@ -36,15 +38,18 @@ export interface FnfCalculation {
   loanOutstanding:   number
   otherDeductions:   number
   hyiRecovery:       number
+  hyiRecoveryDetail: HyiRecoveryDetailRow[]
   lopDays:           number
   lopAmount:         number
   excessLeaveDays:   number
   excessLeaveAmount: number
+  excessLeaveDetail: ExcessLeaveDetailRow[]
   totalAdditions:    number
   totalDeductions:   number
   netPayable:        number
+  isNegative:        boolean // true if deductions exceeded earnings (employee owes company)
   cycles:            FnfCycleBreakdown[]
-  breakdown: { label: string; amount: number; type: 'addition' | 'deduction'; detail?: ExcessLeaveDetailRow[] }[]
+  breakdown: { label: string; amount: number; type: 'addition' | 'deduction' }[]
 }
 
 export interface ExcessLeaveDetailRow {
@@ -54,6 +59,11 @@ export interface ExcessLeaveDetailRow {
   proratedAllowed:  number
   usedDays:         number
   excessDays:       number
+}
+
+export interface HyiRecoveryDetailRow {
+  monthLabel: string
+  amount:     number
 }
 
 function daysBetween(start: Date, end: Date): number {
@@ -211,6 +221,7 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   // recovery = HYI for every month from the resignation slab's start through
   // the LWD month, inclusive — this matches all policy examples exactly.
   let hyiRecovery = 0
+  const hyiRecoveryDetail: HyiRecoveryDetailRow[] = []
   const salaryForHyi = await getSalaryInputForDate(employeeId, resignationDate)
   // Use prebuiltSalary (snapshot) hyiMonthly directly — it's the source of truth
   const hyiMonthly = salaryForHyi.prebuiltSalary
@@ -225,6 +236,11 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     const recoveryMonths = lwdAbs - cycleStartAbs + 1
     if (recoveryMonths > 0) {
       hyiRecovery = r2(hyiMonthly * recoveryMonths)
+      for (let i = 0; i < recoveryMonths; i++) {
+        const abs = cycleStartAbs + i
+        const d   = new Date(Math.floor(abs / 12), abs % 12, 1)
+        hyiRecoveryDetail.push({ monthLabel: monthLabel(d), amount: hyiMonthly })
+      }
     }
   }
 
@@ -270,13 +286,22 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     excessLeaveAmount = computeLop(grossForExcess, resignMonthTotalDays, excessLeaveDays)
   }
 
+  // ─── NOTICE PERIOD SPAN (display metric — resignation date → LWD, inclusive) ──
+  // Distinct from F&F's own salaryDays/cycles, which only cover the months F&F
+  // itself pays out (resignation month is paid separately via normal payroll).
+  const noticePeriodDays   = daysBetween(resignationDate, lwd)
+  const noticePeriodMonths =
+    (lwd.getFullYear() * 12 + lwd.getMonth()) -
+    (resignationDate.getFullYear() * 12 + resignationDate.getMonth()) + 1
+
   // ─── TOTALS ────────────────────────────────────────────────────────────────
   const totalAdditions  = r2(totalProratedSalary + pendingReimbursements)
   const totalDeductions = r2(totalPf + totalEsi + totalPt + totalTds + loanOutstanding + hyiRecovery + totalLopAmount + excessLeaveAmount)
-  const netPayable      = r2(Math.max(0, totalAdditions - totalDeductions))
+  const netPayable      = r2(totalAdditions - totalDeductions)
+  const isNegative      = netPayable < 0
 
   // ─── BREAKDOWN ────────────────────────────────────────────────────────────
-  const breakdown: { label: string; amount: number; type: 'addition' | 'deduction'; detail?: ExcessLeaveDetailRow[] }[] = []
+  const breakdown: { label: string; amount: number; type: 'addition' | 'deduction' }[] = []
 
   if (cycles.length === 1) {
     const c = cycles[0]
@@ -303,7 +328,7 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
   if (loanOutstanding > 0)    breakdown.push({ label: 'Loan Outstanding',  amount: loanOutstanding, type: 'deduction' })
   if (hyiRecovery > 0)        breakdown.push({ label: 'HYI Recovery',      amount: hyiRecovery, type: 'deduction' })
   if (totalLopAmount > 0)     breakdown.push({ label: `LOP (${totalLopDays} days)`, amount: totalLopAmount, type: 'deduction' })
-  if (excessLeaveAmount > 0)  breakdown.push({ label: `Excess Leave Recovery (${excessLeaveDays} days)`, amount: excessLeaveAmount, type: 'deduction', detail: excessLeaveDetail.filter(d => d.excessDays > 0 || d.usedDays > 0) })
+  if (excessLeaveAmount > 0)  breakdown.push({ label: `Excess Leave Recovery (${excessLeaveDays} days)`, amount: excessLeaveAmount, type: 'deduction' })
 
   return {
     employeeId,
@@ -313,6 +338,8 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     cycleStart:            cycles[0]?.cycleStart || resignationDate,
     salaryDays:            totalSalaryDays,
     totalCycleDays:        cycles.reduce((s, c) => s + c.totalDays, 0),
+    noticePeriodDays,
+    noticePeriodMonths,
     grossSalary:           cycles[0]?.grossMonthly || 0,
     proratedSalary:        totalProratedSalary,
     pendingReimbursements,
@@ -323,13 +350,16 @@ export async function calculateFnf(employeeId: string, overrideLwd?: Date): Prom
     loanOutstanding,
     otherDeductions:       0,
     hyiRecovery,
+    hyiRecoveryDetail,
     lopDays:               totalLopDays,
     lopAmount:             totalLopAmount,
     excessLeaveDays,
     excessLeaveAmount,
+    excessLeaveDetail,
     totalAdditions,
     totalDeductions,
     netPayable,
+    isNegative,
     cycles,
     breakdown,
   }
