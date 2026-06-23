@@ -192,6 +192,11 @@ export default function TeamsChatCleanupPage() {
                         </span>
                       )}
                     </div>
+                    {chat.members.length > 0 && (
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {chat.members.join(', ')}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button
