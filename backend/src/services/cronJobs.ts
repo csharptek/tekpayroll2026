@@ -65,7 +65,18 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
 
     const { calculatePayrollForEmployee } = await import('./payrollEngine')
     const employees = await prisma.employee.findMany({
-      where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
+      where: {
+        OR: [
+          { status: 'ACTIVE' },
+          {
+            status: 'ON_NOTICE',
+            OR: [
+              { lastWorkingDay: null },
+              { lastWorkingDay: { gte: cycle.cycleStart } },
+            ],
+          },
+        ],
+      },
     })
 
     let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0, errCount = 0
@@ -77,7 +88,7 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
           where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: emp.id } },
         })
         const reimbs = await prisma.reimbursement.aggregate({
-          where: { cycleId: cycle.id, employeeId: emp.id },
+          where: { cycleId: cycle.id, employeeId: emp.id, status: { in: ['APPROVED', 'PAID'] } },
           _sum: { amount: true },
         })
 
@@ -99,6 +110,8 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
           employeeStatus:  emp.status,
           reimbursements:  Number(reimbs._sum.amount || 0),
           prebuiltSalary:  revisionInput.prebuiltSalary,
+          isTrainee:       emp.isTrainee,
+          stipendMonthly:  emp.isTrainee && emp.stipendMonthly ? Number(emp.stipendMonthly) : undefined,
         })
 
         await prisma.payrollEntry.upsert({
