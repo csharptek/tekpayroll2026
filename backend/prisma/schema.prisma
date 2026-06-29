@@ -221,6 +221,7 @@ model Employee {
   payrollSkips        PayrollSkip[]
   payslips            Payslip[]
   fnfSettlement       FnfSettlement?
+  fnfWizardSession    FnfWizardSession?
   loans               Loan[]
   auditLogs           AuditLog[]       @relation("AuditEmployee")
   performedAudits     AuditLog[]       @relation("AuditPerformer")
@@ -1640,4 +1641,42 @@ model SalaryStructureSnapshot {
 
   @@index([employeeId, isActive])
   @@index([employeeId, effectiveDate])
+}
+
+// ─── FNF WIZARD ───────────────────────────────────────────────────────────────
+
+enum FnfWizardStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model FnfWizardSession {
+  id          String            @id @default(cuid())
+  employeeId  String            @unique
+  employee    Employee          @relation(fields: [employeeId], references: [id])
+  currentStep String            @default("BASE_SALARY")
+  status      FnfWizardStatus   @default(IN_PROGRESS)
+  createdBy   String?
+  steps       FnfWizardStepData[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  @@index([employeeId])
+}
+
+model FnfWizardStepData {
+  id           String           @id @default(cuid())
+  sessionId    String
+  session      FnfWizardSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  stepKey      String
+  stepNumber   Int
+  originalData Json
+  overrideData Json?
+  notes        String?          @db.Text
+  confirmedAt  DateTime?
+  confirmedBy  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  @@unique([sessionId, stepKey])
+  @@index([sessionId])
 }

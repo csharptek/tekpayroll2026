@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   GitMerge, Calculator, CheckCircle2, Eye,
-  Calendar, AlertTriangle, Banknote, IndianRupee, FileText,
+  Calendar, AlertTriangle, Banknote, IndianRupee, FileText, Wand2,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { fnfApi } from '../../services/api'
@@ -547,9 +547,15 @@ export default function FnfPage() {
                 </div>
                 <StatusBadge status={emp.status} />
                 {emp.lastWorkingDay ? (
-                  <Button size="sm" icon={<Calculator size={13} />} onClick={() => setCalcEmployee(emp)}>
-                    Calculate F&F
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" icon={<Wand2 size={13} />}
+                      onClick={() => navigate(`/hr/fnf/wizard/${emp.id}`)}>
+                      FnF Wizard
+                    </Button>
+                    <Button size="sm" variant="secondary" icon={<Calculator size={13} />} onClick={() => setCalcEmployee(emp)}>
+                      Calculate F&F
+                    </Button>
+                  </div>
                 ) : (
                   <span className="text-xs text-amber-500 flex items-center gap-1">
                     <AlertTriangle size={11} /> Set last working day first

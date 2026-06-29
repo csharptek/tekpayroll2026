@@ -25,6 +25,7 @@ import LoansPage from './pages/hr/LoansPage'
 import LoanDetailPage from './pages/hr/LoanDetailPage'
 import PayslipGenerationPage from './pages/hr/PayslipGenerationPage'
 import FnfPage from './pages/hr/FnfPage'
+import FnfWizardPage from './pages/hr/FnfWizardPage'
 import AuditLogPage from './pages/hr/AuditLogPage'
 import RunTasksPage from './pages/hr/RunTasksPage'
 import DocumentGenerationPage from './pages/hr/DocumentGenerationPage'
@@ -139,6 +140,7 @@ export default function App() {
           <Route path="loans" element={<RequireAuth roles={['SUPER_ADMIN']}><LoansPage /></RequireAuth>} />
           <Route path="loans/:id" element={<RequireAuth roles={['SUPER_ADMIN']}><LoanDetailPage /></RequireAuth>} />
           <Route path="fnf" element={<RequireAuth roles={['SUPER_ADMIN']}><FnfPage /></RequireAuth>} />
+          <Route path="fnf/wizard/:employeeId" element={<RequireAuth roles={['SUPER_ADMIN']}><FnfWizardPage /></RequireAuth>} />
           <Route path="tds" element={<RequireAuth roles={['SUPER_ADMIN']}><TdsManagementPage /></RequireAuth>} />
           <Route path="teams-chat-cleanup" element={<RequireAuth roles={['SUPER_ADMIN']}><TeamsChatCleanupPage /></RequireAuth>} />
           <Route path="deleted-chats" element={<RequireAuth roles={['SUPER_ADMIN']}><DeletedChatsPage /></RequireAuth>} />

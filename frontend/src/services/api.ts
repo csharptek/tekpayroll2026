@@ -207,12 +207,24 @@ export const fnfApi = {
   eligible:        ()           => api.get('/api/fnf/eligible'),
   byEmployee:      (id: string) => api.get(`/api/fnf/employee/${id}`),
   get:             (id: string) => api.get(`/api/fnf/${id}`),
-  calculate:       (empId: string) => api.post(`/api/fnf/calculate/${empId}`),
+  calculate:       (empId: string, hyiOverrides?: Record<string, number>) => api.post(`/api/fnf/calculate/${empId}`, { hyiOverrides }),
   preview:         (empId: string, lastWorkingDay?: string) => api.post(`/api/fnf/preview/${empId}`, { lastWorkingDay }),
-  initiate:        (empId: string) => api.post(`/api/fnf/initiate/${empId}`),
+  initiate:        (empId: string, hyiOverrides?: Record<string, number>) => api.post(`/api/fnf/initiate/${empId}`, { hyiOverrides }),
   approve:         (id: string, notes?: string) => api.post(`/api/fnf/${id}/approve`, { notes }),
   settle:          (id: string, notes?: string) => api.post(`/api/fnf/${id}/settle`, { notes }),
   update:          (id: string, data: any) => api.put(`/api/fnf/${id}`, data),
+  generatePdf:     (id: string) => api.post(`/api/fnf/${id}/generate-pdf`),
+  wizard: {
+    getSession:   (empId: string) => api.get(`/api/fnf/wizard/${empId}`),
+    getStepData:  (empId: string, hyiOverrides?: Record<string, number>) =>
+      api.get(`/api/fnf/wizard/${empId}/step-data`, {
+        params: hyiOverrides && Object.keys(hyiOverrides).length ? { hyiOverrides: JSON.stringify(hyiOverrides) } : {},
+      }),
+    confirmStep:  (empId: string, stepKey: string, data: { originalData: any; overrideData?: any; notes?: string }) =>
+      api.post(`/api/fnf/wizard/${empId}/step/${stepKey}/confirm`, data),
+    complete:     (empId: string) => api.post(`/api/fnf/wizard/${empId}/complete`),
+    reset:        (empId: string) => api.delete(`/api/fnf/wizard/${empId}`),
+  },
 }
 
 export const leaveApi = {
