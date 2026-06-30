@@ -124,7 +124,7 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
     ...(esi  > 0 ? [{ label: 'ESI — Employee',           amount: esi  }] : []),
     ...(pt   > 0 ? [{ label: 'Professional Tax',         amount: pt   }] : []),
     ...(tds  > 0 ? [{ label: 'TDS',                      amount: tds  }] : []),
-    ...(lop  > 0 ? [{ label: `Loss of Pay (${entry.lopDays} days)`, amount: lop }] : []),
+    ...(lop  > 0 ? [{ label: `Loss of Pay (${Number(entry.lopDays)} days)`, amount: lop }] : []),
     ...(loan > 0 ? [{ label: 'Loan EMI Deduction',       amount: loan }] : []),
     ...(incRec > 0 ? [{ label: 'Incentive Recovery',     amount: incRec }] : []),
   ]
@@ -214,7 +214,7 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
       <div class="info-row"><span class="label">Pay Period</span><span class="value">${mmYyyy} (${monthLabel})</span></div>
       <div class="info-row"><span class="label">Working Days (Mon–Fri)</span><span class="value">${weekdays}</span></div>
       <div class="info-row"><span class="label">Payable Days</span><span class="value">${entry.payableDays} / ${entry.totalDays}</span></div>
-      <div class="info-row"><span class="label">LOP Days</span><span class="value">${entry.lopDays}</span></div>
+      <div class="info-row"><span class="label">LOP Days</span><span class="value">${Number(entry.lopDays)}</span></div>
       <div class="info-row"><span class="label">Joining Date</span><span class="value">${new Date(emp.joiningDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span></div>
     </div>
   </div>

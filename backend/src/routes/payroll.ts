@@ -148,7 +148,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         cycleStart:      cycle.cycleStart,
         cycleEnd:        cycle.cycleEnd,
         payrollMonth:    cycle.payrollMonth,
-        lopDays:         lopEntry?.lopDays || 0,
+        lopDays:         Number(lopEntry?.lopDays || 0),
         tdsMonthly:      tdsMonthly,
         reimbursements:  Number(reimbs._sum.amount || 0),
         employeeStatus:  emp.status,
@@ -181,7 +181,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
           proratedGross:     calc.proration.proratedGross,
           incentive:         0,
           reimbursementTotal: calc.reimbursements,
-          lopDays:           lopEntry?.lopDays || 0,
+          lopDays:           Number(lopEntry?.lopDays || 0),
           lopAmount:         calc.deductions.lop,
           pfAmount:          calc.deductions.pf,
           employerPfAmount:  calc.salary.employerPfMonthly,
@@ -210,7 +210,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
           isProrated:        calc.proration.isProrated,
           proratedGross:     calc.proration.proratedGross,
           reimbursementTotal: calc.reimbursements,
-          lopDays:           lopEntry?.lopDays || 0,
+          lopDays:           Number(lopEntry?.lopDays || 0),
           lopAmount:         calc.deductions.lop,
           pfAmount:          calc.deductions.pf,
           employerPfAmount:  calc.salary.employerPfMonthly,
@@ -311,7 +311,7 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
           prisma.lopEntry.findFirst({ where: { employeeId: emp.id, cycle: { payrollMonth } } }),
           prisma.reimbursement.aggregate({ where: { employeeId: emp.id, cycle: { payrollMonth }, status: { in: ['APPROVED', 'PAID'] } }, _sum: { amount: true } }),
         ])
-        if (override.lopDays === undefined)        lopDays     = lopEntry?.lopDays || 0
+        if (override.lopDays === undefined)        lopDays     = Number(lopEntry?.lopDays || 0)
         if (override.reimbursements === undefined)  reimbAmount = Number(reimbs._sum.amount || 0)
       }
 

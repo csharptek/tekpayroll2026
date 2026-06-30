@@ -387,7 +387,7 @@ model PayrollEntry {
   reimbursementTotal Decimal         @default(0) @db.Decimal(12, 2)
 
   // Deductions
-  lopDays         Int                @default(0)
+  lopDays         Decimal            @default(0) @db.Decimal(5, 2)
   lopAmount       Decimal            @default(0) @db.Decimal(12, 2)
   pfAmount        Decimal            @default(0) @db.Decimal(12, 2)   // employee PF
   employerPfAmount  Decimal          @default(0) @db.Decimal(12, 2)   // employer PF (inside CTC)
@@ -439,9 +439,7 @@ model LopEntry {
   employeeId  String
   employee    Employee     @relation(fields: [employeeId], references: [id])
 
-  lopDays     Int
-  reason      String?
-  approvedBy  String?
+  lopDays     Decimal      @default(0) @db.Decimal(5, 2)
   approvedByName String?
   approvedAt  DateTime?
 

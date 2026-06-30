@@ -34,7 +34,7 @@ export function generateFnfStatementHTML(calc: FnfCalculation, employee: any): s
       <td style="text-align:right">₹ ${fmt(c.proratedSalary)}</td>
       <td style="text-align:right">₹ ${fmt(c.pfAmount)}</td>
       <td style="text-align:right">₹ ${fmt(c.esiAmount)}</td>
-      <td style="text-align:right">${c.lopDays > 0 ? `${c.lopDays}d / ₹${fmt(c.lopAmount)}` : '—'}</td>
+      <td style="text-align:right">${Number(c.lopDays) > 0 ? `${c.lopDays}d / ₹${fmt(c.lopAmount)}` : '—'}</td>
     </tr>`
   ).join('')
 

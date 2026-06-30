@@ -277,7 +277,7 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
           pfAmount:      Number(e.pfAmount),
           esiAmount:     Number(e.esiAmount),
           tdsAmount:     Number(e.tdsAmount),
-          lopDays:       e.lopDays,
+          lopDays:       Number(e.lopDays),
           lopAmount:     Number(e.lopAmount),
         })),
         totalPaid: paidCycleEntries.reduce((s, e) => s + Number(e.netSalary), 0),

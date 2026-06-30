@@ -838,11 +838,11 @@ async function createLopFromLeave(employeeId: string, leaveApplicationId: string
     create: {
       cycleId: cycle.id,
       employeeId,
-      lopDays: Math.round(lopDays),
+      lopDays: lopDays,
       reason: `Auto-LOP from leave application`,
     },
     update: {
-      lopDays: { increment: Math.round(lopDays) },
+      lopDays: { increment: lopDays },
     },
   })
 }
