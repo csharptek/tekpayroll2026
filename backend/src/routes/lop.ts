@@ -15,15 +15,15 @@ lopRouter.get('/:cycleId', async (req, res) => {
 });
 
 lopRouter.post('/', async (req, res) => {
-  const { cycleId, employeeId, lopDays, reason } = req.body;
+  const { cycleId, employeeId, lopDays } = req.body;
   const cycle = await prisma.payrollCycle.findUnique({ where: { id: cycleId } });
   if (!cycle) throw new AppError('Cycle not found', 404);
   if (cycle.status === 'LOCKED' || cycle.status === 'DISBURSED') throw new AppError('Cycle is locked', 400);
 
   const entry = await prisma.lopEntry.upsert({
     where: { cycleId_employeeId: { cycleId, employeeId } },
-    create: { cycleId, employeeId, lopDays, reason, approvedBy: req.user!.id, approvedByName: req.user!.name, approvedAt: new Date() },
-    update: { lopDays, reason, approvedBy: req.user!.id, approvedByName: req.user!.name, approvedAt: new Date() },
+    create: { cycleId, employeeId, lopDays: Number(lopDays), approvedByName: req.user!.name, approvedAt: new Date() },
+    update: { lopDays: Number(lopDays), approvedByName: req.user!.name, approvedAt: new Date() },
   });
   res.json({ success: true, data: entry });
 });

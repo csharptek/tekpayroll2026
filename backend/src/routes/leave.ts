@@ -567,8 +567,8 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
         if (cycle) {
           await prisma.lopEntry.upsert({
             where: { cycleId_employeeId: { cycleId: cycle.id, employeeId } },
-            create: { cycleId: cycle.id, employeeId, lopDays: Math.round(lopDays), reason: 'Bulk leave entry (admin)' },
-            update: { lopDays: { increment: Math.round(lopDays) } },
+            create: { cycleId: cycle.id, employeeId, lopDays },
+            update: { lopDays: { increment: lopDays } },
           })
         }
       }

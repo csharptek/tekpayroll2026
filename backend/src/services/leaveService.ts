@@ -621,8 +621,9 @@ export async function cancelLeaveDirectly(
           where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: app.employeeId } },
         })
         if (lopEntry) {
-          const safeLopReverse = Math.min(lopToReverse, lopEntry.lopDays)
-          const newLopDays = lopEntry.lopDays - safeLopReverse
+          const currentLopDays = Number(lopEntry.lopDays)
+          const safeLopReverse = Math.min(lopToReverse, currentLopDays)
+          const newLopDays = currentLopDays - safeLopReverse
           if (newLopDays <= 0) {
             await prisma.lopEntry.delete({
               where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: app.employeeId } },
@@ -839,7 +840,6 @@ async function createLopFromLeave(employeeId: string, leaveApplicationId: string
       cycleId: cycle.id,
       employeeId,
       lopDays: lopDays,
-      reason: `Auto-LOP from leave application`,
     },
     update: {
       lopDays: { increment: lopDays },
