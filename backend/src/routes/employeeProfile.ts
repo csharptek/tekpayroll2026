@@ -514,15 +514,19 @@ employeeProfileRouter.get('/:id/documents', async (req, res) => {
     where: { employeeId: req.params.id },
     orderBy: { uploadedAt: 'desc' },
   })
-  // Regenerate fresh SAS URLs from stored fileKey (avoids stale/truncated URLs in DB)
-  const { accountName, credential } = getSharedKeyCredential()
+  // Regenerate fresh SAS URLs from stored fileKey (avoids stale/truncated URLs in DB).
+  // BUT: files stored on the Railway volume already have a self-serving /api/... URL —
+  // never overwrite those with a (dead) Azure SAS URL.
+  let credentials: { accountName: string; credential: any } | null = null
+  try { credentials = getSharedKeyCredential() } catch { credentials = null }
+
   const docsWithFreshUrls = docs.map(doc => {
-    if (!doc.fileKey) return doc
-    const containerName = doc.fileKey.startsWith('generated-docs/')
-      ? (process.env.AZURE_DOCS_CONTAINER || 'emp-documents')
-      : (process.env.AZURE_DOCS_CONTAINER || 'emp-documents')
+    // Railway-stored file: keep the stored /api/... URL as-is
+    if (doc.fileUrl && doc.fileUrl.startsWith('/api/')) return doc
+    if (!doc.fileKey || !credentials) return doc
+    const containerName = process.env.AZURE_DOCS_CONTAINER || 'emp-documents'
     try {
-      const freshUrl = generateSasUrl(containerName, doc.fileKey, accountName, credential)
+      const freshUrl = generateSasUrl(containerName, doc.fileKey, credentials.accountName, credentials.credential)
       return { ...doc, fileUrl: freshUrl }
     } catch {
       return doc
