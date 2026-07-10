@@ -93,13 +93,50 @@ function sanitizeName(name: string): string {
 
 // ─── TEXT EXTRACTION / MATCHING ────────────────────────────────────────────────
 
-const PAN_REGEX = /\b([A-Z]{5}[0-9]{4}[A-Z])\b/
+const PAN_REGEX = /\b([A-Z]{5}[0-9]{4}[A-Z])\b/g
 
 interface Extracted {
   pan: string | null
+  name: string | null
   rawText: string
   isPartA: boolean
   isPartB: boolean
+}
+
+// Pull the EMPLOYEE PAN — the one near "PAN of the Employee/Specified senior citizen".
+// Form 16 also contains the deductor (company) PAN, which we must NOT use.
+function extractEmployeePan(text: string): string | null {
+  // Look for the employee-PAN label, then the first PAN pattern that follows it
+  const labelIdx = text.search(/PAN of the Employee(?:\/Specified senior citizen)?/i)
+  if (labelIdx >= 0) {
+    const after = text.slice(labelIdx, labelIdx + 200)
+    const m = after.match(/[A-Z]{5}[0-9]{4}[A-Z]/)
+    if (m) return m[0]
+  }
+  // Fallback: last PAN in the doc is usually the employee's (deductor PAN appears first)
+  const all = text.match(PAN_REGEX)
+  if (all && all.length) return all[all.length - 1]
+  return null
+}
+
+// Pull the EMPLOYEE name — near "Name and address of the Employee", NOT employer.
+function extractEmployeeName(text: string): string | null {
+  const patterns = [
+    /Name and address of the Employee(?:\/Specified senior citizen)?\s*:?\s*([A-Za-z][A-Za-z .]{3,60})/i,
+    /Name of the Employee(?:\/Specified senior citizen)?\s*:?\s*([A-Za-z][A-Za-z .]{3,60})/i,
+    /Employee Name\s*:?\s*([A-Za-z][A-Za-z .]{3,60})/i,
+  ]
+  for (const p of patterns) {
+    const m = text.match(p)
+    if (m) {
+      // Trim trailing address/label noise — keep up to first newline-ish break or double space
+      let name = m[1].trim()
+      // Stop at common trailing words that indicate address started
+      name = name.split(/\s+(?:S\/O|D\/O|W\/O|Flat|House|Plot|Road|Street|PIN|Pin)\b/i)[0].trim()
+      if (name.length >= 3) return name
+    }
+  }
+  return null
 }
 
 async function extractPdfInfo(buffer: Buffer): Promise<Extracted> {
@@ -110,11 +147,16 @@ async function extractPdfInfo(buffer: Buffer): Promise<Extracted> {
   } catch {
     text = ''
   }
-  const panMatch = text.match(PAN_REGEX)
   const upper = text.toUpperCase()
   const isPartA = upper.includes('PART A') || upper.includes('PART-A')
   const isPartB = upper.includes('PART B') || upper.includes('PART-B')
-  return { pan: panMatch ? panMatch[1] : null, rawText: text, isPartA, isPartB }
+  return {
+    pan: extractEmployeePan(text),
+    name: extractEmployeeName(text),
+    rawText: text,
+    isPartA,
+    isPartB,
+  }
 }
 
 // Strip designation/parenthetical/extra tokens, normalize for fuzzy match
@@ -145,19 +187,6 @@ function nameMatchScore(extractedTokens: string[], employeeTokens: string[]): nu
   for (const t of a) if (b.has(t)) overlap++
   const denom = Math.max(a.size, b.size)
   return Math.round((overlap / denom) * 100)
-}
-
-function guessNameFromText(text: string): string | null {
-  const patterns = [
-    /Name and address of the Employee[^:]*:?\s*([A-Za-z .]{4,60})/i,
-    /Name of the Employee\s*:?\s*([A-Za-z .]{4,60})/i,
-    /Employee Name\s*:?\s*([A-Za-z .]{4,60})/i,
-  ]
-  for (const p of patterns) {
-    const m = text.match(p)
-    if (m) return m[1].trim()
-  }
-  return null
 }
 
 // ─── ROUTES ─────────────────────────────────────────────────────────────────
@@ -203,7 +232,7 @@ form16BulkRouter.post('/bulk-upload', upload.array('files', 100), async (req: an
       const partA = group.find(g => g.extracted.isPartA) || group[0]
       const partB = group.find(g => g.extracted.isPartB && g !== partA)
 
-      const nameGuess = guessNameFromText(partA.extracted.rawText) || guessNameFromText(partB?.extracted.rawText || '')
+      const nameGuess = partA.extracted.name || partB?.extracted.name || null
       let bestMatch: { emp: typeof employees[0]; score: number } | null = null
       if (nameGuess) {
         const guessTokens = normalizeName(nameGuess)
@@ -232,7 +261,7 @@ form16BulkRouter.post('/bulk-upload', upload.array('files', 100), async (req: an
     const noPanByEmployee = new Map<string, FileInfo[]>()
     const noPanUnresolved: FileInfo[] = []
     for (const info of noPan) {
-      const nameGuess = guessNameFromText(info.extracted.rawText)
+      const nameGuess = info.extracted.name
       if (!nameGuess) { noPanUnresolved.push(info); continue }
       const guessTokens = normalizeName(nameGuess)
       let bestMatch: { emp: typeof employees[0]; score: number } | null = null
