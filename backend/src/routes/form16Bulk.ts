@@ -434,3 +434,14 @@ form16BulkRouter.get('/bulk-sessions/:id', async (req, res, next) => {
     res.json({ data: { items } })
   } catch (err) { next(err) }
 })
+
+// All employees (any status, no pagination) — for the reassign dropdown
+form16BulkRouter.get('/all-employees', async (_req, res, next) => {
+  try {
+    const employees = await prisma.employee.findMany({
+      select: { id: true, name: true, employeeCode: true, status: true },
+      orderBy: { name: 'asc' },
+    })
+    res.json({ data: employees })
+  } catch (err) { next(err) }
+})

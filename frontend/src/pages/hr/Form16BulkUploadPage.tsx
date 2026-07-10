@@ -16,7 +16,7 @@ interface BulkItem {
   employee?: { id: string; name: string; employeeCode: string } | null
 }
 
-interface EmployeeOption { id: string; name: string; employeeCode: string }
+interface EmployeeOption { id: string; name: string; employeeCode: string; status?: string }
 
 export default function Form16BulkUploadPage() {
   const fileRef = useRef<HTMLInputElement>(null)
@@ -31,8 +31,8 @@ export default function Form16BulkUploadPage() {
 
   async function loadEmployees() {
     if (employees.length) return
-    const res = await api.get('/api/employees')
-    const list = (res.data?.data || res.data || []).map((e: any) => ({ id: e.id, name: e.name, employeeCode: e.employeeCode }))
+    const res = await api.get('/api/form16/all-employees')
+    const list = (res.data?.data || []).map((e: any) => ({ id: e.id, name: e.name, employeeCode: e.employeeCode, status: e.status }))
     setEmployees(list)
   }
 
@@ -184,7 +184,7 @@ export default function Form16BulkUploadPage() {
                           >
                             <option value="">Reassign…</option>
                             {employees.map(e => (
-                              <option key={e.id} value={e.id}>{e.name} ({e.employeeCode})</option>
+                              <option key={e.id} value={e.id}>{e.name} ({e.employeeCode}){e.status && e.status !== 'ACTIVE' ? ` — ${e.status}` : ''}</option>
                             ))}
                           </select>
                           <button className="text-xs text-red-500 hover:underline" onClick={() => handleReject(item.id)}>Exclude</button>
