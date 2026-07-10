@@ -7,7 +7,7 @@ import { Button, Alert } from '../ui'
 const DOC_TYPES = [
   'PAN_CARD', 'AADHAAR_CARD', 'PASSPORT', 'OFFER_LETTER', 'RELIEVING_LETTER',
   'APPOINTMENT_LETTER', 'EXPERIENCE_LETTER', 'EDUCATION_CERTIFICATE',
-  'ADDRESS_PROOF', 'BANK_PROOF', 'OTHER',
+  'ADDRESS_PROOF', 'BANK_PROOF', 'FORM_16', 'OTHER',
 ]
 
 const DOC_LABELS: Record<string, string> = {
@@ -15,13 +15,13 @@ const DOC_LABELS: Record<string, string> = {
   OFFER_LETTER: 'Offer Letter', RELIEVING_LETTER: 'Relieving Letter',
   APPOINTMENT_LETTER: 'Appointment Letter',
   EXPERIENCE_LETTER: 'Experience Letter', EDUCATION_CERTIFICATE: 'Education Certificate',
-  ADDRESS_PROOF: 'Address Proof', BANK_PROOF: 'Bank Proof', OTHER: 'Other',
+  ADDRESS_PROOF: 'Address Proof', BANK_PROOF: 'Bank Proof', FORM_16: 'Form 16', OTHER: 'Other',
 }
 
 const DOC_ICONS: Record<string, string> = {
   PAN_CARD: '🪪', AADHAAR_CARD: '🆔', PASSPORT: '📘', OFFER_LETTER: '📄',
   RELIEVING_LETTER: '📋', APPOINTMENT_LETTER: '📑', EXPERIENCE_LETTER: '💼',
-  EDUCATION_CERTIFICATE: '🎓', ADDRESS_PROOF: '🏠', BANK_PROOF: '🏦', OTHER: '📎',
+  EDUCATION_CERTIFICATE: '🎓', ADDRESS_PROOF: '🏠', BANK_PROOF: '🏦', FORM_16: '🧾', OTHER: '📎',
 }
 
 interface PendingFile {

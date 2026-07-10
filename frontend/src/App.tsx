@@ -29,6 +29,7 @@ import FnfWizardPage from './pages/hr/FnfWizardPage'
 import AuditLogPage from './pages/hr/AuditLogPage'
 import RunTasksPage from './pages/hr/RunTasksPage'
 import DocumentGenerationPage from './pages/hr/DocumentGenerationPage'
+import Form16BulkUploadPage from './pages/hr/Form16BulkUploadPage'
 import ConfigPage from './pages/hr/ConfigPage'
 import SalaryCalculatorPage from './pages/hr/SalaryCalculatorPage'
 import SalaryCalculatorNewEsicPage from './pages/hr/SalaryCalculatorNewEsicPage'
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="audit" element={<AuditLogPage />} />
           <Route path="run-tasks" element={<RequireAuth roles={['SUPER_ADMIN']}><RunTasksPage /></RequireAuth>} />
           <Route path="documents" element={<RequireAuth roles={['SUPER_ADMIN','HR']}><DocumentGenerationPage /></RequireAuth>} />
+          <Route path="form16-bulk" element={<RequireAuth roles={['SUPER_ADMIN']}><Form16BulkUploadPage /></RequireAuth>} />
           <Route path="config" element={<ConfigPage />} />
           <Route path="notifications" element={<NotificationConfigPage />} />
           <Route path="salary-calculator" element={<SalaryCalculatorPage />} />

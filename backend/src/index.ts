@@ -24,6 +24,7 @@ import { importRouter } from './routes/import';
 import { syncRouter } from './routes/sync'
 import { leaveRouter } from './routes/leave'
 import { employeeProfileRouter } from './routes/employeeProfile'
+import { form16BulkRouter } from './routes/form16Bulk'
 import { cronRouter } from './routes/cron';
 import { documentsRouter } from './routes/documents';
 import cron from 'node-cron';
@@ -89,6 +90,7 @@ app.use('/api/leave', leaveRouter)
 app.use('/api/employees', employeeProfileRouter)
 app.use('/api/cron', cronRouter);
 app.use('/api/documents', documentsRouter);
+app.use('/api/form16', form16BulkRouter)
 app.use('/api/policies', policiesRouter);
 app.use('/api/exit', exitRouter);
 app.use('/api/assets', assetRouter);

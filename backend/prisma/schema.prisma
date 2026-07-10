@@ -235,6 +235,7 @@ model Employee {
   employmentDetail    EmploymentDetail?
   bankAccounts        BankAccount[]
   documents           EmployeeDocument[]
+  form16BulkItems     Form16BulkItem[]
   governmentId        GovernmentId?
 
   // Leave module relations (new — no change to existing fields)
@@ -1067,7 +1068,16 @@ enum DocumentType {
   ADDRESS_PROOF
   BANK_PROOF
   INCREMENT_LETTER
+  FORM_16
   OTHER
+}
+
+enum Form16BulkStatus {
+  PENDING
+  MATCHED
+  UNMATCHED
+  CONFIRMED
+  REJECTED
 }
 
 model EmployeeDocument {
@@ -1096,6 +1106,46 @@ model EmployeeDocument {
 
   @@index([employeeId])
   @@index([documentType])
+}
+
+model Form16BulkSession {
+  id          String              @id @default(cuid())
+  uploadedBy  String
+  totalFiles  Int
+  status      String              @default("REVIEWING") // REVIEWING, CONFIRMED, CANCELLED
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  items       Form16BulkItem[]
+}
+
+model Form16BulkItem {
+  id              String            @id @default(cuid())
+  sessionId       String
+  session         Form16BulkSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  employeeId      String?
+  employee        Employee?         @relation(fields: [employeeId], references: [id])
+  matchedName     String?
+  extractedPan    String?
+  matchConfidence Int?              // 0-100
+  matchMethod     String?           // PAN, NAME_FUZZY, MANUAL
+
+  partAFileKey    String?
+  partAFileName   String?
+  partBFileKey    String?
+  partBFileName   String?
+
+  mergedFileKey   String?
+  mergedFileUrl   String?
+
+  status          Form16BulkStatus  @default(PENDING)
+  errorMessage    String?
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([sessionId])
+  @@index([employeeId])
 }
 
 // ─── GOVERNMENT IDS (extended from existing fields) ──────────────────────────

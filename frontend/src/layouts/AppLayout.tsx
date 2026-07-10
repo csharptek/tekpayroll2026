@@ -93,6 +93,7 @@ const SUPER_ADMIN_NAV = [
       { label: 'Payroll Cycles',      icon: CreditCard, to: '/hr/payroll' },
       { label: 'Payroll Preview',     icon: FileSearch, to: '/hr/payroll/preview' },
       { label: 'Payslips',            icon: FileText,   to: '/hr/payslips' },
+      { label: 'Bulk Form 16',        icon: Upload,     to: '/hr/form16-bulk' },
       { label: 'Salary Breakups',     icon: Table2,     to: '/hr/salary-breakups' },
       { label: 'Bulk Edit Salaries',  icon: Table2,     to: '/hr/salaries-bulk-edit' },
       { label: 'Loans & Advances',    icon: Wallet,     to: '/hr/loans' },
