@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { requireSuperAdmin } from '../middleware/auth'
+import { authenticate, requireSuperAdmin } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters, StorageSharedKeyCredential } from '@azure/storage-blob'
@@ -11,6 +11,7 @@ import { PDFDocument } from 'pdf-lib'
 const pdfParse = require('pdf-parse')
 
 export const form16BulkRouter = Router()
+form16BulkRouter.use(authenticate)
 form16BulkRouter.use(requireSuperAdmin)
 
 const upload = multer({
