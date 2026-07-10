@@ -48,14 +48,20 @@ const allowedOrigins = [
   'http://localhost:5174',
 ].filter(Boolean)
 
+console.log('[CORS] Allowed origins:', allowedOrigins)
+
 app.use(cors({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) return callback(null, true)
     if (allowedOrigins.includes(origin)) return callback(null, true)
-    callback(new Error('CORS: origin not allowed'))
+    // Don't throw — reject without CORS headers, but never crash preflight
+    return callback(null, false)
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-dev-role', 'x-dev-user-id'],
 }));
+app.options('*', cors());
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
