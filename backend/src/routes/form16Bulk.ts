@@ -2,17 +2,16 @@ import { Router } from 'express'
 import { authenticate, requireSuperAdmin } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
-import { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters, StorageSharedKeyCredential } from '@azure/storage-blob'
 import multer from 'multer'
-import { randomUUID } from 'crypto'
+import { randomUUID, createHmac } from 'crypto'
 import { PDFDocument } from 'pdf-lib'
-// pdf-parse v2 exports differently — use require to avoid ESM default-export issues
+import fs from 'fs'
+import path from 'path'
+// pdf-parse v1 (CommonJS) — require returns the function directly
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pdfParse = require('pdf-parse')
 
 export const form16BulkRouter = Router()
-form16BulkRouter.use(authenticate)
-form16BulkRouter.use(requireSuperAdmin)
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -20,57 +19,73 @@ const upload = multer({
   fileFilter: (_req, file, cb) => cb(null, file.mimetype === 'application/pdf'),
 })
 
-// ─── AZURE BLOB HELPERS (temp container for staging) ──────────────────────────
+// ─── LOCAL VOLUME STORAGE HELPERS (Railway volume at /data) ───────────────────
 
-function getConnStr(): string {
-  const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING
-  if (!connStr || connStr === 'PLACEHOLDER') throw new AppError('Azure storage not configured', 500)
-  return connStr
+const STORAGE_ROOT = process.env.FILE_STORAGE_DIR || '/data'
+const FILE_TOKEN_SECRET = process.env.FILE_TOKEN_SECRET || process.env.AZURE_CLIENT_ID || 'tekone-file-secret'
+
+function saveLocalFile(buffer: Buffer, relativeKey: string): string {
+  const fullPath = path.join(STORAGE_ROOT, relativeKey)
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true })
+  fs.writeFileSync(fullPath, buffer)
+  return relativeKey
 }
 
-function getSharedKeyCredential(): { accountName: string; credential: StorageSharedKeyCredential } {
-  const connStr = getConnStr()
-  const accountNameMatch = connStr.match(/AccountName=([^;]+)/)
-  const accountKeyMatch = connStr.match(/AccountKey=([^;]+)/)
-  if (!accountNameMatch || !accountKeyMatch) throw new AppError('Invalid Azure connection string', 500)
-  return {
-    accountName: accountNameMatch[1],
-    credential: new StorageSharedKeyCredential(accountNameMatch[1], accountKeyMatch[1]),
-  }
+function readLocalFile(relativeKey: string): Buffer {
+  const fullPath = path.join(STORAGE_ROOT, relativeKey)
+  return fs.readFileSync(fullPath)
 }
 
-function generateSasUrl(containerName: string, blobKey: string, accountName: string, credential: StorageSharedKeyCredential): string {
-  const expiresOn = new Date()
-  expiresOn.setFullYear(expiresOn.getFullYear() + 3)
-  const sasQuery = generateBlobSASQueryParameters(
-    { containerName, blobName: blobKey, permissions: BlobSASPermissions.parse('r'), expiresOn },
-    credential,
-  ).toString()
-  return `https://${accountName}.blob.core.windows.net/${containerName}/${blobKey}?${sasQuery}`
-}
-
-async function uploadToBlob(buffer: Buffer, blobPath: string, containerEnvKey: string): Promise<{ url: string; key: string }> {
-  const connStr = getConnStr()
-  const containerName = process.env[containerEnvKey] || 'emp-documents'
-  const client = BlobServiceClient.fromConnectionString(connStr)
-  const container = client.getContainerClient(containerName)
-  await container.createIfNotExists()
-  const blockBlob = container.getBlockBlobClient(blobPath)
-  await blockBlob.uploadData(buffer, { blobHTTPHeaders: { blobContentType: 'application/pdf' } })
-  const { accountName, credential } = getSharedKeyCredential()
-  const url = generateSasUrl(containerName, blobPath, accountName, credential)
-  return { url, key: blobPath }
-}
-
-async function deleteBlob(blobPath: string, containerEnvKey: string): Promise<void> {
+function deleteLocalFile(relativeKey: string): void {
   try {
-    const connStr = getConnStr()
-    const containerName = process.env[containerEnvKey] || 'emp-documents'
-    const client = BlobServiceClient.fromConnectionString(connStr)
-    const container = client.getContainerClient(containerName)
-    await container.getBlockBlobClient(blobPath).deleteIfExists()
-  } catch { /* best effort cleanup */ }
+    const fullPath = path.join(STORAGE_ROOT, relativeKey)
+    if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath)
+  } catch { /* best effort */ }
 }
+
+function signFileToken(key: string, expiresAtMs: number): string {
+  return createHmac('sha256', FILE_TOKEN_SECRET).update(`${key}:${expiresAtMs}`).digest('hex')
+}
+
+function verifyFileToken(key: string, expiresAtMs: number, token: string): boolean {
+  if (Date.now() > expiresAtMs) return false
+  return signFileToken(key, expiresAtMs) === token
+}
+
+function buildFileUrl(key: string): string {
+  const base = process.env.BACKEND_URL || ''
+  const exp = Date.now() + 3 * 365 * 24 * 60 * 60 * 1000
+  const token = signFileToken(key, exp)
+  const qs = `key=${encodeURIComponent(key)}&exp=${exp}&token=${token}`
+  return `${base}/api/form16/file?${qs}`
+}
+
+function storeFile(buffer: Buffer, relativeKey: string): { url: string; key: string } {
+  const key = saveLocalFile(buffer, relativeKey)
+  return { url: buildFileUrl(key), key }
+}
+
+// ─── PUBLIC FILE STREAM (token-signed, no auth header needed) ─────────────────
+// MUST be registered BEFORE the authenticate middleware below so <a href> works.
+form16BulkRouter.get('/file', (req, res) => {
+  const key = String(req.query.key || '')
+  const exp = Number(req.query.exp || 0)
+  const token = String(req.query.token || '')
+  if (!key || !exp || !token || !verifyFileToken(key, exp, token)) {
+    return res.status(403).send('Invalid or expired link')
+  }
+  const fullPath = path.join(STORAGE_ROOT, key)
+  if (!fullPath.startsWith(STORAGE_ROOT) || !fs.existsSync(fullPath)) {
+    return res.status(404).send('File not found')
+  }
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `inline; filename="${path.basename(key)}"`)
+  fs.createReadStream(fullPath).pipe(res)
+})
+
+// Everything below requires SUPER_ADMIN auth
+form16BulkRouter.use(authenticate)
+form16BulkRouter.use(requireSuperAdmin)
 
 function sanitizeName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40)
@@ -166,7 +181,7 @@ form16BulkRouter.post('/bulk-upload', upload.array('files', 100), async (req: an
     for (const file of files) {
       const extracted = await extractPdfInfo(file.buffer)
       const blobKey = `form16-staging/${session.id}/${randomUUID()}-${file.originalname}`
-      await uploadToBlob(file.buffer, blobKey, 'AZURE_DOCS_CONTAINER')
+      saveLocalFile(file.buffer, blobKey)
       infos.push({ file, extracted, blobKey })
     }
 
@@ -299,8 +314,8 @@ form16BulkRouter.delete('/bulk-items/:id', async (req: any, res, next) => {
   try {
     const item = await prisma.form16BulkItem.findUnique({ where: { id: req.params.id } })
     if (!item) throw new AppError('Item not found', 404)
-    if (item.partAFileKey) await deleteBlob(item.partAFileKey, 'AZURE_DOCS_CONTAINER')
-    if (item.partBFileKey) await deleteBlob(item.partBFileKey, 'AZURE_DOCS_CONTAINER')
+    if (item.partAFileKey) deleteLocalFile(item.partAFileKey)
+    if (item.partBFileKey) deleteLocalFile(item.partBFileKey)
     await prisma.form16BulkItem.update({ where: { id: req.params.id }, data: { status: 'REJECTED' } })
     res.json({ data: { success: true } })
   } catch (err) { next(err) }
@@ -314,33 +329,28 @@ form16BulkRouter.post('/bulk-confirm/:sessionId', async (req: any, res, next) =>
     })
     if (!items.length) throw new AppError('No matched items to confirm', 400)
 
-    const connStr = getConnStr()
-    const containerName = process.env.AZURE_DOCS_CONTAINER || 'emp-documents'
-    const client = BlobServiceClient.fromConnectionString(connStr)
-    const container = client.getContainerClient(containerName)
-
     const results: any[] = []
 
     for (const item of items) {
       try {
-        const partABlob = await container.getBlockBlobClient(item.partAFileKey!).downloadToBuffer()
+        const partABuf = readLocalFile(item.partAFileKey!)
         const mergedDoc = await PDFDocument.create()
 
-        const docA = await PDFDocument.load(partABlob)
+        const docA = await PDFDocument.load(partABuf)
         const pagesA = await mergedDoc.copyPages(docA, docA.getPageIndices())
         pagesA.forEach(p => mergedDoc.addPage(p))
 
         if (item.partBFileKey) {
-          const partBBlob = await container.getBlockBlobClient(item.partBFileKey).downloadToBuffer()
-          const docB = await PDFDocument.load(partBBlob)
+          const partBBuf = readLocalFile(item.partBFileKey)
+          const docB = await PDFDocument.load(partBBuf)
           const pagesB = await mergedDoc.copyPages(docB, docB.getPageIndices())
           pagesB.forEach(p => mergedDoc.addPage(p))
         }
 
         const mergedBytes = await mergedDoc.save()
         const empFolder = `${sanitizeName(item.employee!.employeeCode)}-${sanitizeName(item.employee!.name)}`
-        const finalKey = `${empFolder}/form16-${randomUUID()}.pdf`
-        const { url, key } = await uploadToBlob(Buffer.from(mergedBytes), finalKey, 'AZURE_DOCS_CONTAINER')
+        const finalKey = `form16/${empFolder}/form16-${randomUUID()}.pdf`
+        const { url, key } = storeFile(Buffer.from(mergedBytes), finalKey)
 
         await prisma.employeeDocument.create({
           data: {
@@ -361,8 +371,8 @@ form16BulkRouter.post('/bulk-confirm/:sessionId', async (req: any, res, next) =>
           },
         })
 
-        await deleteBlob(item.partAFileKey!, 'AZURE_DOCS_CONTAINER')
-        if (item.partBFileKey) await deleteBlob(item.partBFileKey, 'AZURE_DOCS_CONTAINER')
+        deleteLocalFile(item.partAFileKey!)
+        if (item.partBFileKey) deleteLocalFile(item.partBFileKey)
 
         await prisma.form16BulkItem.update({
           where: { id: item.id },
