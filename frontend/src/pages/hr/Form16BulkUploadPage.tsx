@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { UploadCloud, CheckCircle2, XCircle, AlertTriangle, FileText, Loader2 } from 'lucide-react'
-import { api } from '../../services/api'
+import api from '../../services/api'
 import { Button, Alert } from '../../components/ui'
 
 interface BulkItem {
