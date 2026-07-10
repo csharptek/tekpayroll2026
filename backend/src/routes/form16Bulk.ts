@@ -148,7 +148,7 @@ function guessNameFromText(text: string): string | null {
 
 form16BulkRouter.post('/bulk-upload', upload.array('files', 100), async (req: any, res, next) => {
   try {
-    const files: Express.Multer.File[] = req.files || []
+    const files: any[] = req.files || []
     if (!files.length) throw new AppError('No files uploaded', 400)
 
     const employees = await prisma.employee.findMany({
@@ -160,7 +160,7 @@ form16BulkRouter.post('/bulk-upload', upload.array('files', 100), async (req: an
       data: { uploadedBy: req.user.id, totalFiles: files.length, status: 'REVIEWING' },
     })
 
-    type FileInfo = { file: Express.Multer.File; extracted: Extracted; blobKey: string }
+    type FileInfo = { file: any; extracted: Extracted; blobKey: string }
     const infos: FileInfo[] = []
     for (const file of files) {
       const extracted = await extractPdfInfo(file.buffer)
