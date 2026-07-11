@@ -4,6 +4,15 @@ import { Upload, Trash2, CheckCircle2, Download, FileText, Eye, Plus, X, FolderU
 import { profileApi, Field, sel } from './shared'
 import { Button, Alert } from '../ui'
 
+// Relative /api/... URLs (Railway-stored files) must be resolved against the API host,
+// not the frontend origin. Absolute URLs (http...) pass through unchanged.
+const API_BASE = (import.meta as any).env?.VITE_API_URL || ''
+function resolveFileUrl(url: string): string {
+  if (!url) return url
+  if (/^https?:\/\//i.test(url)) return url
+  return `${API_BASE}${url}`
+}
+
 const DOC_TYPES = [
   'PAN_CARD', 'AADHAAR_CARD', 'PASSPORT', 'OFFER_LETTER', 'RELIEVING_LETTER',
   'APPOINTMENT_LETTER', 'EXPERIENCE_LETTER', 'EDUCATION_CERTIFICATE',
@@ -282,11 +291,11 @@ export default function DocumentsTab({ emp, isHR, onSaved }: { emp: any; isHR: b
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      <a href={d.fileUrl} target="_blank" rel="noopener noreferrer"
+                      <a href={resolveFileUrl(d.fileUrl)} target="_blank" rel="noopener noreferrer"
                         className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
                         <Eye size={14}/>
                       </a>
-                      <a href={d.fileUrl} download={d.fileName}
+                      <a href={resolveFileUrl(d.fileUrl)} download={d.fileName}
                         className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
                         <Download size={14}/>
                       </a>

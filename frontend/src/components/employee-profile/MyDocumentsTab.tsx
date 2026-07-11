@@ -4,6 +4,13 @@ import { Upload, FileText, Eye, Lock, AlertTriangle, CheckCircle2, X } from 'luc
 import { profileApi } from './shared'
 import { Button, Alert } from '../ui'
 
+const API_BASE = (import.meta as any).env?.VITE_API_URL || ''
+function resolveFileUrl(url: string): string {
+  if (!url) return url
+  if (/^https?:\/\//i.test(url)) return url
+  return `${API_BASE}${url}`
+}
+
 // Doc types employee can self-upload
 const SELF_DOC_TYPES = [
   { type: 'PAN_CARD',       label: 'PAN Card',                icon: '🪪', single: true,  hasRef: true,  refLabel: 'PAN Number',    refPattern: '[A-Z]{5}[0-9]{4}[A-Z]{1}' },
@@ -113,7 +120,7 @@ function DocSection({
                 </div>
                 {/* View only — no download */}
                 <a
-                  href={d.fileUrl}
+                  href={resolveFileUrl(d.fileUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
