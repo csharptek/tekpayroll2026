@@ -514,10 +514,12 @@ const HR_RESTRICTED_TYPES = ['INCREMENT_LETTER', 'FORM_16']
 
 employeeProfileRouter.get('/:id/documents', async (req, res) => {
   const isSuperAdmin = req.user!.role === 'SUPER_ADMIN'
+  const isOwnRecord = req.user!.id === req.params.id
+  const restrict = !isSuperAdmin && !isOwnRecord
   const docs = await prisma.employeeDocument.findMany({
     where: {
       employeeId: req.params.id,
-      ...(isSuperAdmin ? {} : { documentType: { notIn: HR_RESTRICTED_TYPES as any } }),
+      ...(restrict ? { documentType: { notIn: HR_RESTRICTED_TYPES as any } } : {}),
     },
     orderBy: { uploadedAt: 'desc' },
   })
