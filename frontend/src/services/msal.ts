@@ -40,10 +40,10 @@ export async function initializeMsal(): Promise<void> {
 export async function signInWithMicrosoft(): Promise<string | null> {
   try {
     clearLoggedOut() // user is intentionally signing in
-    // Always use prompt: 'select_account' — prevents auto-login with cached account
+    // prompt: 'login' — avoids device-enrollment check that breaks personal Android
     await msalInstance.loginRedirect({
       ...loginRequest,
-      prompt: 'select_account',
+      prompt: 'login',
     })
     return null
   } catch (err) {
