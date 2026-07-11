@@ -5,8 +5,6 @@ import { AppError } from '../middleware/errorHandler'
 import multer from 'multer'
 import { randomUUID, createHmac } from 'crypto'
 import { PDFDocument } from 'pdf-lib'
-import fs from 'fs'
-import path from 'path'
 // pdf-parse v1 (CommonJS) — require returns the function directly
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pdfParse = require('pdf-parse')
@@ -19,77 +17,53 @@ const upload = multer({
   fileFilter: (_req, file, cb) => cb(null, file.mimetype === 'application/pdf'),
 })
 
-// ─── LOCAL VOLUME STORAGE HELPERS (Railway volume at /data) ───────────────────
+// ─── POSTGRES FILE STORAGE (no external storage dependency) ──────────────────
 
-const STORAGE_ROOT = process.env.FILE_STORAGE_DIR || '/data'
 const FILE_TOKEN_SECRET = process.env.FILE_TOKEN_SECRET || process.env.AZURE_CLIENT_ID || 'tekone-file-secret'
 
-function saveLocalFile(buffer: Buffer, relativeKey: string): string {
-  const fullPath = path.join(STORAGE_ROOT, relativeKey)
-  fs.mkdirSync(path.dirname(fullPath), { recursive: true })
-  fs.writeFileSync(fullPath, buffer)
-  return relativeKey
+function signFileToken(fileId: string, expiresAtMs: number): string {
+  return createHmac('sha256', FILE_TOKEN_SECRET).update(`${fileId}:${expiresAtMs}`).digest('hex')
 }
 
-function readLocalFile(relativeKey: string): Buffer {
-  const fullPath = path.join(STORAGE_ROOT, relativeKey)
-  return fs.readFileSync(fullPath)
-}
-
-function deleteLocalFile(relativeKey: string): void {
-  try {
-    const fullPath = path.join(STORAGE_ROOT, relativeKey)
-    if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath)
-  } catch { /* best effort */ }
-}
-
-function signFileToken(key: string, expiresAtMs: number): string {
-  return createHmac('sha256', FILE_TOKEN_SECRET).update(`${key}:${expiresAtMs}`).digest('hex')
-}
-
-function verifyFileToken(key: string, expiresAtMs: number, token: string): boolean {
+function verifyFileToken(fileId: string, expiresAtMs: number, token: string): boolean {
   if (Date.now() > expiresAtMs) return false
-  return signFileToken(key, expiresAtMs) === token
+  return signFileToken(fileId, expiresAtMs) === token
 }
 
-function buildFileUrl(key: string): string {
-  const base = process.env.BACKEND_URL || ''
+// Relative URL — frontend resolveFileUrl() prepends the API host.
+function buildFileUrl(fileId: string): string {
   const exp = Date.now() + 3 * 365 * 24 * 60 * 60 * 1000
-  const token = signFileToken(key, exp)
-  const qs = `key=${encodeURIComponent(key)}&exp=${exp}&token=${token}`
-  return `${base}/api/form16/file?${qs}`
+  const token = signFileToken(fileId, exp)
+  return `/api/form16/file?id=${fileId}&exp=${exp}&token=${token}`
 }
 
-function storeFile(buffer: Buffer, relativeKey: string): { url: string; key: string } {
-  const key = saveLocalFile(buffer, relativeKey)
-  return { url: buildFileUrl(key), key }
+// Store a PDF in Postgres, return {url, key}. key = StoredFile.id
+async function storeFile(buffer: Buffer, fileName: string): Promise<{ url: string; key: string }> {
+  const rec = await prisma.storedFile.create({
+    data: { fileName, mimeType: 'application/pdf', data: buffer, size: buffer.length },
+  })
+  return { url: buildFileUrl(rec.id), key: rec.id }
 }
 
-// ─── PUBLIC FILE STREAM (token-signed, no auth header needed) ─────────────────
-// MUST be registered BEFORE the authenticate middleware below so <a href> works.
-form16BulkRouter.get('/file', (req, res) => {
-  const key = String(req.query.key || '')
+// ─── PUBLIC FILE STREAM (token-signed, works in plain <a href>) ───────────────
+form16BulkRouter.get('/file', async (req, res) => {
+  const id = String(req.query.id || '')
   const exp = Number(req.query.exp || 0)
   const token = String(req.query.token || '')
-  if (!key || !exp || !token || !verifyFileToken(key, exp, token)) {
+  if (!id || !exp || !token || !verifyFileToken(id, exp, token)) {
     return res.status(403).send('Invalid or expired link')
   }
-  const fullPath = path.join(STORAGE_ROOT, key)
-  if (!fullPath.startsWith(STORAGE_ROOT) || !fs.existsSync(fullPath)) {
-    return res.status(404).send('File not found')
-  }
-  res.setHeader('Content-Type', 'application/pdf')
-  res.setHeader('Content-Disposition', `inline; filename="${path.basename(key)}"`)
-  fs.createReadStream(fullPath).pipe(res)
+  const rec = await prisma.storedFile.findUnique({ where: { id } })
+  if (!rec) return res.status(404).send('File not found')
+  res.setHeader('Content-Type', rec.mimeType)
+  res.setHeader('Content-Disposition', `inline; filename="${rec.fileName}"`)
+  res.send(Buffer.from(rec.data))
 })
 
 // Everything below requires SUPER_ADMIN auth
 form16BulkRouter.use(authenticate)
 form16BulkRouter.use(requireSuperAdmin)
 
-function sanitizeName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40)
-}
 
 // ─── TEXT EXTRACTION / MATCHING ────────────────────────────────────────────────
 
@@ -209,8 +183,7 @@ form16BulkRouter.post('/bulk-upload', upload.array('files', 100), async (req: an
     const infos: FileInfo[] = []
     for (const file of files) {
       const extracted = await extractPdfInfo(file.buffer)
-      const blobKey = `form16-staging/${session.id}/${randomUUID()}-${file.originalname}`
-      saveLocalFile(file.buffer, blobKey)
+      const blobKey = randomUUID() // logical id only; bytes go into the DB row
       infos.push({ file, extracted, blobKey })
     }
 
@@ -252,8 +225,10 @@ form16BulkRouter.post('/bulk-upload', upload.array('files', 100), async (req: an
         matchMethod: matched ? 'PAN_NAME' : 'NAME_FUZZY',
         partAFileKey: partA.blobKey,
         partAFileName: partA.file.originalname,
+        partAData: partA.file.buffer,
         partBFileKey: partB?.blobKey || null,
         partBFileName: partB?.file.originalname || null,
+        partBData: partB?.file.buffer || null,
         status: matched ? 'MATCHED' : 'UNMATCHED',
       })
     }
@@ -291,8 +266,10 @@ form16BulkRouter.post('/bulk-upload', upload.array('files', 100), async (req: an
         matchMethod: 'NAME_FUZZY',
         partAFileKey: partA.blobKey,
         partAFileName: partA.file.originalname,
+        partAData: partA.file.buffer,
         partBFileKey: partB?.blobKey || null,
         partBFileName: partB?.file.originalname || null,
+        partBData: partB?.file.buffer || null,
         status: 'MATCHED',
       })
     }
@@ -307,6 +284,7 @@ form16BulkRouter.post('/bulk-upload', upload.array('files', 100), async (req: an
         matchMethod: null,
         partAFileKey: info.blobKey,
         partAFileName: info.file.originalname,
+        partAData: info.file.buffer,
         status: 'UNMATCHED',
       })
     }
@@ -343,9 +321,10 @@ form16BulkRouter.delete('/bulk-items/:id', async (req: any, res, next) => {
   try {
     const item = await prisma.form16BulkItem.findUnique({ where: { id: req.params.id } })
     if (!item) throw new AppError('Item not found', 404)
-    if (item.partAFileKey) deleteLocalFile(item.partAFileKey)
-    if (item.partBFileKey) deleteLocalFile(item.partBFileKey)
-    await prisma.form16BulkItem.update({ where: { id: req.params.id }, data: { status: 'REJECTED' } })
+    await prisma.form16BulkItem.update({
+      where: { id: req.params.id },
+      data: { status: 'REJECTED', partAData: null, partBData: null },
+    })
     res.json({ data: { success: true } })
   } catch (err) { next(err) }
 })
@@ -362,24 +341,22 @@ form16BulkRouter.post('/bulk-confirm/:sessionId', async (req: any, res, next) =>
 
     for (const item of items) {
       try {
-        const partABuf = readLocalFile(item.partAFileKey!)
+        if (!item.partAData) throw new Error('Part A data missing from staging row')
         const mergedDoc = await PDFDocument.create()
 
-        const docA = await PDFDocument.load(partABuf)
+        const docA = await PDFDocument.load(Buffer.from(item.partAData))
         const pagesA = await mergedDoc.copyPages(docA, docA.getPageIndices())
         pagesA.forEach(p => mergedDoc.addPage(p))
 
-        if (item.partBFileKey) {
-          const partBBuf = readLocalFile(item.partBFileKey)
-          const docB = await PDFDocument.load(partBBuf)
+        if (item.partBData) {
+          const docB = await PDFDocument.load(Buffer.from(item.partBData))
           const pagesB = await mergedDoc.copyPages(docB, docB.getPageIndices())
           pagesB.forEach(p => mergedDoc.addPage(p))
         }
 
         const mergedBytes = await mergedDoc.save()
-        const empFolder = `${sanitizeName(item.employee!.employeeCode)}-${sanitizeName(item.employee!.name)}`
-        const finalKey = `form16/${empFolder}/form16-${randomUUID()}.pdf`
-        const { url, key } = storeFile(Buffer.from(mergedBytes), finalKey)
+        const fileName = `Form16-${item.employee!.employeeCode}.pdf`
+        const { url, key } = await storeFile(Buffer.from(mergedBytes), fileName)
 
         await prisma.employeeDocument.create({
           data: {
@@ -400,12 +377,9 @@ form16BulkRouter.post('/bulk-confirm/:sessionId', async (req: any, res, next) =>
           },
         })
 
-        deleteLocalFile(item.partAFileKey!)
-        if (item.partBFileKey) deleteLocalFile(item.partBFileKey)
-
         await prisma.form16BulkItem.update({
           where: { id: item.id },
-          data: { status: 'CONFIRMED', mergedFileKey: key, mergedFileUrl: url },
+          data: { status: 'CONFIRMED', mergedFileKey: key, mergedFileUrl: url, partAData: null, partBData: null },
         })
 
         results.push({ itemId: item.id, employee: item.employee!.name, success: true })
@@ -446,26 +420,3 @@ form16BulkRouter.get('/all-employees', async (_req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// TEMP DIAGNOSTIC — visit /api/form16/debug-storage in browser (SA login not needed? it's behind auth — use API client)
-// Actually registered BEFORE auth would be unsafe; keep behind SA auth and call from the app's origin.
-form16BulkRouter.get('/debug-storage', async (_req, res) => {
-  const info: any = {
-    STORAGE_ROOT,
-    FILE_STORAGE_DIR_env: process.env.FILE_STORAGE_DIR || '(not set)',
-    BACKEND_URL_env: process.env.BACKEND_URL || '(not set)',
-    rootExists: fs.existsSync(STORAGE_ROOT),
-    rootContents: [],
-    form16Contents: [],
-    stagingContents: [],
-    dbSample: null,
-  }
-  try { info.rootContents = fs.readdirSync(STORAGE_ROOT).slice(0, 50) } catch (e: any) { info.rootContents = `ERR: ${e.message}` }
-  try { info.form16Contents = fs.readdirSync(path.join(STORAGE_ROOT, 'form16')).slice(0, 50) } catch (e: any) { info.form16Contents = `ERR: ${e.message}` }
-  try { info.stagingContents = fs.readdirSync(path.join(STORAGE_ROOT, 'form16-staging')).slice(0, 10) } catch (e: any) { info.stagingContents = `ERR: ${e.message}` }
-  try {
-    const doc = await prisma.employeeDocument.findFirst({ where: { documentType: 'FORM_16' }, select: { fileKey: true, fileUrl: true } })
-    info.dbSample = doc
-    if (doc?.fileKey) info.dbSampleFileExists = fs.existsSync(path.join(STORAGE_ROOT, doc.fileKey))
-  } catch (e: any) { info.dbSample = `ERR: ${e.message}` }
-  res.json(info)
-})

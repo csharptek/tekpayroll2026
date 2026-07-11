@@ -1132,8 +1132,10 @@ model Form16BulkItem {
 
   partAFileKey    String?
   partAFileName   String?
+  partAData       Bytes?
   partBFileKey    String?
   partBFileName   String?
+  partBData       Bytes?
 
   mergedFileKey   String?
   mergedFileUrl   String?
@@ -1146,6 +1148,16 @@ model Form16BulkItem {
 
   @@index([sessionId])
   @@index([employeeId])
+}
+
+// Binary file storage in Postgres (used for Form 16 merged PDFs)
+model StoredFile {
+  id        String   @id @default(cuid())
+  fileName  String
+  mimeType  String   @default("application/pdf")
+  data      Bytes
+  size      Int
+  createdAt DateTime @default(now())
 }
 
 // ─── GOVERNMENT IDS (extended from existing fields) ──────────────────────────
