@@ -509,9 +509,16 @@ employeeProfileRouter.delete('/:id/bank-accounts/:accountId', requireHR, async (
 // EMPLOYEE_SELF_UPLOAD doc types that can be locked
 const SELF_UPLOAD_TYPES = ['PAN_CARD', 'AADHAAR_CARD', 'PASSPORT', 'OFFER_LETTER', 'RELIEVING_LETTER']
 
+// Restricted doc types: HR cannot view; SuperAdmin only
+const HR_RESTRICTED_TYPES = ['INCREMENT_LETTER', 'FORM_16']
+
 employeeProfileRouter.get('/:id/documents', async (req, res) => {
+  const isSuperAdmin = req.user!.role === 'SUPER_ADMIN'
   const docs = await prisma.employeeDocument.findMany({
-    where: { employeeId: req.params.id },
+    where: {
+      employeeId: req.params.id,
+      ...(isSuperAdmin ? {} : { documentType: { notIn: HR_RESTRICTED_TYPES as any } }),
+    },
     orderBy: { uploadedAt: 'desc' },
   })
   // Regenerate fresh SAS URLs from stored fileKey (avoids stale/truncated URLs in DB).
