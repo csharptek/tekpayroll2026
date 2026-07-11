@@ -219,6 +219,13 @@ function DocSection({
   )
 }
 
+const COMPANY_DOC_LABELS: Record<string, string> = {
+  FORM_16: '🧾 Form 16',
+  APPOINTMENT_LETTER: '📑 Appointment Letter',
+  EXPERIENCE_LETTER: '💼 Experience Letter',
+  INCREMENT_LETTER: '📄 Increment Letter',
+}
+
 export default function MyDocumentsTab({ empId }: { empId: string }) {
   const qc = useQueryClient()
 
@@ -232,6 +239,8 @@ export default function MyDocumentsTab({ empId }: { empId: string }) {
       {[1,2,3].map(i => <div key={i} className="h-20 rounded-2xl bg-slate-100 animate-pulse" />)}
     </div>
   )
+
+  const companyDocs = (documents || []).filter((d: any) => COMPANY_DOC_LABELS[d.documentType])
 
   return (
     <div className="space-y-4">
@@ -248,6 +257,29 @@ export default function MyDocumentsTab({ empId }: { empId: string }) {
           onUploaded={() => qc.invalidateQueries({ queryKey: ['documents', empId] })}
         />
       ))}
+
+      {companyDocs.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">Company Issued Documents</h3>
+          <div className="space-y-2">
+            {companyDocs.map((d: any) => (
+              <div key={d.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <span>{COMPANY_DOC_LABELS[d.documentType]}</span>
+                  <span className="text-xs text-slate-400">{d.fileName}</span>
+                </div>
+                <a
+                  href={resolveFileUrl(d.fileUrl)}
+                  target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline"
+                >
+                  <Eye size={13}/> View
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
