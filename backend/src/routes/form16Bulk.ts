@@ -445,3 +445,27 @@ form16BulkRouter.get('/all-employees', async (_req, res, next) => {
     res.json({ data: employees })
   } catch (err) { next(err) }
 })
+
+// TEMP DIAGNOSTIC — visit /api/form16/debug-storage in browser (SA login not needed? it's behind auth — use API client)
+// Actually registered BEFORE auth would be unsafe; keep behind SA auth and call from the app's origin.
+form16BulkRouter.get('/debug-storage', async (_req, res) => {
+  const info: any = {
+    STORAGE_ROOT,
+    FILE_STORAGE_DIR_env: process.env.FILE_STORAGE_DIR || '(not set)',
+    BACKEND_URL_env: process.env.BACKEND_URL || '(not set)',
+    rootExists: fs.existsSync(STORAGE_ROOT),
+    rootContents: [],
+    form16Contents: [],
+    stagingContents: [],
+    dbSample: null,
+  }
+  try { info.rootContents = fs.readdirSync(STORAGE_ROOT).slice(0, 50) } catch (e: any) { info.rootContents = `ERR: ${e.message}` }
+  try { info.form16Contents = fs.readdirSync(path.join(STORAGE_ROOT, 'form16')).slice(0, 50) } catch (e: any) { info.form16Contents = `ERR: ${e.message}` }
+  try { info.stagingContents = fs.readdirSync(path.join(STORAGE_ROOT, 'form16-staging')).slice(0, 10) } catch (e: any) { info.stagingContents = `ERR: ${e.message}` }
+  try {
+    const doc = await prisma.employeeDocument.findFirst({ where: { documentType: 'FORM_16' }, select: { fileKey: true, fileUrl: true } })
+    info.dbSample = doc
+    if (doc?.fileKey) info.dbSampleFileExists = fs.existsSync(path.join(STORAGE_ROOT, doc.fileKey))
+  } catch (e: any) { info.dbSample = `ERR: ${e.message}` }
+  res.json(info)
+})
