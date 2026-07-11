@@ -107,13 +107,13 @@ export default function App() {
           <Route path="employees/add" element={<AddEmployeePage />} />
           <Route path="employees/:id" element={<EmployeeDetailPage />} />
           <Route path="employees/:id/edit" element={<EditEmployeePage />} />
-          <Route path="employees-bulk-edit" element={<BulkEditEmployeesPage />} />
-          <Route path="employees-bulk-edit" element={<BulkEditEmployeePage />} />
+          <Route path="employees-bulk-edit" element={<RequireAuth roles={['SUPER_ADMIN']}><BulkEditEmployeesPage /></RequireAuth>} />
+          <Route path="employees-bulk-edit" element={<RequireAuth roles={['SUPER_ADMIN']}><BulkEditEmployeePage /></RequireAuth>} />
           <Route path="import" element={<BulkImportPage />} />
           <Route path="sync" element={<SyncPage />} />
           <Route path="audit" element={<AuditLogPage />} />
           <Route path="run-tasks" element={<RequireAuth roles={['SUPER_ADMIN']}><RunTasksPage /></RequireAuth>} />
-          <Route path="documents" element={<RequireAuth roles={['SUPER_ADMIN','HR']}><DocumentGenerationPage /></RequireAuth>} />
+          <Route path="documents" element={<RequireAuth roles={['SUPER_ADMIN']}><DocumentGenerationPage /></RequireAuth>} />
           <Route path="form16-bulk" element={<RequireAuth roles={['SUPER_ADMIN']}><Form16BulkUploadPage /></RequireAuth>} />
           <Route path="config" element={<ConfigPage />} />
           <Route path="notifications" element={<NotificationConfigPage />} />

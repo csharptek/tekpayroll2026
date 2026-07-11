@@ -28,7 +28,6 @@ const HR_NAV = [
     items: [
       { label: 'All Employees', icon: Users,     to: '/hr/employees' },
       { label: 'Bulk Import',   icon: Upload,    to: '/hr/import' },
-      { label: 'Bulk Edit',     icon: Edit3,     to: '/hr/employees-bulk-edit' },
       { label: 'M365 Sync',     icon: RefreshCw, to: '/hr/sync' },
     ]
   },
@@ -47,12 +46,6 @@ const HR_NAV = [
       { label: 'Asset List',        icon: Package,     to: '/hr/assets' },
       { label: 'Asset Requests',    icon: Package,     to: '/hr/asset-requests' },
       { label: 'Asset Configurator',icon: Settings,    to: '/hr/asset-configurator' },
-    ]
-  },
-  {
-    section: 'Documents',
-    items: [
-      { label: 'Increment Letter', icon: FileOutput, to: '/hr/documents' },
     ]
   },
   {

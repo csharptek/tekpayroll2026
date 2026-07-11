@@ -53,7 +53,7 @@ async function uploadBlob(buffer: Buffer, key: string, mimeType: string) {
 
 // ─── COMPANY LOGO UPLOAD ──────────────────────────────────────────────────────
 
-documentsRouter.post('/company-logo', requireHR, upload.single('logo'), async (req: any, res) => {
+documentsRouter.post('/company-logo', requireSuperAdmin, upload.single('logo'), async (req: any, res) => {
   if (!req.file) throw new AppError('No file uploaded', 400)
   const key = `company/logo-${randomUUID()}.png`
   const url = await uploadBlob(req.file.buffer, key, req.file.mimetype)
@@ -72,7 +72,7 @@ documentsRouter.post('/company-logo', requireHR, upload.single('logo'), async (r
 
 // ─── COMPANY SIGN UPLOAD ─────────────────────────────────────────────────────
 
-documentsRouter.post('/company-sign', requireHR, upload.single('logo'), async (req: any, res) => {
+documentsRouter.post('/company-sign', requireSuperAdmin, upload.single('logo'), async (req: any, res) => {
   if (!req.file) throw new AppError('No file uploaded', 400)
   const key = `company/sign-${randomUUID()}.png`
   const url = await uploadBlob(req.file.buffer, key, req.file.mimetype)
@@ -86,7 +86,7 @@ documentsRouter.post('/company-sign', requireHR, upload.single('logo'), async (r
 
 // ─── GET SALARY SNAPSHOT FOR EMPLOYEE ─────────────────────────────────────────
 
-documentsRouter.get('/salary-snapshot/:employeeId', requireHR, async (req: any, res) => {
+documentsRouter.get('/salary-snapshot/:employeeId', requireSuperAdmin, async (req: any, res) => {
   const snapshot = await prisma.salaryStructureSnapshot.findFirst({
     where: { employeeId: req.params.employeeId, isActive: true },
   })
@@ -168,7 +168,7 @@ documentsRouter.post('/compute-salary', async (req: any, res) => {
 
 // ─── GENERATE + SAVE DOCUMENT ─────────────────────────────────────────────────
 
-documentsRouter.post('/generate', requireHR, async (req: any, res) => {
+documentsRouter.post('/generate', requireSuperAdmin, async (req: any, res) => {
   const {
     employeeId, documentType, letterDate, effectiveDate,
     isPromotion, newDesignation, salaryData, htmlContent,
@@ -243,7 +243,7 @@ function resolveEmailPlaceholders(template: string, emp: { name: string; employe
 
 // ─── SEND INCREMENT EMAIL ──────────────────────────────────────────────────────
 
-documentsRouter.post('/send-email', requireHR, async (req: any, res) => {
+documentsRouter.post('/send-email', requireSuperAdmin, async (req: any, res) => {
   const { employeeId, htmlContent, subject } = req.body
   if (!employeeId || !htmlContent) throw new AppError('employeeId and htmlContent required', 400)
 
@@ -281,7 +281,7 @@ documentsRouter.post('/send-email', requireHR, async (req: any, res) => {
 
 // ─── TEST INCREMENT EMAIL ──────────────────────────────────────────────────────
 
-documentsRouter.post('/test-email', requireHR, async (req: any, res) => {
+documentsRouter.post('/test-email', requireSuperAdmin, async (req: any, res) => {
   const { toEmail, employeeId, htmlContent } = req.body
   if (!toEmail) throw new AppError('toEmail required', 400)
 
