@@ -521,8 +521,10 @@ employeeProfileRouter.get('/:id/documents', async (req, res) => {
   try { credentials = getSharedKeyCredential() } catch { credentials = null }
 
   const docsWithFreshUrls = docs.map(doc => {
-    // Railway-stored file: keep the stored /api/... URL as-is
-    if (doc.fileUrl && doc.fileUrl.startsWith('/api/')) return doc
+    // Railway-stored file (relative or absolute /api/form16/file URL): keep as-is
+    if (doc.fileUrl && (doc.fileUrl.startsWith('/api/') || doc.fileUrl.includes('/api/form16/file'))) return doc
+    // Railway-stored key prefix: never regenerate an Azure SAS for these
+    if (doc.fileKey && doc.fileKey.startsWith('form16/')) return doc
     if (!doc.fileKey || !credentials) return doc
     const containerName = process.env.AZURE_DOCS_CONTAINER || 'emp-documents'
     try {
