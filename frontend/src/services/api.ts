@@ -172,6 +172,8 @@ export const payslipApi = {
 
 export const payslipVaultApi = {
   employees: () => api.get('/api/payslip-vault/employees'),
+  companyReport: (from?: string, to?: string) =>
+    api.get('/api/payslip-vault/company-report', { params: { from, to } }),
   employeePayslips: (employeeId: string) => api.get(`/api/payslip-vault/employees/${employeeId}/payslips`),
   months: () => api.get('/api/payslip-vault/months'),
   downloadSingle: (employeeId: string, months: string[]) =>

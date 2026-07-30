@@ -7,6 +7,7 @@ import {
   zipBulkPayslips,
   getSalaryView,
   exportSalaryExcel,
+  getCompanyReport,
 } from '../services/payslipVaultService'
 
 export const payslipVaultRouter = Router()
@@ -87,6 +88,16 @@ payslipVaultRouter.get('/salary-view/:employeeId', async (req, res) => {
   const { from, to } = req.query as { from?: string; to?: string }
   const data = await getSalaryView({
     employeeId: req.params.employeeId,
+    from: from ? new Date(from) : undefined,
+    to: to ? new Date(to) : undefined,
+  })
+  res.json({ success: true, data })
+})
+
+// GET company-wide report — month-wise all employees + cumulative
+payslipVaultRouter.get('/company-report', async (req, res) => {
+  const { from, to } = req.query as { from?: string; to?: string }
+  const data = await getCompanyReport({
     from: from ? new Date(from) : undefined,
     to: to ? new Date(to) : undefined,
   })

@@ -141,7 +141,83 @@ export async function getSalaryView(params: {
   return { monthly, cumulative, monthCount: monthly.length }
 }
 
-// ─── Excel export — full breakup, employee-wise or multi-employee one sheet ─
+// ─── Company-wide report: month-wise all employees + cumulative totals ─────
+
+export async function getCompanyReport(params: { from?: Date; to?: Date }) {
+  const { from, to } = params
+
+  const entries = await prisma.payrollEntry.findMany({
+    where: {
+      cycle: {
+        ...(from || to ? { cycleStart: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+      },
+    },
+    select: {
+      grossSalary: true,
+      netSalary: true,
+      pfAmount: true,
+      employerPfAmount: true,
+      esiAmount: true,
+      employerEsiAmount: true,
+      ptAmount: true,
+      tdsAmount: true,
+      lopAmount: true,
+      loanDeduction: true,
+      employee: { select: { id: true, employeeCode: true, name: true, department: true, status: true } },
+      cycle: { select: { payrollMonth: true, cycleStart: true } },
+    },
+    orderBy: [{ cycle: { cycleStart: 'asc' } }, { employee: { name: 'asc' } }],
+  })
+
+  if (!entries.length) return { months: [], cumulative: null, employeeCount: 0 }
+
+  const byMonth = new Map<string, typeof entries>()
+  for (const e of entries) {
+    const key = e.cycle.payrollMonth
+    if (!byMonth.has(key)) byMonth.set(key, [])
+    byMonth.get(key)!.push(e)
+  }
+
+  const months = [...byMonth.entries()].map(([payrollMonth, rows]) => ({
+    payrollMonth,
+    employeeCount: rows.length,
+    totalGross: rows.reduce((s, r) => s + dec(r.grossSalary), 0),
+    totalNet: rows.reduce((s, r) => s + dec(r.netSalary), 0),
+    totalPf: rows.reduce((s, r) => s + dec(r.pfAmount) + dec(r.employerPfAmount), 0),
+    totalEsi: rows.reduce((s, r) => s + dec(r.esiAmount) + dec(r.employerEsiAmount), 0),
+    totalPt: rows.reduce((s, r) => s + dec(r.ptAmount), 0),
+    totalTds: rows.reduce((s, r) => s + dec(r.tdsAmount), 0),
+    totalLop: rows.reduce((s, r) => s + dec(r.lopAmount), 0),
+    totalLoan: rows.reduce((s, r) => s + dec(r.loanDeduction), 0),
+    employees: rows.map((r) => ({
+      employeeId: r.employee.id,
+      employeeCode: r.employee.employeeCode,
+      name: r.employee.name,
+      department: r.employee.department,
+      status: r.employee.status,
+      grossSalary: dec(r.grossSalary),
+      netSalary: dec(r.netSalary),
+    })),
+  }))
+
+  const cumulative = entries.reduce(
+    (acc, r) => ({
+      totalGross: acc.totalGross + dec(r.grossSalary),
+      totalNet: acc.totalNet + dec(r.netSalary),
+      totalPf: acc.totalPf + dec(r.pfAmount) + dec(r.employerPfAmount),
+      totalEsi: acc.totalEsi + dec(r.esiAmount) + dec(r.employerEsiAmount),
+      totalPt: acc.totalPt + dec(r.ptAmount),
+      totalTds: acc.totalTds + dec(r.tdsAmount),
+      totalLop: acc.totalLop + dec(r.lopAmount),
+      totalLoan: acc.totalLoan + dec(r.loanDeduction),
+    }),
+    { totalGross: 0, totalNet: 0, totalPf: 0, totalEsi: 0, totalPt: 0, totalTds: 0, totalLop: 0, totalLoan: 0 },
+  )
+
+  const uniqueEmployees = new Set(entries.map((e) => e.employee.id))
+
+  return { months, cumulative, employeeCount: uniqueEmployees.size, monthCount: months.length }
+}
 
 const EXCEL_COLUMNS = [
   { header: 'Employee Code', key: 'employeeCode', width: 16 },

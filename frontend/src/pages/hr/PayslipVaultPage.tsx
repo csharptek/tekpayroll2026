@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Archive, Download, Eye, FileSpreadsheet, Search } from 'lucide-react'
+import { Archive, ChevronDown, ChevronRight, Download, Eye, FileSpreadsheet, Search } from 'lucide-react'
 import { payslipVaultApi } from '../../services/api'
 import { PageHeader, Card, Button, Input, Select, Table, Th, Td, Tr, EmptyState, Skeleton, Alert, StatusBadge, Modal } from '../../components/ui'
 
@@ -33,6 +33,41 @@ interface SalaryMonthRow {
   status: string
 }
 
+interface CompanyReportEmployeeRow {
+  employeeId: string
+  employeeCode: string
+  name: string
+  department: string | null
+  status: string
+  grossSalary: number
+  netSalary: number
+}
+
+interface CompanyReportMonth {
+  payrollMonth: string
+  employeeCount: number
+  totalGross: number
+  totalNet: number
+  totalPf: number
+  totalEsi: number
+  totalPt: number
+  totalTds: number
+  totalLop: number
+  totalLoan: number
+  employees: CompanyReportEmployeeRow[]
+}
+
+interface CompanyReportCumulative {
+  totalGross: number
+  totalNet: number
+  totalPf: number
+  totalEsi: number
+  totalPt: number
+  totalTds: number
+  totalLop: number
+  totalLoan: number
+}
+
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -43,6 +78,7 @@ function saveBlob(blob: Blob, filename: string) {
 }
 
 export default function PayslipVaultPage() {
+  const [pageTab, setPageTab] = useState<'employees' | 'company'>('employees')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -58,6 +94,20 @@ export default function PayslipVaultPage() {
   const [drawerSelectedPayslips, setDrawerSelectedPayslips] = useState<Set<string>>(new Set())
   const [drawerFrom, setDrawerFrom] = useState('')
   const [drawerTo, setDrawerTo] = useState('')
+
+  // company report tab
+  const [reportFrom, setReportFrom] = useState('')
+  const [reportTo, setReportTo] = useState('')
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null)
+
+  const { data: companyReport, isLoading: companyReportLoading } = useQuery({
+    queryKey: ['payslip-vault-company-report', reportFrom, reportTo],
+    queryFn: () =>
+      payslipVaultApi
+        .companyReport(reportFrom || undefined, reportTo || undefined)
+        .then((r) => r.data.data as { months: CompanyReportMonth[]; cumulative: CompanyReportCumulative | null; employeeCount: number; monthCount: number }),
+    enabled: pageTab === 'company',
+  })
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ['payslip-vault-employees'],
@@ -207,6 +257,27 @@ export default function PayslipVaultPage() {
       {error && <Alert type="error" message={error} />}
       {successMsg && <Alert type="success" message={successMsg} />}
 
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+            pageTab === 'employees' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'
+          }`}
+          onClick={() => setPageTab('employees')}
+        >
+          Employees
+        </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+            pageTab === 'company' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'
+          }`}
+          onClick={() => setPageTab('company')}
+        >
+          Company Report
+        </button>
+      </div>
+
+      {pageTab === 'employees' && (
+      <>
       <Card title="Filters">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Input
@@ -333,6 +404,99 @@ export default function PayslipVaultPage() {
           <li>Click "View" on any employee to browse their payslips or salary history.</li>
         </ul>
       </Card>
+      </>
+      )}
+
+      {pageTab === 'company' && (
+        <Card title="Company-wide Payroll Report">
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <Input type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} placeholder="From" />
+            <Input type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} placeholder="To" />
+          </div>
+
+          {companyReportLoading ? (
+            <Skeleton className="h-64" />
+          ) : !companyReport || companyReport.months.length === 0 ? (
+            <EmptyState title="No payroll data" description="No payroll entries found for this range." />
+          ) : (
+            <div className="space-y-4">
+              {companyReport.cumulative && (
+                <div className="bg-slate-50 rounded-lg p-4 text-sm grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div><span className="text-gray-500">Months</span><div className="font-semibold">{companyReport.monthCount}</div></div>
+                  <div><span className="text-gray-500">Employees</span><div className="font-semibold">{companyReport.employeeCount}</div></div>
+                  <div><span className="text-gray-500">Total Gross</span><div className="font-semibold">₹{companyReport.cumulative.totalGross.toLocaleString('en-IN')}</div></div>
+                  <div><span className="text-gray-500">Total Net</span><div className="font-semibold">₹{companyReport.cumulative.totalNet.toLocaleString('en-IN')}</div></div>
+                  <div><span className="text-gray-500">Total PF</span><div className="font-semibold">₹{companyReport.cumulative.totalPf.toLocaleString('en-IN')}</div></div>
+                  <div><span className="text-gray-500">Total ESI</span><div className="font-semibold">₹{companyReport.cumulative.totalEsi.toLocaleString('en-IN')}</div></div>
+                  <div><span className="text-gray-500">Total TDS</span><div className="font-semibold">₹{companyReport.cumulative.totalTds.toLocaleString('en-IN')}</div></div>
+                  <div><span className="text-gray-500">Total Loan</span><div className="font-semibold">₹{companyReport.cumulative.totalLoan.toLocaleString('en-IN')}</div></div>
+                </div>
+              )}
+
+              <Table>
+                <thead>
+                  <tr>
+                    <Th></Th>
+                    <Th>Month</Th>
+                    <Th>Employees</Th>
+                    <Th>Gross</Th>
+                    <Th>Net</Th>
+                    <Th>PF</Th>
+                    <Th>ESI</Th>
+                    <Th>TDS</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {companyReport.months.map((m) => (
+                    <>
+                      <Tr key={m.payrollMonth} onClick={() => setExpandedMonth(expandedMonth === m.payrollMonth ? null : m.payrollMonth)}>
+                        <Td>{expandedMonth === m.payrollMonth ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</Td>
+                        <Td className="font-medium">{m.payrollMonth}</Td>
+                        <Td>{m.employeeCount}</Td>
+                        <Td>₹{m.totalGross.toLocaleString('en-IN')}</Td>
+                        <Td>₹{m.totalNet.toLocaleString('en-IN')}</Td>
+                        <Td>₹{m.totalPf.toLocaleString('en-IN')}</Td>
+                        <Td>₹{m.totalEsi.toLocaleString('en-IN')}</Td>
+                        <Td>₹{m.totalTds.toLocaleString('en-IN')}</Td>
+                      </Tr>
+                      {expandedMonth === m.payrollMonth && (
+                        <tr key={`${m.payrollMonth}-detail`}>
+                          <td colSpan={8} className="bg-slate-50 px-4 py-3">
+                            <Table>
+                              <thead>
+                                <tr>
+                                  <Th>Code</Th>
+                                  <Th>Name</Th>
+                                  <Th>Department</Th>
+                                  <Th>Status</Th>
+                                  <Th>Gross</Th>
+                                  <Th>Net</Th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {m.employees.map((emp) => (
+                                  <Tr key={emp.employeeId}>
+                                    <Td>{emp.employeeCode}</Td>
+                                    <Td>{emp.name}</Td>
+                                    <Td>{emp.department || '—'}</Td>
+                                    <Td><StatusBadge status={emp.status} /></Td>
+                                    <Td>₹{emp.grossSalary.toLocaleString('en-IN')}</Td>
+                                    <Td>₹{emp.netSalary.toLocaleString('en-IN')}</Td>
+                                  </Tr>
+                                ))}
+                              </tbody>
+                            </Table>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          )}
+        </Card>
+      )}
 
       <Modal
         open={!!drawerEmployee}
