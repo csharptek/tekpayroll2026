@@ -8,6 +8,7 @@ import {
   getSalaryView,
   exportSalaryExcel,
   getCompanyReport,
+  resolveLinkedEmployeeIds,
 } from '../services/payslipVaultService'
 
 export const payslipVaultRouter = Router()
@@ -33,8 +34,9 @@ payslipVaultRouter.get('/months', async (_req, res) => {
 
 // GET all generated payslips for one employee (drill-down list)
 payslipVaultRouter.get('/employees/:employeeId/payslips', async (req, res) => {
+  const linkedIds = await resolveLinkedEmployeeIds(req.params.employeeId)
   const payslips = await prisma.payslip.findMany({
-    where: { employeeId: req.params.employeeId, status: 'GENERATED' },
+    where: { employeeId: { in: linkedIds }, status: 'GENERATED' },
     select: {
       id: true,
       pdfKey: true,

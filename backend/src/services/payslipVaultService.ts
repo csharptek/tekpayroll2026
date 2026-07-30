@@ -26,7 +26,45 @@ function endOfDayIST(d: Date): Date {
   return new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1)
 }
 
-// ─── Shared helpers ────────────────────────────────────────────────────────
+// ─── Trainee-conversion helper ──────────────────────────────────────────────
+// When a trainee is converted to a full employee, a NEW Employee record is
+// created (convertedFromTraineeId), and the old trainee record is linked via
+// convertedToEmployeeId. Payslips/PayrollEntries generated before conversion
+// still point at the OLD employeeId. Querying only the current employeeId
+// silently drops that pre-conversion history (e.g. April missing after a
+// May conversion). Resolve the full chain before querying payroll data.
+export async function resolveLinkedEmployeeIds(employeeId: string): Promise<string[]> {
+  const ids = new Set<string>([employeeId])
+  let current = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { convertedFromTraineeId: true, convertedToEmployeeId: true },
+  })
+  if (!current) return [...ids]
+
+  // Walk backwards (this employee was converted FROM a trainee)
+  let traineeId = current.convertedFromTraineeId
+  while (traineeId && !ids.has(traineeId)) {
+    ids.add(traineeId)
+    const trainee = await prisma.employee.findUnique({
+      where: { id: traineeId },
+      select: { convertedFromTraineeId: true },
+    })
+    traineeId = trainee?.convertedFromTraineeId ?? null
+  }
+
+  // Walk forwards (this employee was later converted TO a new employee)
+  let convertedId = current.convertedToEmployeeId
+  while (convertedId && !ids.has(convertedId)) {
+    ids.add(convertedId)
+    const next = await prisma.employee.findUnique({
+      where: { id: convertedId },
+      select: { convertedToEmployeeId: true },
+    })
+    convertedId = next?.convertedToEmployeeId ?? null
+  }
+
+  return [...ids]
+}
 
 function dec(v: any): number {
   return v == null ? 0 : Number(v)
@@ -67,7 +105,8 @@ async function fetchPayslips(params: {
 // ─── Single employee — merge multiple months into one PDF ─────────────────
 
 export async function mergeSingleEmployeePayslips(employeeId: string, months: string[]) {
-  const payslips = await fetchPayslips({ employeeIds: [employeeId], months })
+  const linkedIds = await resolveLinkedEmployeeIds(employeeId)
+  const payslips = await fetchPayslips({ employeeIds: linkedIds, months })
   if (!payslips.length) throw new AppError('No generated payslips found for selection', 404)
 
   const merged = await PDFDocument.create()
@@ -120,10 +159,11 @@ export async function getSalaryView(params: {
   to?: Date
 }) {
   const { employeeId, from, to } = params
+  const linkedIds = await resolveLinkedEmployeeIds(employeeId)
 
   const entries = await prisma.payrollEntry.findMany({
     where: {
-      employeeId,
+      employeeId: { in: linkedIds },
       cycle: {
         ...(from || to ? { cycleStart: { ...(from ? { gte: startOfDayIST(from) } : {}), ...(to ? { lte: endOfDayIST(to) } : {}) } } : {}),
       },
