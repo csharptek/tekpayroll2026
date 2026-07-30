@@ -172,6 +172,7 @@ export const payslipApi = {
 
 export const payslipVaultApi = {
   employees: () => api.get('/api/payslip-vault/employees'),
+  employeePayslips: (employeeId: string) => api.get(`/api/payslip-vault/employees/${employeeId}/payslips`),
   months: () => api.get('/api/payslip-vault/months'),
   downloadSingle: (employeeId: string, months: string[]) =>
     api.post('/api/payslip-vault/download/single', { employeeId, months }, { responseType: 'blob' }),

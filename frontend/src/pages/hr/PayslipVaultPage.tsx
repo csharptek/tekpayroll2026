@@ -1,14 +1,35 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Archive, Download, FileSpreadsheet, Search } from 'lucide-react'
+import { Archive, Download, Eye, FileSpreadsheet, Search } from 'lucide-react'
 import { payslipVaultApi } from '../../services/api'
-import { PageHeader, Card, Button, Input, Select, Table, Th, Td, Tr, EmptyState, Skeleton, Alert, StatusBadge } from '../../components/ui'
+import { PageHeader, Card, Button, Input, Select, Table, Th, Td, Tr, EmptyState, Skeleton, Alert, StatusBadge, Modal } from '../../components/ui'
 
 interface EmployeeRow {
   id: string
   employeeCode: string
   name: string
   department: string | null
+  status: string
+}
+
+interface EmployeePayslip {
+  id: string
+  pdfKey: string | null
+  generatedAt: string | null
+  cycle: { payrollMonth: string; cycleStart: string }
+  entry: { netSalary: string; grossSalary: string } | null
+}
+
+interface SalaryMonthRow {
+  payrollMonth: string
+  grossSalary: number
+  netSalary: number
+  pfAmount: number
+  esiAmount: number
+  ptAmount: number
+  tdsAmount: number
+  lopAmount: number
+  loanDeduction: number
   status: string
 }
 
@@ -31,6 +52,13 @@ export default function PayslipVaultPage() {
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
+  // drill-down drawer
+  const [drawerEmployee, setDrawerEmployee] = useState<EmployeeRow | null>(null)
+  const [drawerTab, setDrawerTab] = useState<'payslips' | 'salary'> ('payslips')
+  const [drawerSelectedPayslips, setDrawerSelectedPayslips] = useState<Set<string>>(new Set())
+  const [drawerFrom, setDrawerFrom] = useState('')
+  const [drawerTo, setDrawerTo] = useState('')
+
   const { data: employees, isLoading } = useQuery({
     queryKey: ['payslip-vault-employees'],
     queryFn: () => payslipVaultApi.employees().then((r) => r.data.data as EmployeeRow[]),
@@ -39,6 +67,49 @@ export default function PayslipVaultPage() {
   const { data: monthOptions } = useQuery({
     queryKey: ['payslip-vault-months'],
     queryFn: () => payslipVaultApi.months().then((r) => r.data.data as { payrollMonth: string }[]),
+  })
+
+  const { data: drawerPayslips, isLoading: drawerPayslipsLoading } = useQuery({
+    queryKey: ['payslip-vault-employee-payslips', drawerEmployee?.id],
+    queryFn: () => payslipVaultApi.employeePayslips(drawerEmployee!.id).then((r) => r.data.data as EmployeePayslip[]),
+    enabled: !!drawerEmployee && drawerTab === 'payslips',
+  })
+
+  const { data: drawerSalary, isLoading: drawerSalaryLoading } = useQuery({
+    queryKey: ['payslip-vault-salary-view', drawerEmployee?.id, drawerFrom, drawerTo],
+    queryFn: () =>
+      payslipVaultApi
+        .salaryView(drawerEmployee!.id, drawerFrom || undefined, drawerTo || undefined)
+        .then((r) => r.data.data as { monthly: SalaryMonthRow[]; cumulative: SalaryMonthRow; monthCount: number }),
+    enabled: !!drawerEmployee && drawerTab === 'salary',
+  })
+
+  const openDrawer = (emp: EmployeeRow) => {
+    setDrawerEmployee(emp)
+    setDrawerTab('payslips')
+    setDrawerSelectedPayslips(new Set())
+    setDrawerFrom('')
+    setDrawerTo('')
+  }
+
+  const toggleDrawerPayslip = (payrollMonth: string) => {
+    setDrawerSelectedPayslips((prev) => {
+      const next = new Set(prev)
+      next.has(payrollMonth) ? next.delete(payrollMonth) : next.add(payrollMonth)
+      return next
+    })
+  }
+
+  const drawerDownloadMut = useMutation({
+    mutationFn: async () => {
+      const res = await payslipVaultApi.downloadSingle(drawerEmployee!.id, [...drawerSelectedPayslips])
+      return res.data
+    },
+    onSuccess: (blob) => {
+      saveBlob(blob, `${drawerEmployee?.employeeCode || 'employee'}_payslips.pdf`)
+      showSuccess('Payslip PDF downloaded.')
+    },
+    onError: () => setError('Download failed for selected payslips.'),
   })
 
   const filtered = useMemo(() => {
@@ -226,6 +297,7 @@ export default function PayslipVaultPage() {
                 <Th>Name</Th>
                 <Th>Department</Th>
                 <Th>Status</Th>
+                <Th>Action</Th>
               </tr>
             </thead>
             <tbody>
@@ -238,6 +310,14 @@ export default function PayslipVaultPage() {
                   <Td>{e.name}</Td>
                   <Td>{e.department || '—'}</Td>
                   <Td><StatusBadge status={e.status} /></Td>
+                  <Td>
+                    <Button
+                      variant="secondary"
+                      onClick={(ev) => { ev.stopPropagation(); openDrawer(e) }}
+                    >
+                      <Eye size={14} className="mr-1" /> View
+                    </Button>
+                  </Td>
                 </Tr>
               ))}
             </tbody>
@@ -250,8 +330,137 @@ export default function PayslipVaultPage() {
           <li>Single PDF: select exactly 1 employee + one or more months.</li>
           <li>Bulk Zip: select multiple employees + months, or a from/to date range.</li>
           <li>Export Excel: select employees + from/to date range for full salary breakup.</li>
+          <li>Click "View" on any employee to browse their payslips or salary history.</li>
         </ul>
       </Card>
+
+      <Modal
+        open={!!drawerEmployee}
+        onClose={() => setDrawerEmployee(null)}
+        title={drawerEmployee ? `${drawerEmployee.name} (${drawerEmployee.employeeCode})` : ''}
+        size="lg"
+      >
+        {drawerEmployee && (
+          <div className="space-y-4">
+            <div className="flex gap-2 border-b border-gray-200">
+              <button
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
+                  drawerTab === 'payslips' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'
+                }`}
+                onClick={() => setDrawerTab('payslips')}
+              >
+                Payslips
+              </button>
+              <button
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
+                  drawerTab === 'salary' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'
+                }`}
+                onClick={() => setDrawerTab('salary')}
+              >
+                Salary View
+              </button>
+            </div>
+
+            {drawerTab === 'payslips' && (
+              <div className="space-y-3">
+                {drawerPayslipsLoading ? (
+                  <Skeleton className="h-40" />
+                ) : !drawerPayslips || drawerPayslips.length === 0 ? (
+                  <EmptyState title="No payslips found" description="No generated payslips for this employee yet." />
+                ) : (
+                  <>
+                    <Table>
+                      <thead>
+                        <tr>
+                          <Th></Th>
+                          <Th>Month</Th>
+                          <Th>Gross</Th>
+                          <Th>Net</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {drawerPayslips.map((p) => (
+                          <Tr key={p.id} onClick={() => toggleDrawerPayslip(p.cycle.payrollMonth)}>
+                            <Td>
+                              <input
+                                type="checkbox"
+                                checked={drawerSelectedPayslips.has(p.cycle.payrollMonth)}
+                                onChange={() => toggleDrawerPayslip(p.cycle.payrollMonth)}
+                              />
+                            </Td>
+                            <Td>{p.cycle.payrollMonth}</Td>
+                            <Td>{p.entry ? Number(p.entry.grossSalary).toLocaleString('en-IN') : '—'}</Td>
+                            <Td>{p.entry ? Number(p.entry.netSalary).toLocaleString('en-IN') : '—'}</Td>
+                          </Tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                    <Button
+                      disabled={drawerSelectedPayslips.size === 0 || drawerDownloadMut.isPending}
+                      onClick={() => drawerDownloadMut.mutate()}
+                    >
+                      <Download size={16} className="mr-1" />
+                      Download Selected ({drawerSelectedPayslips.size})
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {drawerTab === 'salary' && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Input type="date" value={drawerFrom} onChange={(e) => setDrawerFrom(e.target.value)} placeholder="From" />
+                  <Input type="date" value={drawerTo} onChange={(e) => setDrawerTo(e.target.value)} placeholder="To" />
+                </div>
+                {drawerSalaryLoading ? (
+                  <Skeleton className="h-40" />
+                ) : !drawerSalary || drawerSalary.monthly.length === 0 ? (
+                  <EmptyState title="No salary data" description="No payroll entries found for this range." />
+                ) : (
+                  <>
+                    <Table>
+                      <thead>
+                        <tr>
+                          <Th>Month</Th>
+                          <Th>Gross</Th>
+                          <Th>PF</Th>
+                          <Th>ESI</Th>
+                          <Th>PT</Th>
+                          <Th>TDS</Th>
+                          <Th>LOP</Th>
+                          <Th>Loan</Th>
+                          <Th>Net</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {drawerSalary.monthly.map((m) => (
+                          <Tr key={m.payrollMonth}>
+                            <Td>{m.payrollMonth}</Td>
+                            <Td>{m.grossSalary.toLocaleString('en-IN')}</Td>
+                            <Td>{m.pfAmount.toLocaleString('en-IN')}</Td>
+                            <Td>{m.esiAmount.toLocaleString('en-IN')}</Td>
+                            <Td>{m.ptAmount.toLocaleString('en-IN')}</Td>
+                            <Td>{m.tdsAmount.toLocaleString('en-IN')}</Td>
+                            <Td>{m.lopAmount.toLocaleString('en-IN')}</Td>
+                            <Td>{m.loanDeduction.toLocaleString('en-IN')}</Td>
+                            <Td className="font-medium">{m.netSalary.toLocaleString('en-IN')}</Td>
+                          </Tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                    <div className="bg-slate-50 rounded-lg p-3 text-sm">
+                      <span className="font-medium">Cumulative ({drawerSalary.monthCount} months):</span>{' '}
+                      Gross ₹{drawerSalary.cumulative.grossSalary.toLocaleString('en-IN')} · Net ₹
+                      {drawerSalary.cumulative.netSalary.toLocaleString('en-IN')}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

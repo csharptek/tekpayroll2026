@@ -30,6 +30,22 @@ payslipVaultRouter.get('/months', async (_req, res) => {
   res.json({ success: true, data: cycles })
 })
 
+// GET all generated payslips for one employee (drill-down list)
+payslipVaultRouter.get('/employees/:employeeId/payslips', async (req, res) => {
+  const payslips = await prisma.payslip.findMany({
+    where: { employeeId: req.params.employeeId, status: 'GENERATED' },
+    select: {
+      id: true,
+      pdfKey: true,
+      generatedAt: true,
+      cycle: { select: { payrollMonth: true, cycleStart: true } },
+      entry: { select: { netSalary: true, grossSalary: true } },
+    },
+    orderBy: { cycle: { cycleStart: 'desc' } },
+  })
+  res.json({ success: true, data: payslips })
+})
+
 // POST download merged PDF for one employee, multiple months
 payslipVaultRouter.post('/download/single', async (req, res) => {
   const { employeeId, months } = req.body
