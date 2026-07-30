@@ -89,7 +89,7 @@ async function fetchPayslips(params: {
   return prisma.payslip.findMany({
     where: {
       employeeId: { in: employeeIds },
-      status: 'GENERATED',
+      status: { in: ['GENERATED', 'EMAILED'] },
       pdfKey: { not: null },
       cycle: Object.keys(cycleFilter).length ? cycleFilter : undefined,
     },

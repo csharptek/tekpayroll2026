@@ -36,7 +36,7 @@ payslipVaultRouter.get('/months', async (_req, res) => {
 payslipVaultRouter.get('/employees/:employeeId/payslips', async (req, res) => {
   const linkedIds = await resolveLinkedEmployeeIds(req.params.employeeId)
   const payslips = await prisma.payslip.findMany({
-    where: { employeeId: { in: linkedIds }, status: 'GENERATED' },
+    where: { employeeId: { in: linkedIds }, status: { in: ['GENERATED', 'EMAILED'] } },
     select: {
       id: true,
       pdfKey: true,
