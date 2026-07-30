@@ -9,7 +9,8 @@ import {
   BarChart3, Receipt, Wallet, GitMerge, Upload,
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
-  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package, Bell, Percent, MessageSquareOff, RotateCcw
+  CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package, Bell, Percent, MessageSquareOff, RotateCcw,
+  Archive,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -86,6 +87,7 @@ const SUPER_ADMIN_NAV = [
       { label: 'Payroll Cycles',      icon: CreditCard, to: '/hr/payroll' },
       { label: 'Payroll Preview',     icon: FileSearch, to: '/hr/payroll/preview' },
       { label: 'Payslips',            icon: FileText,   to: '/hr/payslips' },
+      { label: 'Payslip Vault',       icon: Archive,    to: '/hr/payslip-vault' },
       { label: 'Bulk Form 16',        icon: Upload,     to: '/hr/form16-bulk' },
       { label: 'Salary Breakups',     icon: Table2,     to: '/hr/salary-breakups' },
       { label: 'Bulk Edit Salaries',  icon: Table2,     to: '/hr/salaries-bulk-edit' },
@@ -442,6 +444,7 @@ function usePageTitle() {
     '/hr/employees/add': 'Add Employee',
     '/hr/payroll': 'Payroll Cycles',
     '/hr/payslips': 'Payslip Generation',
+    '/hr/payslip-vault': 'Payslip Vault',
     '/hr/loans': 'Loans & Advances',
     '/hr/reimbursements': 'Reimbursements',
     '/hr/fnf': 'Full & Final Settlement',

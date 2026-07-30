@@ -170,6 +170,19 @@ export const payslipApi = {
   allowPasswordReset: (employeeId: string, allow: boolean) => api.patch(`/api/employees/${employeeId}/allow-password-reset`, { allow }),
 }
 
+export const payslipVaultApi = {
+  employees: () => api.get('/api/payslip-vault/employees'),
+  months: () => api.get('/api/payslip-vault/months'),
+  downloadSingle: (employeeId: string, months: string[]) =>
+    api.post('/api/payslip-vault/download/single', { employeeId, months }, { responseType: 'blob' }),
+  downloadBulk: (params: { employeeIds: string[]; months?: string[]; from?: string; to?: string }) =>
+    api.post('/api/payslip-vault/download/bulk', params, { responseType: 'blob' }),
+  salaryView: (employeeId: string, from?: string, to?: string) =>
+    api.get(`/api/payslip-vault/salary-view/${employeeId}`, { params: { from, to } }),
+  exportExcel: (params: { employeeIds: string[]; from?: string; to?: string }) =>
+    api.post('/api/payslip-vault/export/excel', params, { responseType: 'blob' }),
+}
+
 export const loanApi = {
   list:        (params?: any) => api.get('/api/loans', { params }),
   pending:     ()             => api.get('/api/loans/pending'),
