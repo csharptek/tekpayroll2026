@@ -5,6 +5,27 @@ import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { downloadPayslipPdf } from '../utils/payslipBlob'
 
+// ─── Date helpers ──────────────────────────────────────────────────────────
+// Date-only strings like "2026-04-01" from <input type="date"> parse as UTC
+// midnight. cycleStart is stored as IST local time, so a naive `gte` on that
+// UTC instant excludes the first ~5.5 hours of the day — cutting out entire
+// early-month cycles (e.g. April missing while May onward worked). Normalize
+// explicitly to IST day boundaries instead of trusting Date's UTC parsing.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
+
+function startOfDayIST(d: Date): Date {
+  // Shift into IST, floor to date, shift back to get the UTC instant
+  // that corresponds to 00:00:00 IST on that calendar day.
+  const ist = new Date(d.getTime() + IST_OFFSET_MS)
+  ist.setUTCHours(0, 0, 0, 0)
+  return new Date(ist.getTime() - IST_OFFSET_MS)
+}
+
+function endOfDayIST(d: Date): Date {
+  const start = startOfDayIST(d)
+  return new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1)
+}
+
 // ─── Shared helpers ────────────────────────────────────────────────────────
 
 function dec(v: any): number {
@@ -23,8 +44,8 @@ async function fetchPayslips(params: {
   if (months?.length) cycleFilter.payrollMonth = { in: months }
   if (from || to) {
     cycleFilter.cycleStart = {}
-    if (from) cycleFilter.cycleStart.gte = from
-    if (to) cycleFilter.cycleStart.lte = to
+    if (from) cycleFilter.cycleStart.gte = startOfDayIST(from)
+    if (to) cycleFilter.cycleStart.lte = endOfDayIST(to)
   }
 
   return prisma.payslip.findMany({
@@ -104,7 +125,7 @@ export async function getSalaryView(params: {
     where: {
       employeeId,
       cycle: {
-        ...(from || to ? { cycleStart: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+        ...(from || to ? { cycleStart: { ...(from ? { gte: startOfDayIST(from) } : {}), ...(to ? { lte: endOfDayIST(to) } : {}) } } : {}),
       },
     },
     include: { cycle: { select: { payrollMonth: true, cycleStart: true, status: true } } },
@@ -149,7 +170,7 @@ export async function getCompanyReport(params: { from?: Date; to?: Date }) {
   const entries = await prisma.payrollEntry.findMany({
     where: {
       cycle: {
-        ...(from || to ? { cycleStart: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+        ...(from || to ? { cycleStart: { ...(from ? { gte: startOfDayIST(from) } : {}), ...(to ? { lte: endOfDayIST(to) } : {}) } } : {}),
       },
     },
     select: {
@@ -261,7 +282,7 @@ export async function exportSalaryExcel(params: {
     where: {
       employeeId: { in: employeeIds },
       cycle: {
-        ...(from || to ? { cycleStart: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+        ...(from || to ? { cycleStart: { ...(from ? { gte: startOfDayIST(from) } : {}), ...(to ? { lte: endOfDayIST(to) } : {}) } } : {}),
       },
     },
     include: {
