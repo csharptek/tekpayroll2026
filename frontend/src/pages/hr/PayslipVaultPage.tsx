@@ -373,7 +373,7 @@ export default function PayslipVaultPage() {
             </thead>
             <tbody>
               {filtered.map((e) => (
-                <Tr key={e.id} onClick={() => toggle(e.id)}>
+                <Tr key={e.id}>
                   <Td>
                     <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} />
                   </Td>
@@ -384,7 +384,7 @@ export default function PayslipVaultPage() {
                   <Td>
                     <Button
                       variant="secondary"
-                      onClick={(ev) => { ev.stopPropagation(); openDrawer(e) }}
+                      onClick={() => openDrawer(e)}
                     >
                       <Eye size={14} className="mr-1" /> View
                     </Button>
@@ -544,7 +544,7 @@ export default function PayslipVaultPage() {
                       </thead>
                       <tbody>
                         {drawerPayslips.map((p) => (
-                          <Tr key={p.id} onClick={() => toggleDrawerPayslip(p.cycle.payrollMonth)}>
+                          <Tr key={p.id}>
                             <Td>
                               <input
                                 type="checkbox"
