@@ -180,6 +180,9 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
         fbpMonthly:       salarySnap ? Number(salarySnap.fbpMonthly) : 0,
         hyiMonthly:       salarySnap ? Number(salarySnap.hyiMonthly) : 0,
         grandTotalMonthly:salarySnap ? Number(salarySnap.grandTotalMonthly) : 0,
+        employeePf:       salarySnap ? Number(salarySnap.employeePfMonthly) : 0,
+        employeeEsi:      salarySnap ? Number(salarySnap.employeeEsiMonthly) : 0,
+        netMonthly:       salarySnap ? Number(salarySnap.netMonthly) : 0,
         effectiveDate:    salarySnap?.effectiveDate,
       },
       leavesLop: {

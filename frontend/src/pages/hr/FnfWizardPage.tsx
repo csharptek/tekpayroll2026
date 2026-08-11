@@ -182,6 +182,9 @@ function Step1BaseSalary({ data, savedOverride, onConfirm, isConfirmed }: any) {
         <DataRow label="FBP (Monthly)" value={fmt(d.fbpMonthly)} />
         <DataRow label="HYI (Monthly)" value={fmt(d.hyiMonthly)} />
         <DataRow label="Grand Total (Monthly)" value={fmt(d.grandTotalMonthly)} highlight="green" />
+        <DataRow label="Employee PF" value={`- ${fmt(d.employeePf || 0)}`} />
+        {d.employeeEsi > 0 && <DataRow label="Employee ESI" value={`- ${fmt(d.employeeEsi)}`} />}
+        <DataRow label="Est. Net Take Home (Monthly)" value={fmt(d.netMonthly)} highlight="green" />
         {d.effectiveDate && (
           <p className="text-[11px] text-slate-400 pt-2">
             Snapshot effective: {fmtDate(d.effectiveDate)}
