@@ -303,6 +303,38 @@ function Step2LeavesLop({ data, savedOverride, onConfirm, isConfirmed, employeeI
         )}
       </div>
 
+      {d.excessLeaveDetail?.length > 0 && (
+        <div className="mb-4 overflow-x-auto">
+          <p className="text-xs font-semibold text-slate-500 mb-1.5">Excess Leave Calculation</p>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-100 text-slate-400">
+                <th className="text-left pb-1.5 font-medium">Type</th>
+                <th className="text-right pb-1.5 font-medium">Annual Entitlement</th>
+                <th className="text-right pb-1.5 font-medium">Months Elapsed</th>
+                <th className="text-right pb-1.5 font-medium">Prorated Allowed</th>
+                <th className="text-right pb-1.5 font-medium">Used</th>
+                <th className="text-right pb-1.5 font-medium">Excess Days</th>
+                <th className="text-right pb-1.5 font-medium">Excess ₹</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.excessLeaveDetail.map((r: any) => (
+                <tr key={r.leaveKind} className="border-b border-slate-50">
+                  <td className="py-1.5 capitalize font-medium text-slate-700">{r.leaveKind.toLowerCase()}</td>
+                  <td className="py-1.5 text-right">{r.annualEntitlement}</td>
+                  <td className="py-1.5 text-right">{r.monthsElapsed}</td>
+                  <td className="py-1.5 text-right">{r.proratedAllowed}</td>
+                  <td className="py-1.5 text-right">{r.usedDays}</td>
+                  <td className={clsx('py-1.5 text-right font-semibold', r.excessDays > 0 ? 'text-red-600' : 'text-slate-400')}>{r.excessDays}</td>
+                  <td className={clsx('py-1.5 text-right font-semibold', r.excessAmount > 0 ? 'text-red-600' : 'text-slate-400')}>{r.excessAmount > 0 ? fmt(r.excessAmount) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="space-y-3 mb-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
         <p className="text-xs font-semibold text-amber-700">Override (if incorrect)</p>
         <div className="grid grid-cols-2 gap-3">
