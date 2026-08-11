@@ -60,6 +60,8 @@ export default function PayrollRunDetailPage() {
               <Th className="text-right">PT</Th>
               <Th className="text-right">TDS</Th>
               <Th className="text-right">LOP</Th>
+              <Th className="text-right">Reimb.</Th>
+              <Th className="text-right">Loan</Th>
               <Th className="text-right">Net</Th>
               <Th>Payslip</Th>
             </tr>
@@ -79,6 +81,8 @@ export default function PayrollRunDetailPage() {
                 <Td className="text-right">{Number(e.ptAmount) > 0 ? <Rupee amount={e.ptAmount} /> : '—'}</Td>
                 <Td className="text-right">{Number(e.tdsAmount) > 0 ? <Rupee amount={e.tdsAmount} /> : '—'}</Td>
                 <Td className="text-right">{Number(e.lopAmount) > 0 ? <Rupee amount={e.lopAmount} className="text-red-500" /> : '—'}</Td>
+                <Td className="text-right">{Number(e.reimbursementTotal) > 0 ? <Rupee amount={e.reimbursementTotal} className="text-emerald-600" /> : '—'}</Td>
+                <Td className="text-right">{Number(e.loanDeduction) > 0 ? <Rupee amount={e.loanDeduction} className="text-red-500" /> : '—'}</Td>
                 <Td className="text-right font-bold"><Rupee amount={e.netSalary} /></Td>
                 <Td>
                   {e.payslip?.pdfUrl
