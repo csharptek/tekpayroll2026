@@ -12,17 +12,11 @@ const isStale = (val: string | null) =>
 async function main() {
   let total = 0
 
-  const photos = await prisma.employee.findMany({
+  const photos = await prisma.employeeProfile.updateMany({
     where: { profilePhotoUrl: { contains: 'blob.core.windows.net' } },
-    select: { id: true },
+    data: { profilePhotoUrl: null, profilePhotoKey: null },
   })
-  if (photos.length) {
-    await prisma.employee.updateMany({
-      where: { id: { in: photos.map(p => p.id) } },
-      data: { profilePhotoUrl: null, profilePhotoKey: null },
-    })
-    total += photos.length
-  }
+  total += photos.count
 
   const docs = await prisma.employeeDocument.findMany({
     where: { documentUrl: { contains: 'blob.core.windows.net' } },
