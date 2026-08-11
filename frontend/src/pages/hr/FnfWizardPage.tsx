@@ -200,14 +200,65 @@ function Step1BaseSalary({ data, savedOverride, onConfirm, isConfirmed }: any) {
   )
 }
 
-function Step2LeavesLop({ data, savedOverride, onConfirm, isConfirmed }: any) {
+function Step2LeavesLop({ data, savedOverride, onConfirm, isConfirmed, employeeId, onLeaveAdded }: any) {
   const d = data.leavesLop
   const [notes, setNotes] = useState(savedOverride?.notes || '')
   const [lopOverride, setLopOverride] = useState(savedOverride?.lopAmountOverride != null ? String(savedOverride.lopAmountOverride) : '')
   const [excessOverride, setExcessOverride] = useState(savedOverride?.excessAmountOverride != null ? String(savedOverride.excessAmountOverride) : '')
 
+  const [showAddLeave, setShowAddLeave] = useState(false)
+  const [newLeave, setNewLeave] = useState({ leaveKind: 'CASUAL', startDate: '', endDate: '', reasonLabel: '' })
+  const [addingLeave, setAddingLeave] = useState(false)
+  const [addLeaveError, setAddLeaveError] = useState('')
+
+  const submitAddLeave = async () => {
+    if (!newLeave.startDate || !newLeave.endDate) { setAddLeaveError('Select dates'); return }
+    setAddingLeave(true)
+    setAddLeaveError('')
+    try {
+      await fnfApi.wizard.addLeave(employeeId, newLeave)
+      setNewLeave({ leaveKind: 'CASUAL', startDate: '', endDate: '', reasonLabel: '' })
+      setShowAddLeave(false)
+      onLeaveAdded?.()
+    } catch (e: any) {
+      setAddLeaveError(e?.response?.data?.message || 'Failed to add leave')
+    } finally {
+      setAddingLeave(false)
+    }
+  }
+
   return (
     <StepCard title="Leaves Taken & LOP" icon={<Calendar size={16} />} isConfirmed={isConfirmed}>
+      <div className="mb-3">
+        {!showAddLeave ? (
+          <button className="text-xs text-brand-600 font-medium" onClick={() => setShowAddLeave(true)}>
+            + Add missed leave
+          </button>
+        ) : (
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              <select className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                value={newLeave.leaveKind} onChange={e => setNewLeave(s => ({ ...s, leaveKind: e.target.value }))}>
+                <option value="SICK">Sick</option>
+                <option value="CASUAL">Casual</option>
+                <option value="PLANNED">Planned</option>
+              </select>
+              <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                value={newLeave.startDate} onChange={e => setNewLeave(s => ({ ...s, startDate: e.target.value }))} />
+              <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                value={newLeave.endDate} onChange={e => setNewLeave(s => ({ ...s, endDate: e.target.value }))} />
+            </div>
+            <input type="text" placeholder="Reason (optional)" className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+              value={newLeave.reasonLabel} onChange={e => setNewLeave(s => ({ ...s, reasonLabel: e.target.value }))} />
+            {addLeaveError && <p className="text-[11px] text-red-500">{addLeaveError}</p>}
+            <div className="flex gap-2">
+              <Button onClick={submitAddLeave} disabled={addingLeave}>{addingLeave ? 'Adding...' : 'Add Leave'}</Button>
+              <button className="text-xs text-slate-400" onClick={() => setShowAddLeave(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {d.leaves.length === 0 ? (
         <p className="text-sm text-slate-400 mb-4">No leave applications during FnF period.</p>
       ) : (
@@ -1095,7 +1146,7 @@ export default function FnfWizardPage() {
     enabled:  !!employeeId,
   })
 
-  const { data: stepData, isLoading: loadingStepData } = useQuery({
+  const { data: stepData, isLoading: loadingStepData, refetch: refetchStepData } = useQuery({
     queryKey: ['fnf-wizard-step-data', employeeId, hyiOverrides],
     queryFn:  () => fnfApi.wizard.getStepData(employeeId!, Object.keys(hyiOverrides).length ? hyiOverrides : undefined).then(r => r.data.data),
     enabled:  !!employeeId,
@@ -1205,7 +1256,7 @@ export default function FnfWizardPage() {
 
     switch (activeStep) {
       case 'BASE_SALARY':     return <Step1BaseSalary     {...stepProps('BASE_SALARY')} />
-      case 'LEAVES_LOP':      return <Step2LeavesLop      {...stepProps('LEAVES_LOP')} />
+      case 'LEAVES_LOP':      return <Step2LeavesLop      {...stepProps('LEAVES_LOP')} employeeId={employeeId} onLeaveAdded={refetchStepData} />
       case 'PRORATED_SALARY': return <Step3ProratedSalary {...stepProps('PRORATED_SALARY')} />
       case 'REIMBURSEMENTS':  return <Step4Reimbursements {...stepProps('REIMBURSEMENTS')} />
       case 'LOANS':           return <Step5Loans          {...stepProps('LOANS')} />

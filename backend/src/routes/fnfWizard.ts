@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { calculateFnf } from '../services/fnfService'
 import { computeSalaryStructure, getSalaryInputForDate } from '../services/payrollEngine'
+import { countWorkingDays } from '../services/leaveService'
 
 export const fnfWizardRouter = Router()
 fnfWizardRouter.use(authenticate, requireSuperAdmin)
@@ -81,17 +82,16 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
     orderBy: { effectiveDate: 'desc' },
   })
 
-  // Leave applications during FnF period
+  // Leave applications for the year, Jan 1 → resignation date (matches excess-leave calc window)
   const resignationDate = employee.resignationDate
-  const fnfStartMonth = new Date(resignationDate.getFullYear(), resignationDate.getMonth() + 1, 1)
   const lwd = employee.lastWorkingDay || employee.expectedLwd!
-  const lwdMonthEnd = new Date(lwd.getFullYear(), lwd.getMonth() + 1, 0)
+  const yearStart = new Date(resignationDate.getFullYear(), 0, 1)
 
   const fnfLeaves = await prisma.lvApplication.findMany({
     where: {
       employeeId,
       status: { in: ['APPROVED', 'AUTO_APPROVED'] },
-      startDate: { gte: fnfStartMonth, lte: lwdMonthEnd },
+      startDate: { gte: yearStart, lte: resignationDate },
     },
     orderBy: { startDate: 'asc' },
   })
@@ -516,6 +516,42 @@ fnfWizardRouter.post('/:employeeId/complete', async (req, res) => {
       },
     },
   })
+})
+
+// ─── ADD MISSED LEAVE (FnF wizard only — direct insert, auto-approved) ────────
+fnfWizardRouter.post('/:employeeId/add-leave', async (req, res) => {
+  const { employeeId } = req.params
+  const { leaveKind, startDate: startStr, endDate: endStr, isHalfDay, halfDaySlot, reasonLabel } = req.body
+
+  if (!leaveKind || !startStr || !endStr) throw new AppError('leaveKind, startDate, endDate required', 400)
+
+  const startDate = new Date(startStr)
+  const endDate = new Date(endStr)
+  const totalDays = await countWorkingDays(startDate, endDate, !!isHalfDay)
+  if (totalDays === 0) throw new AppError('No working days in the selected date range.', 400)
+
+  const year = startDate.getFullYear()
+
+  const application = await prisma.lvApplication.create({
+    data: {
+      employeeId, leaveKind, startDate, endDate, totalDays,
+      isHalfDay: !!isHalfDay,
+      halfDaySlot: isHalfDay ? halfDaySlot : null,
+      reasonLabel: reasonLabel || 'Added during FnF settlement',
+      status: 'AUTO_APPROVED',
+      isLop: false,
+      lopDays: 0,
+    },
+  })
+
+  // Ensure entitlement row exists, then reflect usedDays so excess-leave calc picks it up
+  await prisma.leaveEntitlement.upsert({
+    where: { employeeId_leaveKind_year: { employeeId, leaveKind, year } },
+    create: { employeeId, leaveKind, year, totalDays: 0, usedDays: totalDays },
+    update: { usedDays: { increment: totalDays } },
+  })
+
+  res.json({ success: true, data: application })
 })
 
 // ─── RESET SESSION ────────────────────────────────────────────────────────────
