@@ -2,16 +2,16 @@ import { Router } from 'express'
 import { authenticate, requireHR, requireSuperAdmin } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
-import { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters, StorageSharedKeyCredential } from '@azure/storage-blob'
 import multer from 'multer'
 import { randomUUID } from 'crypto'
 import path from 'path'
 import bcrypt from 'bcryptjs'
+import { saveFile, deleteFile, getFileUrl } from '../utils/fileStorage'
 
 export const employeeProfileRouter = Router()
 employeeProfileRouter.use(authenticate)
 
-// ─── AZURE BLOB UPLOAD HELPER ─────────────────────────────────────────────────
+// ─── VOLUME STORAGE HELPER (Railway volume, replaces Azure Blob) ─────────────
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -22,54 +22,13 @@ const upload = multer({
   },
 })
 
-// ─── ENV CONTAINER NAMES ─────────────────────────────────────────────────────
-// AZURE_PHOTOS_CONTAINER — for employee profile photos      (default: emp-photos)
-// AZURE_DOCS_CONTAINER   — for employee documents           (default: emp-documents)
-// AZURE_STORAGE_CONTAINER — payslips only (untouched)
-
-function getConnStr(): string {
-  const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING
-  if (!connStr || connStr === 'PLACEHOLDER') throw new AppError('Azure storage not configured', 500)
-  return connStr
-}
-
-// Parse account name + key from connection string for SAS generation
-function getSharedKeyCredential(): { accountName: string; credential: StorageSharedKeyCredential } {
-  const connStr = getConnStr()
-  const accountNameMatch = connStr.match(/AccountName=([^;]+)/)
-  const accountKeyMatch  = connStr.match(/AccountKey=([^;]+)/)
-  if (!accountNameMatch || !accountKeyMatch) throw new AppError('Invalid Azure connection string', 500)
-  return {
-    accountName: accountNameMatch[1],
-    credential:  new StorageSharedKeyCredential(accountNameMatch[1], accountKeyMatch[1]),
-  }
-}
-
-// Generate a SAS URL valid for 3 years (photos/docs don't change often)
-function generateSasUrl(
-  containerName: string,
-  blobKey: string,
-  accountName: string,
-  credential: StorageSharedKeyCredential,
-): string {
-  const expiresOn = new Date()
-  expiresOn.setFullYear(expiresOn.getFullYear() + 3)
-
-  const sasQuery = generateBlobSASQueryParameters(
-    {
-      containerName,
-      blobName:   blobKey,
-      permissions: BlobSASPermissions.parse('r'), // read-only
-      expiresOn,
-    },
-    credential,
-  ).toString()
-
-  return `https://${accountName}.blob.core.windows.net/${containerName}/${blobKey}?${sasQuery}`
-}
+// ─── CONTAINER NAMES ──────────────────────────────────────────────────────────
+const CONTAINERS = {
+  AZURE_PHOTOS_CONTAINER: 'emp-photos',
+  AZURE_DOCS_CONTAINER:   'emp-documents',
+} as const
 
 function sanitizeName(name: string): string {
-  // Azure blob folder name safe: lowercase, alphanumeric + hyphens only
   return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40)
 }
 
@@ -88,27 +47,12 @@ async function uploadToBlob(
   containerEnvKey: 'AZURE_PHOTOS_CONTAINER' | 'AZURE_DOCS_CONTAINER',
   blobPath: string,   // full path inside container e.g. "c-tek186-john-doe/profile/uuid.jpg"
 ): Promise<{ url: string; key: string }> {
-  const connStr       = getConnStr()
-  const containerName = process.env[containerEnvKey] ||
-    (containerEnvKey === 'AZURE_PHOTOS_CONTAINER' ? 'emp-photos' : 'emp-documents')
-  const client        = BlobServiceClient.fromConnectionString(connStr)
-  const container     = client.getContainerClient(containerName)
+  const containerName = CONTAINERS[containerEnvKey]
+  const ext = path.extname(originalName)
+  const key = `${blobPath}/${randomUUID()}${ext}`
 
-  // Create container as PRIVATE (no public access — works on all Azure storage accounts)
-  await container.createIfNotExists()
-
-  const ext      = path.extname(originalName)
-  const key      = `${blobPath}/${randomUUID()}${ext}`
-  const blob     = container.getBlockBlobClient(key)
-  const mimeType = originalName.toLowerCase().endsWith('.pdf') ? 'application/pdf'
-    : originalName.toLowerCase().match(/\.(png|webp)$/) ? `image/${originalName.split('.').pop()}`
-    : 'image/jpeg'
-
-  await blob.uploadData(buffer, { blobHTTPHeaders: { blobContentType: mimeType } })
-
-  // Generate a 3-year SAS URL (private blob — no public access needed)
-  const { accountName, credential } = getSharedKeyCredential()
-  const url = generateSasUrl(containerName, key, accountName, credential)
+  await saveFile(containerName, key, buffer)
+  const url = getFileUrl(containerName, key)
 
   return { url, key }
 }
@@ -117,12 +61,7 @@ async function deleteBlob(
   key: string,
   containerEnvKey: 'AZURE_PHOTOS_CONTAINER' | 'AZURE_DOCS_CONTAINER',
 ): Promise<void> {
-  const connStr       = getConnStr()
-  const containerName = process.env[containerEnvKey] ||
-    (containerEnvKey === 'AZURE_PHOTOS_CONTAINER' ? 'emp-photos' : 'emp-documents')
-  const client    = BlobServiceClient.fromConnectionString(connStr)
-  const container = client.getContainerClient(containerName)
-  await container.getBlockBlobClient(key).deleteIfExists()
+  await deleteFile(CONTAINERS[containerEnvKey], key)
 }
 
 // ─── MANAGERS LIST (for reporting manager dropdown) ────────────────────────────
@@ -523,27 +462,9 @@ employeeProfileRouter.get('/:id/documents', async (req, res) => {
     },
     orderBy: { uploadedAt: 'desc' },
   })
-  // Regenerate fresh SAS URLs from stored fileKey (avoids stale/truncated URLs in DB).
-  // BUT: files stored on the Railway volume already have a self-serving /api/... URL —
-  // never overwrite those with a (dead) Azure SAS URL.
-  let credentials: { accountName: string; credential: any } | null = null
-  try { credentials = getSharedKeyCredential() } catch { credentials = null }
-
-  const docsWithFreshUrls = docs.map(doc => {
-    // Railway-stored file (relative or absolute /api/form16/file URL): keep as-is
-    if (doc.fileUrl && (doc.fileUrl.startsWith('/api/') || doc.fileUrl.includes('/api/form16/file'))) return doc
-    // Railway-stored key prefix: never regenerate an Azure SAS for these
-    if (doc.fileKey && doc.fileKey.startsWith('form16/')) return doc
-    if (!doc.fileKey || !credentials) return doc
-    const containerName = process.env.AZURE_DOCS_CONTAINER || 'emp-documents'
-    try {
-      const freshUrl = generateSasUrl(containerName, doc.fileKey, credentials.accountName, credentials.credential)
-      return { ...doc, fileUrl: freshUrl }
-    } catch {
-      return doc
-    }
-  })
-  res.json({ success: true, data: docsWithFreshUrls })
+  // All files now served via signed /api/files/... URLs (Railway volume) —
+  // stored fileUrl is already valid, no regeneration needed.
+  res.json({ success: true, data: docs })
 })
 
 // HR/SA upload — never locks

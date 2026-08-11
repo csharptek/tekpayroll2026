@@ -3,52 +3,23 @@ import multer from 'multer'
 import { prisma } from '../utils/prisma'
 import { authenticate, requireHR, requireSuperAdmin } from '../middleware/auth'
 import { AppError } from '../middleware/errorHandler'
-import { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters, StorageSharedKeyCredential } from '@azure/storage-blob'
 import { randomUUID } from 'crypto'
 import { sendEmail, sendEmailWithAttachment, getDocEmailConfig } from '../services/emailService'
 import { computeSalaryStructure, getEsiConfig, getSalaryInputForDate, computePt } from '../services/payrollEngine'
+import { saveFile, readFile, getFileUrl } from '../utils/fileStorage'
 
 export const documentsRouter = Router()
 documentsRouter.use(authenticate)
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 
-// ─── BLOB HELPERS ─────────────────────────────────────────────────────────────
+// ─── STORAGE HELPERS (Railway volume) ─────────────────────────────────────────
 
-function getConnStr() {
-  const c = process.env.AZURE_STORAGE_CONNECTION_STRING
-  if (!c || c === 'PLACEHOLDER') throw new AppError('Azure storage not configured', 500)
-  return c
-}
+const DOCS_CONTAINER = 'emp-documents'
 
-function getCredential() {
-  const connStr = getConnStr()
-  const nameM = connStr.match(/AccountName=([^;]+)/)
-  const keyM  = connStr.match(/AccountKey=([^;]+)/)
-  if (!nameM || !keyM) throw new AppError('Invalid Azure connection string', 500)
-  return { accountName: nameM[1], credential: new StorageSharedKeyCredential(nameM[1], keyM[1]) }
-}
-
-function makeSasUrl(containerName: string, blobKey: string) {
-  const { accountName, credential } = getCredential()
-  const expiresOn = new Date()
-  expiresOn.setFullYear(expiresOn.getFullYear() + 3)
-  const sas = generateBlobSASQueryParameters(
-    { containerName, blobName: blobKey, permissions: BlobSASPermissions.parse('r'), expiresOn, protocol: undefined as any },
-    credential,
-  ).toString()
-  return `https://${accountName}.blob.core.windows.net/${containerName}/${blobKey}?${sas}`
-}
-
-async function uploadBlob(buffer: Buffer, key: string, mimeType: string) {
-  const connStr = getConnStr()
-  const containerName = process.env.AZURE_DOCS_CONTAINER || 'emp-documents'
-  const client = BlobServiceClient.fromConnectionString(connStr)
-  const container = client.getContainerClient(containerName)
-  await container.createIfNotExists()
-  const blob = container.getBlockBlobClient(key)
-  await blob.uploadData(buffer, { blobHTTPHeaders: { blobContentType: mimeType } })
-  return makeSasUrl(containerName, key)
+async function uploadBlob(buffer: Buffer, key: string, _mimeType: string) {
+  await saveFile(DOCS_CONTAINER, key, buffer)
+  return getFileUrl(DOCS_CONTAINER, key)
 }
 
 // ─── COMPANY LOGO UPLOAD ──────────────────────────────────────────────────────
@@ -345,68 +316,17 @@ documentsRouter.get('/migrate-html-preview', requireSuperAdmin, async (req: any,
 })
 
 // Execute: convert all HTML docs to PDF
+// NOTE: disabled — legacy Azure Blob source is gone. Any remaining
+// text/html EmployeeDocument rows predate the Railway volume migration
+// and are no longer retrievable; re-upload affected documents manually.
 documentsRouter.post('/migrate-html-to-pdf', requireSuperAdmin, async (req: any, res) => {
-  const docs = await prisma.employeeDocument.findMany({
-    where: { mimeType: 'text/html' },
-    include: { employee: { select: { name: true, employeeCode: true } } },
-  })
+  throw new AppError('Migration source (Azure Blob) no longer available. Re-upload affected documents instead.', 410)
 
-  const connStr = getConnStr()
-  const containerName = process.env.AZURE_DOCS_CONTAINER || 'emp-documents'
-  const blobClient = BlobServiceClient.fromConnectionString(connStr)
-  const container = blobClient.getContainerClient(containerName)
-
+  // eslint-disable-next-line no-unreachable
+  const docs: any[] = []
   let success = 0
   let failed = 0
   const errors: string[] = []
-
-  for (const doc of docs) {
-    try {
-      // Fetch HTML from blob
-      const blob = container.getBlockBlobClient(doc.fileKey)
-      const download = await blob.download()
-      const chunks: Buffer[] = []
-      for await (const chunk of download.readableStreamBody as any) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-      }
-      const html = Buffer.concat(chunks).toString('utf-8')
-
-      // Convert to PDF
-      const pdfBase64 = await htmlToPdfBase64(html)
-      const pdfBuffer = Buffer.from(pdfBase64, 'base64')
-
-      // Build new key (replace .html with .pdf)
-      const newKey = doc.fileKey.replace(/\.html$/, '.pdf')
-      const newFileName = doc.fileName.replace(/\.html$/, '.pdf')
-
-      // Upload PDF
-      const pdfBlob = container.getBlockBlobClient(newKey)
-      await pdfBlob.uploadData(pdfBuffer, { blobHTTPHeaders: { blobContentType: 'application/pdf' } })
-
-      // Generate new SAS URL
-      const newUrl = makeSasUrl(containerName, newKey)
-
-      // Update DB record
-      await prisma.employeeDocument.update({
-        where: { id: doc.id },
-        data: {
-          fileKey: newKey,
-          fileName: newFileName,
-          fileUrl: newUrl,
-          mimeType: 'application/pdf',
-          fileSize: pdfBuffer.length,
-        },
-      })
-
-      // Delete old HTML blob
-      await blob.delete()
-
-      success++
-    } catch (err: any) {
-      failed++
-      errors.push(`${doc.fileName} (${doc.employee?.employeeCode}): ${err?.message || 'Unknown error'}`)
-    }
-  }
 
   res.json({
     success: true,

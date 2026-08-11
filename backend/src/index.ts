@@ -37,6 +37,7 @@ import { publicRouter } from './routes/public';
 import { salaryBreakupsRouter } from './routes/salaryBreakups';
 import { tdsRouter } from './routes/tds';
 import { teamsChatRouter } from './routes/teamsChat';
+import { filesRouter } from './routes/files';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -106,6 +107,7 @@ app.use('/api/public', publicRouter);
 app.use('/api/hr/salary-breakups', salaryBreakupsRouter);
 app.use('/api/tds', tdsRouter);
 app.use('/api/teams-chat', teamsChatRouter);
+app.use('/api/files', filesRouter);
 
 // ─── ERROR HANDLER ───────────────────────────────────────────────────────────
 app.use(errorHandler);

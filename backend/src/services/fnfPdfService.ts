@@ -30,13 +30,8 @@ async function generatePDF(html: string): Promise<Buffer> {
 // ─── BLOB UPLOAD (reuses the payslips container — distinct key prefix) ───────
 
 async function uploadFnfStatement(buffer: Buffer, blobKey: string): Promise<string> {
-  const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING
-  if (!connectionString || connectionString === 'PLACEHOLDER') {
-    console.log(`[BLOB] Dev mode — would upload ${blobKey} to Azure Blob`)
-    return `/dev-fnf-statements/${blobKey}`
-  }
   const url = await uploadPayslipPdf(buffer, blobKey)
-  console.log(`[BLOB] Uploaded: ${blobKey}`)
+  console.log(`[STORAGE] Uploaded: ${blobKey}`)
   return url
 }
 
