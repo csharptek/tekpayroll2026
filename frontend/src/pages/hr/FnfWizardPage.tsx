@@ -5,7 +5,7 @@ import {
   CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle,
   RotateCcw, User, Calendar, IndianRupee, Package,
   CreditCard, Briefcase, Clock, TrendingDown, FileText,
-  Gift, Percent, BarChart3,
+  Gift, Percent, BarChart3, Plus,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -229,8 +229,10 @@ function Step2LeavesLop({ data, savedOverride, onConfirm, isConfirmed, employeeI
     <StepCard title="Leaves Taken & LOP" icon={<Calendar size={16} />} isConfirmed={isConfirmed}>
       <div className="mb-3">
         {!showAddLeave ? (
-          <button className="text-xs text-brand-600 font-medium" onClick={() => setShowAddLeave(true)}>
-            + Add missed leave
+          <button
+            className="flex items-center gap-1.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg px-3 py-2 transition-colors"
+            onClick={() => setShowAddLeave(true)}>
+            <Plus size={14} /> Add Missed Leave
           </button>
         ) : (
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
