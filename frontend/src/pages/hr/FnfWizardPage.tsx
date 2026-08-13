@@ -203,8 +203,6 @@ function Step1BaseSalary({ data, savedOverride, onConfirm, isConfirmed }: any) {
 function Step2LeavesLop({ data, savedOverride, onConfirm, isConfirmed, employeeId, onLeaveAdded }: any) {
   const d = data.leavesLop
   const [notes, setNotes] = useState(savedOverride?.notes || '')
-  const [lopOverride, setLopOverride] = useState(savedOverride?.lopAmountOverride != null ? String(savedOverride.lopAmountOverride) : '')
-  const [excessOverride, setExcessOverride] = useState(savedOverride?.excessAmountOverride != null ? String(savedOverride.excessAmountOverride) : '')
 
   const [showAddLeave, setShowAddLeave] = useState(false)
   const [newLeave, setNewLeave] = useState({ leaveKind: 'CASUAL', startDate: '', endDate: '', reasonLabel: '' })
@@ -335,29 +333,13 @@ function Step2LeavesLop({ data, savedOverride, onConfirm, isConfirmed, employeeI
         </div>
       )}
 
-      <div className="space-y-3 mb-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
-        <p className="text-xs font-semibold text-amber-700">Override (if incorrect)</p>
-        <div className="grid grid-cols-2 gap-3">
-          <OverrideField label="LOP Amount Override (₹)" originalValue={d.totalLopAmount}
-            value={lopOverride} onChange={setLopOverride} />
-          {d.excessLeaveAmount > 0 && (
-            <OverrideField label="Excess Leave Amount Override (₹)" originalValue={d.excessLeaveAmount}
-              value={excessOverride} onChange={setExcessOverride} />
-          )}
-        </div>
-      </div>
-
       <div className="flex flex-col gap-2 mb-4">
         <label className="text-xs text-slate-500">Notes</label>
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
           className="input resize-none text-sm" rows={2} placeholder="Optional notes…" />
       </div>
 
-      <Button onClick={() => onConfirm(d, {
-        lopAmountOverride:    lopOverride     ? Number(lopOverride)     : undefined,
-        excessAmountOverride: excessOverride  ? Number(excessOverride)  : undefined,
-        notes,
-      })} icon={<CheckCircle2 size={13} />} disabled={isConfirmed}>
+      <Button onClick={() => onConfirm(d, { notes })} icon={<CheckCircle2 size={13} />} disabled={isConfirmed}>
         {isConfirmed ? 'Confirmed' : 'Confirm Leaves & LOP'}
       </Button>
     </StepCard>
