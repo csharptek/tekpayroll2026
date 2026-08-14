@@ -112,8 +112,14 @@ export async function calculateFnf(
   // All intermediate months: full salary, no HYI.
   // LWD month: prorated 1st → LWD day, no HYI.
 
-  const fnfStartMonth  = new Date(resignationDate.getFullYear(), resignationDate.getMonth() + 1, 1)
+  const resignationMonthStart = monthStart(resignationDate)
   const lwdMonthStart  = monthStart(lwd)
+  // If resignation and LWD fall in the same month, that month's salary was
+  // never paid via normal payroll — include it in F&F instead of skipping it.
+  const sameMonthExit  = resignationMonthStart.getTime() === lwdMonthStart.getTime()
+  const fnfStartMonth  = sameMonthExit
+    ? resignationMonthStart
+    : new Date(resignationDate.getFullYear(), resignationDate.getMonth() + 1, 1)
 
   const cycles: FnfCycleBreakdown[] = []
   let cursor = fnfStartMonth
