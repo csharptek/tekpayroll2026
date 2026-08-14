@@ -151,6 +151,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
   // LWD panel state
   const [lwdMode, setLwdMode]   = useState<'view' | 'edit'>('view')
   const [previewLwd, setPreviewLwd] = useState(emp.lastWorkingDay?.slice(0, 10) || emp.expectedLwd?.slice(0, 10) || '')
+  const [noticeWaived, setNoticeWaived] = useState(emp.noticePeriodWaived || false)
 
   // Sync previewLwd when exitData loads
   useEffect(() => {
@@ -186,10 +187,10 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
   })
 
   const lwdMut = useMutation({
-    mutationFn: (payload: { lastWorkingDay: string; noticePeriodDays?: number }) =>
+    mutationFn: (payload: { lastWorkingDay: string; noticePeriodWaived: boolean }) =>
       exitApi.updateDetails(emp.id, {
-        lastWorkingDay:  new Date(payload.lastWorkingDay).toISOString(),
-        noticePeriodDays: payload.noticePeriodDays,
+        lastWorkingDay:     new Date(payload.lastWorkingDay).toISOString(),
+        noticePeriodWaived: payload.noticePeriodWaived,
       }),
     onSuccess: () => {
       setSuccess('Last working day updated')
@@ -334,40 +335,29 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
                       value={previewLwd}
                       onChange={v => {
                         setPreviewLwd(v)
-                        // Auto-calc notice days from resignation date
-                        if (v && (ed?.resignationDate || emp.resignationDate)) {
-                          const resDate = new Date(ed?.resignationDate || emp.resignationDate)
-                          const lwdDate = new Date(v)
-                          const days = Math.round((lwdDate.getTime() - resDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-                          setDetails(p => ({ ...p, lastWorkingDay: v, noticePeriodDays: String(Math.max(1, days)) }))
-                        } else {
-                          setDetails(p => ({ ...p, lastWorkingDay: v }))
-                        }
+                        setDetails(p => ({ ...p, lastWorkingDay: v }))
                       }}
                     />
                   </Field>
-                  <Field label="Notice Period (days)">
+                  <Field label="Required Notice Period (days)">
                     <input
                       className={inp}
                       type="number"
                       min="1"
                       value={details.noticePeriodDays}
-                      onChange={e => {
-                        const days = Number(e.target.value)
-                        setDetails(p => ({ ...p, noticePeriodDays: e.target.value }))
-                        // Recalc LWD from resignation date + notice days
-                        if (days > 0 && (ed?.resignationDate || emp.resignationDate)) {
-                          const resDate = new Date(ed?.resignationDate || emp.resignationDate)
-                          const newLwd = new Date(resDate)
-                          newLwd.setDate(newLwd.getDate() + days - 1)
-                          const v = newLwd.toISOString().slice(0, 10)
-                          setPreviewLwd(v)
-                          setDetails(p => ({ ...p, lastWorkingDay: v, noticePeriodDays: e.target.value }))
-                        }
-                      }}
+                      disabled
                     />
+                    <p className="text-xs text-slate-400 mt-1">Policy value. Edit separately if incorrect.</p>
                   </Field>
                 </div>
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={noticeWaived}
+                    onChange={e => setNoticeWaived(e.target.checked)}
+                  />
+                  Notice period waived — no shortfall recovery on F&amp;F
+                </label>
                 <div className="flex items-center gap-2 justify-end flex-wrap">
                   <Button variant="ghost" onClick={() => setLwdMode('view')}>Cancel</Button>
                   <Button
@@ -376,8 +366,8 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
                     onClick={() => {
                       setError(''); setSuccess('')
                       lwdMut.mutate({
-                        lastWorkingDay:  details.lastWorkingDay || previewLwd,
-                        noticePeriodDays: Number(details.noticePeriodDays) || undefined,
+                        lastWorkingDay:     details.lastWorkingDay || previewLwd,
+                        noticePeriodWaived: noticeWaived,
                       })
                     }}
                   >

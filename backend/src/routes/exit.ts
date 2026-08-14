@@ -205,7 +205,7 @@ exitRouter.post('/:id/initiate', requireHR, async (req, res) => {
 
 exitRouter.patch('/:id/details', requireHR, async (req, res) => {
   const me = req.user!
-  const { lastWorkingDay, exitType, noticePeriodServed, buyoutAmount, resignationDate, noticePeriodDays } = req.body
+  const { lastWorkingDay, exitType, noticePeriodServed, buyoutAmount, resignationDate, noticePeriodDays, noticePeriodWaived } = req.body
 
   const emp = await prisma.employee.findUnique({ where: { id: req.params.id } })
   if (!emp) throw new AppError('Employee not found', 404)
@@ -214,26 +214,19 @@ exitRouter.patch('/:id/details', requireHR, async (req, res) => {
   if (exitType            !== undefined) data.exitType            = exitType
   if (resignationDate     !== undefined) data.resignationDate     = new Date(resignationDate)
   if (noticePeriodServed  !== undefined) data.noticePeriodServed  = Boolean(noticePeriodServed)
+  if (noticePeriodWaived  !== undefined) data.noticePeriodWaived  = Boolean(noticePeriodWaived)
   if (buyoutAmount        !== undefined) data.buyoutAmount        = buyoutAmount != null ? Number(buyoutAmount) : null
 
-  // If noticePeriodDays changed, recalculate expectedLwd from resignationDate
+  // noticePeriodDays is the POLICY requirement — only changes when explicitly edited
+  // via its own field. Never derived from LWD changes.
   if (noticePeriodDays !== undefined) {
     data.noticePeriodDays = Number(noticePeriodDays)
-    const resDate = data.resignationDate || emp.resignationDate
-    if (resDate) {
-      data.expectedLwd = addDays(new Date(resDate), Number(noticePeriodDays) - 1)
-      // If no explicit LWD override, sync lastWorkingDay to new expectedLwd
-      if (lastWorkingDay === undefined) {
-        data.lastWorkingDay = data.expectedLwd
-      }
-    }
   }
 
-  // Explicit LWD override (e.g. "Confirm LWD" button with custom date)
+  // LWD is independent of noticePeriodDays — changing one never touches the other.
   if (lastWorkingDay !== undefined) {
     data.lastWorkingDay = new Date(lastWorkingDay)
-    // Also keep expectedLwd in sync
-    data.expectedLwd = new Date(lastWorkingDay)
+    data.expectedLwd    = new Date(lastWorkingDay)
   }
 
   await prisma.employee.update({ where: { id: req.params.id }, data })

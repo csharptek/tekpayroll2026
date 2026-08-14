@@ -176,6 +176,7 @@ model Employee {
   noticePeriodDays        Int?
   expectedLwd             DateTime?
   noticePeriodServed      Boolean   @default(false)
+  noticePeriodWaived      Boolean   @default(false)
   buyoutAmount            Decimal?  @db.Decimal(10, 2)
 
   // ─── NEW SALARY STRUCTURE (v2) ───────────────────────────────────────────

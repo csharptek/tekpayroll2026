@@ -121,7 +121,8 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
   // Notice recovery calculation
   const requiredNoticeDays = employee.noticePeriodDays || 0
   const actualNoticeDays = calc.noticePeriodDays
-  const shortfallDays = Math.max(0, requiredNoticeDays - actualNoticeDays)
+  const noticeWaived = employee.noticePeriodWaived
+  const shortfallDays = noticeWaived ? 0 : Math.max(0, requiredNoticeDays - actualNoticeDays)
   let noticeRecoveryAmount = 0
   if (shortfallDays > 0 && salarySnap) {
     const grossMonthly = Number(salarySnap.grandTotalMonthly)
@@ -266,6 +267,7 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
         recoveryAmount:       noticeRecoveryAmount,
         buyoutAmount:         Number(employee.buyoutAmount || 0),
         noticePeriodServed:   employee.noticePeriodServed,
+        noticePeriodWaived:   noticeWaived,
       },
       salaryPaid: {
         entries: paidCycleEntries.map(e => ({
@@ -348,6 +350,14 @@ fnfWizardRouter.post('/:employeeId/step/:stepKey/confirm', async (req, res) => {
       confirmedBy:  req.user!.id,
     },
   })
+
+  // Notice Recovery step: persist waive toggle to employee record
+  if (stepKey === 'NOTICE_RECOVERY' && overrideData && typeof overrideData.noticePeriodWaived === 'boolean') {
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data:  { noticePeriodWaived: overrideData.noticePeriodWaived },
+    })
+  }
 
   // Advance currentStep to next
   const currentIdx = WIZARD_STEPS.findIndex(s => s.key === stepKey)

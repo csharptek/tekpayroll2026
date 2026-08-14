@@ -697,6 +697,11 @@ function Step7Assets({ data, savedOverride, onConfirm, isConfirmed }: any) {
 
 function Step8NoticeRecovery({ data, savedOverride, onConfirm, isConfirmed }: any) {
   const d = data.noticeRecovery
+  const [waived, setWaived] = useState(
+    savedOverride?.noticePeriodWaived ?? d.noticePeriodWaived ?? false
+  )
+  const effectiveShortfall = waived ? 0 : d.shortfallDays
+  const effectiveRecovery  = waived ? 0 : d.recoveryAmount
   const [overrideAmt, setOverrideAmt] = useState(
     savedOverride?.recoveryAmount != null ? String(savedOverride.recoveryAmount) : ''
   )
@@ -705,12 +710,12 @@ function Step8NoticeRecovery({ data, savedOverride, onConfirm, isConfirmed }: an
   return (
     <StepCard title="Notice Period Recovery" icon={<Clock size={16} />} isConfirmed={isConfirmed}>
       <div className="space-y-1 mb-4">
-        <DataRow label="Required Notice" value={`${d.requiredNoticeDays} days`} />
+        <DataRow label="Required Notice (policy)" value={`${d.requiredNoticeDays} days`} />
         <DataRow label="Actual Notice Served" value={`${d.actualNoticeDays} days`} />
-        <DataRow label="Shortfall" value={`${d.shortfallDays} days`}
-          highlight={d.shortfallDays > 0 ? 'red' : undefined} />
-        {d.shortfallDays > 0 && (
-          <DataRow label="Recovery Amount" value={fmt(d.recoveryAmount)} highlight="red" />
+        <DataRow label="Shortfall" value={`${effectiveShortfall} days`}
+          highlight={effectiveShortfall > 0 ? 'red' : undefined} />
+        {effectiveShortfall > 0 && (
+          <DataRow label="Recovery Amount" value={fmt(effectiveRecovery)} highlight="red" />
         )}
         {d.buyoutAmount > 0 && (
           <DataRow label="Buyout Amount (already paid by employee)" value={fmt(d.buyoutAmount)} />
@@ -721,12 +726,20 @@ function Step8NoticeRecovery({ data, savedOverride, onConfirm, isConfirmed }: an
             <span className="text-xs text-emerald-600">Notice period marked as served</span>
           </div>
         )}
-        {d.shortfallDays === 0 && (
+        {waived && (
+          <p className="text-sm text-emerald-600 font-medium pt-2">Notice period waived. No recovery.</p>
+        )}
+        {!waived && effectiveShortfall === 0 && (
           <p className="text-sm text-emerald-600 font-medium pt-2">No recovery needed.</p>
         )}
       </div>
 
-      {d.shortfallDays > 0 && (
+      <label className="flex items-center gap-2 text-sm text-slate-700 mb-3">
+        <input type="checkbox" checked={waived} onChange={e => setWaived(e.target.checked)} />
+        Waive notice period recovery for this settlement
+      </label>
+
+      {!waived && d.shortfallDays > 0 && (
         <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl mb-4">
           <p className="text-xs font-semibold text-amber-700 mb-2">Override</p>
           <OverrideField label="Recovery Amount Override (₹)" originalValue={d.recoveryAmount}
@@ -741,7 +754,8 @@ function Step8NoticeRecovery({ data, savedOverride, onConfirm, isConfirmed }: an
       </div>
 
       <Button onClick={() => onConfirm(d, {
-        recoveryAmount: overrideAmt ? Number(overrideAmt) : d.recoveryAmount,
+        recoveryAmount:     waived ? 0 : (overrideAmt ? Number(overrideAmt) : d.recoveryAmount),
+        noticePeriodWaived: waived,
         notes,
       })} icon={<CheckCircle2 size={13} />} disabled={isConfirmed}>
         {isConfirmed ? 'Confirmed' : 'Confirm Notice Recovery'}
