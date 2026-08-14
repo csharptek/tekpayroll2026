@@ -125,10 +125,12 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
   const noticeWaived = employee.noticePeriodWaived
   const shortfallDays = noticeWaived ? 0 : Math.max(0, requiredNoticeDays - actualNoticeDays)
   let noticeRecoveryAmount = 0
+  let noticeGrossMonthly = 0
+  let noticeDaysInMonth = 0
   if (shortfallDays > 0 && salarySnap) {
-    const grossMonthly = Number(salarySnap.grandTotalMonthly)
-    const daysInMonth = new Date(lwd.getFullYear(), lwd.getMonth() + 1, 0).getDate()
-    noticeRecoveryAmount = Math.round((grossMonthly / daysInMonth) * shortfallDays * 100) / 100
+    noticeGrossMonthly = Number(salarySnap.grandTotalMonthly)
+    noticeDaysInMonth = new Date(lwd.getFullYear(), lwd.getMonth() + 1, 0).getDate()
+    noticeRecoveryAmount = Math.round((noticeGrossMonthly / noticeDaysInMonth) * shortfallDays * 100) / 100
   }
 
   // Salary already paid via payroll cycles from resignation month onward.
@@ -253,6 +255,8 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
         actualNoticeDays:     actualNoticeDays,
         shortfallDays:        shortfallDays,
         recoveryAmount:       noticeRecoveryAmount,
+        grossMonthly:         noticeGrossMonthly,
+        daysInMonth:          noticeDaysInMonth,
         buyoutAmount:         Number(employee.buyoutAmount || 0),
         noticePeriodServed:   employee.noticePeriodServed,
         noticePeriodWaived:   noticeWaived,

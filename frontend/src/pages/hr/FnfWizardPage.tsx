@@ -749,6 +749,14 @@ function Step8NoticeRecovery({ data, savedOverride, onConfirm, isConfirmed }: an
         )}
       </div>
 
+      {!waived && d.shortfallDays > 0 && (
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl mb-4 text-xs text-slate-600 space-y-1">
+          <p className="font-semibold text-slate-700">Calculation</p>
+          <p>Recovery = (Gross Monthly ÷ Days in LWD Month) × Shortfall Days</p>
+          <p>Recovery = ({fmt(d.grossMonthly)} ÷ {d.daysInMonth}) × {d.shortfallDays} days = {fmt(d.recoveryAmount)}</p>
+        </div>
+      )}
+
       <label className="flex items-center gap-2 text-sm text-slate-700 mb-3">
         <input type="checkbox" checked={waived} onChange={e => setWaived(e.target.checked)} />
         Waive notice period recovery for this settlement
