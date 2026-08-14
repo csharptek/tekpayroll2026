@@ -252,7 +252,9 @@ export async function calculateFnf(
   // Resignation month is paid via normal payroll; F&F (LWD month) has no payroll run, so HYI
   // for that month was never paid and must not be recovered.
   const resignMonthAbs = resignationDate.getFullYear() * 12 + resignationDate.getMonth()
-  const lastPaidAbs    = resignMonthAbs
+  // If resignation and LWD are in the same month, that month's HYI was never
+  // paid via normal payroll (it's zeroed in the F&F cycle above) — don't recover it.
+  const lastPaidAbs    = sameMonthExit ? resignMonthAbs - 1 : resignMonthAbs
   const recoveryMonths = lastPaidAbs - cycleStartAbs + 1
 
   // Still needed below for excess-leave valuation

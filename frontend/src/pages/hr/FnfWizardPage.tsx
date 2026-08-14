@@ -363,7 +363,7 @@ function Step3ProratedSalary({ data, savedOverride, onConfirm, isConfirmed }: an
             <tr className="border-b border-slate-100 text-slate-400">
               <th className="text-left pb-1.5 font-medium">Month</th>
               <th className="text-right pb-1.5 font-medium">Days (Paid/Total)</th>
-              <th className="text-right pb-1.5 font-medium">Gross</th>
+              <th className="text-right pb-1.5 font-medium">Gross (excl. HYI)</th>
               <th className="text-right pb-1.5 font-medium">Prorated</th>
               <th className="text-right pb-1.5 font-medium">LOP</th>
             </tr>
@@ -397,6 +397,15 @@ function Step3ProratedSalary({ data, savedOverride, onConfirm, isConfirmed }: an
         <DataRow label="Notice Period" value={`${d.noticePeriodDays} days (${d.noticePeriodMonths} month(s))`} />
         <p className="text-[11px] text-slate-400 pt-1">
           Resignation month salary paid via normal payroll. F&F covers the months shown above.
+        </p>
+      </div>
+
+      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl mb-4 text-xs text-slate-600 space-y-1">
+        <p className="font-semibold text-slate-700">Calculation</p>
+        <p>Full month → Prorated Salary = Gross Monthly (no proration)</p>
+        <p>LWD month → Prorated Salary = (Gross Monthly ÷ Total Days in Month) × Paid Days</p>
+        <p className="text-amber-700 font-medium pt-1">
+          HYI is excluded from Gross Monthly before this calculation — it is never part of pro-rated salary.
         </p>
       </div>
 

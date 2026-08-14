@@ -11,7 +11,7 @@ fnfRouter.use(authenticate, requireSuperAdmin)
 
 fnfRouter.get('/', async (_req, res) => {
   const settlements = await prisma.fnfSettlement.findMany({
-    include: { employee: { select: { id: true, name: true, employeeCode: true, department: true } } },
+    include: { employee: { select: { id: true, name: true, employeeCode: true, department: true, email: true, personalEmail: true } } },
     orderBy: { createdAt: 'desc' },
   })
   res.json({ success: true, data: settlements })
@@ -199,6 +199,57 @@ fnfRouter.put('/:id', async (req, res) => {
   })
 
   res.json({ success: true, data: updated })
+})
+
+// Email F&F statement PDF to employee — official / personal / custom address
+fnfRouter.post('/:id/email', async (req, res) => {
+  const settlement = await prisma.fnfSettlement.findUnique({
+    where: { id: req.params.id },
+    include: { employee: true },
+  })
+  if (!settlement) throw new AppError('Settlement not found', 404)
+  if (!['APPROVED', 'SETTLED'].includes(settlement.status)) {
+    throw new AppError('Settlement must be APPROVED before emailing', 400)
+  }
+  if (!settlement.pdfKey) throw new AppError('Statement PDF not generated yet', 400)
+
+  const to = (req.body.email || '').trim()
+  if (!to || !/^\S+@\S+\.\S+$/.test(to)) throw new AppError('Valid email is required', 400)
+
+  const { downloadPayslipPdf } = await import('../utils/payslipBlob')
+  const { sendEmailWithAttachment } = await import('../services/emailService')
+
+  const buffer   = await downloadPayslipPdf(settlement.pdfKey)
+  const filename = settlement.pdfKey.split('/').pop() || `FNF-${settlement.employee.employeeCode}.pdf`
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:540px;margin:0 auto;padding:24px;">
+      <div style="border-bottom:2px solid #1f4e79;padding-bottom:16px;margin-bottom:24px;">
+        <h2 style="color:#1f4e79;margin:0;">TEKONE</h2>
+      </div>
+      <p style="color:#374151;">Dear <strong>${settlement.employee.name}</strong>,</p>
+      <p style="color:#374151;">Please find attached your Full &amp; Final Settlement statement.</p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+      <p style="color:#9ca3af;font-size:12px;margin:0;">Automated email — please do not reply. TEKONE System.</p>
+    </div>`
+
+  await sendEmailWithAttachment(
+    to,
+    `Full & Final Settlement Statement — ${settlement.employee.name}`,
+    html,
+    filename,
+    buffer.toString('base64'),
+  )
+
+  await createAuditLog({
+    user: req.user!,
+    action: AuditAction.FNF_APPROVE,
+    recordId: settlement.id,
+    targetEmployeeId: settlement.employeeId,
+    description: `F&F statement emailed to ${to}`,
+  })
+
+  res.json({ success: true, data: { sentTo: to } })
 })
 
 // Mark as SETTLED (payment done)

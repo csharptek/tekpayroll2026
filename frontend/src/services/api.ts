@@ -230,6 +230,7 @@ export const fnfApi = {
   settle:          (id: string, notes?: string) => api.post(`/api/fnf/${id}/settle`, { notes }),
   update:          (id: string, data: any) => api.put(`/api/fnf/${id}`, data),
   generatePdf:     (id: string) => api.post(`/api/fnf/${id}/generate-pdf`),
+  emailStatement:  (id: string, email: string) => api.post(`/api/fnf/${id}/email`, { email }),
   wizard: {
     getSession:   (empId: string) => api.get(`/api/fnf/wizard/${empId}`),
     getStepData:  (empId: string, hyiOverrides?: Record<string, number>) =>

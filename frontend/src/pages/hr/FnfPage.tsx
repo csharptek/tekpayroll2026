@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   GitMerge, Calculator, CheckCircle2, Eye,
-  Calendar, AlertTriangle, Banknote, IndianRupee, FileText, Wand2,
+  Calendar, AlertTriangle, Banknote, IndianRupee, FileText, Wand2, Mail,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { fnfApi } from '../../services/api'
@@ -486,6 +486,61 @@ function StatementButton({ settlement }: { settlement: any }) {
   )
 }
 
+// ─── EMAIL STATEMENT MODAL ─────────────────────────────────────────────────
+
+function EmailStatementModal({ settlement, open, onClose }: { settlement: any; open: boolean; onClose: () => void }) {
+  const [choice, setChoice] = useState<'official' | 'personal' | 'custom'>('official')
+  const [custom, setCustom] = useState('')
+
+  const officialEmail = settlement?.employee?.email || ''
+  const personalEmail = settlement?.employee?.personalEmail || ''
+  const to = choice === 'official' ? officialEmail : choice === 'personal' ? personalEmail : custom
+
+  const sendMut = useMutation({
+    mutationFn: () => fnfApi.emailStatement(settlement.id, to),
+    onSuccess: () => onClose(),
+  })
+
+  if (!settlement) return null
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Email Statement — ${settlement.employee?.name}`}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button loading={sendMut.isPending} disabled={!to} onClick={() => sendMut.mutate()}
+            icon={<Mail size={13} />}>
+            Send
+          </Button>
+        </div>
+      }>
+      <div className="space-y-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="radio" checked={choice === 'official'} onChange={() => setChoice('official')}
+            disabled={!officialEmail} />
+          Official — {officialEmail || 'not set'}
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="radio" checked={choice === 'personal'} onChange={() => setChoice('personal')}
+            disabled={!personalEmail} />
+          Personal — {personalEmail || 'not set'}
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="radio" checked={choice === 'custom'} onChange={() => setChoice('custom')} />
+          Custom email
+        </label>
+        {choice === 'custom' && (
+          <input type="email" placeholder="name@example.com" value={custom}
+            onChange={e => setCustom(e.target.value)}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+        )}
+        {sendMut.isError && <Alert type="error" message="Failed to send email." />}
+        {sendMut.isSuccess && <Alert type="success" message="Statement emailed." />}
+      </div>
+    </Modal>
+  )
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function FnfPage() {
@@ -494,6 +549,7 @@ export default function FnfPage() {
   const [approveTarget, setApproveTarget] = useState<any>(null)
   const [settleTarget, setSettleTarget]   = useState<any>(null)
   const [viewTarget, setViewTarget]       = useState<any>(null)
+  const [emailTarget, setEmailTarget]     = useState<any>(null)
 
   const { data: settlements, isLoading: loadingSettlements } = useQuery({
     queryKey: ['fnf-list'],
@@ -642,6 +698,9 @@ export default function FnfPage() {
                   <Td>
                     <div className="flex gap-2">
                       <StatementButton settlement={s} />
+                      <Button variant="secondary" size="sm" icon={<Mail size={12} />} onClick={() => setEmailTarget(s)}>
+                        Email
+                      </Button>
                       <Button size="sm" icon={<Banknote size={12} />} onClick={() => setSettleTarget(s)}>
                         Mark Settled
                       </Button>
@@ -685,9 +744,14 @@ export default function FnfPage() {
                   <Td className="text-xs text-slate-400">{s.notes || '—'}</Td>
                   <Td><StatementButton settlement={s} /></Td>
                   <Td>
-                    <Button variant="secondary" size="sm" icon={<Eye size={12} />} onClick={() => setViewTarget(s)}>
-                      View
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" size="sm" icon={<Eye size={12} />} onClick={() => setViewTarget(s)}>
+                        View
+                      </Button>
+                      <Button variant="secondary" size="sm" icon={<Mail size={12} />} onClick={() => setEmailTarget(s)}>
+                        Email
+                      </Button>
+                    </div>
                   </Td>
                 </Tr>
               ))}
@@ -708,6 +772,7 @@ export default function FnfPage() {
       <ApproveModal settlement={approveTarget} open={!!approveTarget} onClose={() => setApproveTarget(null)} />
       <ApproveModal settlement={viewTarget} open={!!viewTarget} onClose={() => setViewTarget(null)} viewOnly />
       <SettleModal  settlement={settleTarget}  open={!!settleTarget}  onClose={() => setSettleTarget(null)} />
+      <EmailStatementModal settlement={emailTarget} open={!!emailTarget} onClose={() => setEmailTarget(null)} />
     </div>
   )
 }
