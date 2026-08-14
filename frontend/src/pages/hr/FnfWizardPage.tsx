@@ -1146,7 +1146,6 @@ function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, c
   const tdsStep        = confirmedSteps['TDS']
   const bonusStep      = confirmedSteps['BONUS_PRORATION']
   const hyiStep        = confirmedSteps['HYI']
-  const salaryPaidStep = confirmedSteps['SALARY_PAID']
 
   const salaryAmount    = proratedStep?.totalProratedSalary ?? d.proratedSalary.totalProratedSalary
   const reimbursements  = reimStep?.total ?? d.reimbursements.total
@@ -1159,13 +1158,12 @@ function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, c
   const noticeRecovery  = noticeStep?.recoveryAmount ?? 0
   const bonusRecovery   = bonusStep?.bonusRecovery   ?? 0
   const bonusDue        = bonusStep?.bonusDue        ?? 0
-  const salaryAlreadyPaid = salaryPaidStep?.totalPaid ?? 0
   const lopAmount       = d.leavesLop.totalLopAmount
   const excessLeave     = d.leavesLop.excessLeaveAmount || 0
 
   const totalAdditions  = salaryAmount + reimbursements + bonusDue
   const totalDeductions = pfAmount + esiAmount + ptAmount + tdsAmount +
-    loanOutstanding + hyiRecovery + lopAmount + excessLeave + noticeRecovery + bonusRecovery + salaryAlreadyPaid
+    loanOutstanding + hyiRecovery + lopAmount + excessLeave + noticeRecovery + bonusRecovery
   const net = totalAdditions - totalDeductions
   const isNeg = net < 0
 
@@ -1183,7 +1181,6 @@ function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, c
     ...(excessLeave > 0 ? [{ label: 'Excess Leave Recovery', amount: excessLeave, type: 'deduction' as const }] : []),
     ...(noticeRecovery > 0 ? [{ label: 'Notice Period Recovery', amount: noticeRecovery, type: 'deduction' as const }] : []),
     ...(bonusRecovery  > 0 ? [{ label: 'Bonus Recovery', amount: bonusRecovery, type: 'deduction' as const }] : []),
-    ...(salaryAlreadyPaid > 0 ? [{ label: 'Salary Already Paid', amount: salaryAlreadyPaid, type: 'deduction' as const }] : []),
   ]
 
   return (

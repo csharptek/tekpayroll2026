@@ -242,8 +242,12 @@ export async function calculateFnf(
   const resignSlab     = getHyiSlab(resignationDate.getMonth())
   const slabStartMonth = resignSlab === 0 ? 0 : 6
   const cycleStartAbs  = resignationDate.getFullYear() * 12 + slabStartMonth
-  const lwdAbs          = lwd.getFullYear() * 12 + lwd.getMonth()
-  const recoveryMonths = lwdAbs - cycleStartAbs + 1
+  // Recovery only covers months where HYI was actually disbursed via a completed payroll cycle.
+  // Resignation month is paid via normal payroll; F&F (LWD month) has no payroll run, so HYI
+  // for that month was never paid and must not be recovered.
+  const resignMonthAbs = resignationDate.getFullYear() * 12 + resignationDate.getMonth()
+  const lastPaidAbs    = resignMonthAbs
+  const recoveryMonths = lastPaidAbs - cycleStartAbs + 1
 
   // Still needed below for excess-leave valuation
   const salaryForHyi = await getSalaryInputForDate(employeeId, resignationDate)

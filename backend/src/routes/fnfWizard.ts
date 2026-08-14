@@ -391,7 +391,6 @@ fnfWizardRouter.post('/:employeeId/complete', async (req, res) => {
   const noticeStep     = getStep('NOTICE_RECOVERY')
   const tdsStep        = getStep('TDS')
   const bonusStep      = getStep('BONUS_PRORATION')
-  const salaryPaidStep = getStep('SALARY_PAID')
 
   const salaryAmount      = proratedStep?.override?.totalProratedSalary ?? calc.proratedSalary
   const reimbursements    = reimStep?.override?.total ?? calc.pendingReimbursements
@@ -404,8 +403,10 @@ fnfWizardRouter.post('/:employeeId/complete', async (req, res) => {
   const noticeRecovery    = noticeStep?.override?.recoveryAmount ?? 0
   const bonusRecovery     = bonusStep?.override?.bonusRecovery ?? 0
   const bonusDue          = bonusStep?.override?.bonusDue ?? 0
-  const salaryAlreadyPaid = salaryPaidStep?.override?.totalPaid ?? 0
-  const otherDeductions   = noticeRecovery + bonusRecovery + salaryAlreadyPaid
+  // Salary Already Paid (e.g. resignation-month salary via normal payroll) is informational
+  // only, shown on step 9 for reference. Pro-rated salary already excludes that period, so
+  // this must NOT reduce F&F payable — intentionally not included below.
+  const otherDeductions   = noticeRecovery + bonusRecovery
 
   const lopDays           = proratedStep?.override?.totalLopDays ?? calc.lopDays
   const lopAmount         = proratedStep?.override?.totalLopAmount ?? calc.lopAmount
@@ -430,7 +431,6 @@ fnfWizardRouter.post('/:employeeId/complete', async (req, res) => {
     ...(excessLeaveAmount > 0 ? [{ label: 'Excess Leave Recovery', amount: excessLeaveAmount, type: 'deduction' as const }] : []),
     ...(noticeRecovery > 0 ? [{ label: 'Notice Period Recovery', amount: noticeRecovery, type: 'deduction' as const }] : []),
     ...(bonusRecovery  > 0 ? [{ label: 'Bonus Recovery', amount: bonusRecovery, type: 'deduction' as const }] : []),
-    ...(salaryAlreadyPaid > 0 ? [{ label: 'Salary Already Paid', amount: salaryAlreadyPaid, type: 'deduction' as const }] : []),
   ]
 
   const totalSalaryDays = calc.salaryDays
