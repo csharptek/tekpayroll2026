@@ -137,7 +137,7 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
       employeeId,
       cycle: {
         cycleStart: { gte: resignMonthStart },
-        status: { in: ['LOCKED', 'DISBURSED', 'PROCESSED', 'COMPLETED'] },
+        status: { in: ['LOCKED', 'DISBURSED'] },
       },
     },
     include: {
