@@ -150,11 +150,12 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
 
   // Bonus proration
   const annualBonus = salarySnap ? Number(salarySnap.annualBonus) : 0
-  const resignMonth = resignationDate.getMonth() // 0-indexed
   const currentYear = resignationDate.getFullYear()
-  // Bonus paid in March (month index 2). If resigned before March, check if earned
-  const bonusPeriodStart = new Date(currentYear, 3, 1) // April = start of HYI year
-  const bonusPeriodEnd = new Date(currentYear + 1, 2, 31) // March next year
+  const resignMonth = resignationDate.getMonth() // 0-indexed, 0=Jan
+  // Bonus year runs April to March. If resigned Jan-Mar, that period started in the PREVIOUS calendar year.
+  const bonusYearStartYear = resignMonth < 3 ? currentYear - 1 : currentYear
+  const bonusPeriodStart = new Date(bonusYearStartYear, 3, 1) // April = start of bonus year
+  const bonusPeriodEnd = new Date(bonusYearStartYear + 1, 2, 31) // March next year
   const monthsInBonusPeriod = 12
   const monthsWorked = Math.max(0,
     (resignationDate.getFullYear() * 12 + resignationDate.getMonth()) -
