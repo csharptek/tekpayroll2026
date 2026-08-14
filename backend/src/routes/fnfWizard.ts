@@ -148,30 +148,14 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
     orderBy: { createdAt: 'asc' },
   })
 
-  // Bonus proration
+  // Bonus proration — bonus year runs April to March, paid once in March for the completed prior year.
+  // Resigning ANY time during a running bonus year forfeits that year's bonus entirely (like HYI).
   const annualBonus = salarySnap ? Number(salarySnap.annualBonus) : 0
-  const currentYear = resignationDate.getFullYear()
-  const resignMonth = resignationDate.getMonth() // 0-indexed, 0=Jan
-  // Bonus year runs April to March. If resigned Jan-Mar, that period started in the PREVIOUS calendar year.
-  const bonusYearStartYear = resignMonth < 3 ? currentYear - 1 : currentYear
-  const bonusPeriodStart = new Date(bonusYearStartYear, 3, 1) // April = start of bonus year
-  const bonusPeriodEnd = new Date(bonusYearStartYear + 1, 2, 31) // March next year
-  const monthsInBonusPeriod = 12
-  const monthsWorked = Math.max(0,
-    (resignationDate.getFullYear() * 12 + resignationDate.getMonth()) -
-    (bonusPeriodStart.getFullYear() * 12 + bonusPeriodStart.getMonth()) + 1
-  )
-  const proratedBonus = annualBonus > 0
-    ? Math.round((annualBonus / monthsInBonusPeriod) * Math.min(monthsWorked, monthsInBonusPeriod) * 100) / 100
-    : 0
-
-  // Check if bonus was already paid in this period via payroll
-  const bonusAlreadyPaid = paidCycleEntries
-    .filter(e => e.isBolusMonth)
-    .reduce((s, e) => s + Number(e.annualBonus), 0)
-
-  const bonusRecovery = Math.max(0, bonusAlreadyPaid - proratedBonus)
-  const bonusDue = Math.max(0, proratedBonus - bonusAlreadyPaid)
+  const proratedBonus = 0
+  const bonusAlreadyPaid = 0
+  const bonusRecovery = 0
+  const bonusDue = 0
+  const bonusForfeited = annualBonus > 0
 
   res.json({
     success: true,
@@ -303,8 +287,7 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
         bonusAlreadyPaid,
         bonusRecovery,
         bonusDue,
-        monthsWorked: Math.min(monthsWorked, monthsInBonusPeriod),
-        monthsInPeriod: monthsInBonusPeriod,
+        bonusForfeited,
       },
       tds: {
         cycles: calc.cycles.map(c => ({

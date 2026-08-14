@@ -992,7 +992,6 @@ function Step11BonusProration({ data, savedOverride, onConfirm, isConfirmed }: a
     <StepCard title="Bonus Pro-ration" icon={<Gift size={16} />} isConfirmed={isConfirmed}>
       <div className="space-y-1 mb-4">
         <DataRow label="Annual Bonus (CTC)" value={fmt(d.annualBonus)} />
-        <DataRow label="Months Worked / Period" value={`${d.monthsWorked} / ${d.monthsInPeriod}`} />
         <DataRow label="Prorated Bonus (Earned)" value={fmt(d.proratedBonus)} />
         <DataRow label="Bonus Already Paid via Payroll" value={fmt(d.bonusAlreadyPaid)} />
         {d.bonusRecovery > 0 && (
@@ -1001,7 +1000,12 @@ function Step11BonusProration({ data, savedOverride, onConfirm, isConfirmed }: a
         {d.bonusDue > 0 && (
           <DataRow label="Bonus Still Due (Earned > Paid)" value={fmt(d.bonusDue)} highlight="green" />
         )}
-        {d.bonusRecovery === 0 && d.bonusDue === 0 && (
+        {d.bonusForfeited && (
+          <p className="text-sm text-amber-600 font-medium pt-2">
+            Resignation falls within the running bonus year (Apr–Mar). Bonus for this cycle is forfeited — ₹0.
+          </p>
+        )}
+        {!d.bonusForfeited && d.bonusRecovery === 0 && d.bonusDue === 0 && (
           <p className="text-sm text-slate-400 pt-2">Bonus already settled correctly. No adjustment needed.</p>
         )}
       </div>
