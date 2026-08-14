@@ -11,7 +11,14 @@ fnfRouter.use(authenticate, requireSuperAdmin)
 
 fnfRouter.get('/', async (_req, res) => {
   const settlements = await prisma.fnfSettlement.findMany({
-    include: { employee: { select: { id: true, name: true, employeeCode: true, department: true, email: true, personalEmail: true } } },
+    include: {
+      employee: {
+        select: {
+          id: true, name: true, employeeCode: true, department: true, email: true,
+          profile: { select: { personalEmail: true } },
+        },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   })
   res.json({ success: true, data: settlements })

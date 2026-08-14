@@ -493,7 +493,7 @@ function EmailStatementModal({ settlement, open, onClose }: { settlement: any; o
   const [custom, setCustom] = useState('')
 
   const officialEmail = settlement?.employee?.email || ''
-  const personalEmail = settlement?.employee?.personalEmail || ''
+  const personalEmail = settlement?.employee?.profile?.personalEmail || ''
   const to = choice === 'official' ? officialEmail : choice === 'personal' ? personalEmail : custom
 
   const sendMut = useMutation({
