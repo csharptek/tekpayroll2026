@@ -5,7 +5,7 @@ import {
   CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle,
   RotateCcw, User, Calendar, IndianRupee, Package,
   CreditCard, Briefcase, Clock, TrendingDown, FileText,
-  Gift, Percent, BarChart3, Plus,
+  Gift, Percent, BarChart3, Plus, Trash2,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -766,53 +766,121 @@ function Step8NoticeRecovery({ data, savedOverride, onConfirm, isConfirmed }: an
 
 function Step9SalaryPaid({ data, savedOverride, onConfirm, isConfirmed }: any) {
   const d = data.salaryPaid
+
+  type Row = {
+    key: string
+    cycleMonth: string
+    netSalary: number
+    source: 'PAYROLL' | 'MANUAL'
+    note: string
+    included: boolean
+  }
+
+  const initRows: Row[] = (() => {
+    if (savedOverride?.rows) return savedOverride.rows
+    return d.entries.map((e: any) => ({
+      key: `payroll-${e.entryId}`,
+      cycleMonth: e.cycleMonth,
+      netSalary: e.netSalary,
+      source: 'PAYROLL' as const,
+      note: '',
+      included: true,
+    }))
+  })()
+
+  const [rows, setRows] = useState<Row[]>(initRows)
   const [notes, setNotes] = useState(savedOverride?.notes || '')
+  const [newMonth, setNewMonth] = useState('')
+  const [newAmount, setNewAmount] = useState('')
+  const [newNote, setNewNote] = useState('')
+
+  const total = rows.filter(r => r.included).reduce((s, r) => s + Number(r.netSalary || 0), 0)
+
+  const addManualRow = () => {
+    if (!newMonth || !newAmount) return
+    setRows(p => [...p, {
+      key: `manual-${Date.now()}`,
+      cycleMonth: newMonth,
+      netSalary: Number(newAmount),
+      source: 'MANUAL',
+      note: newNote,
+      included: true,
+    }])
+    setNewMonth(''); setNewAmount(''); setNewNote('')
+  }
+
+  const removeRow = (key: string) => setRows(p => p.filter(r => r.key !== key))
+  const toggleRow = (key: string) => setRows(p => p.map(r => r.key === key ? { ...r, included: !r.included } : r))
+  const updateAmount = (key: string, val: string) =>
+    setRows(p => p.map(r => r.key === key ? { ...r, netSalary: Number(val) || 0 } : r))
 
   return (
     <StepCard title="Salary Already Paid via Payroll" icon={<TrendingDown size={16} />} isConfirmed={isConfirmed}>
-      {d.entries.length === 0 ? (
-        <p className="text-sm text-slate-400 mb-4">No payroll cycles processed after resignation date.</p>
-      ) : (
-        <>
-          <Alert type="info"
-            message="These are salaries already paid via normal payroll cycles after resignation. Shown for reference — no deduction here; accounted separately."
-            className="mb-4" />
-          <div className="mb-4 overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-400">
-                  <th className="text-left pb-1.5 font-medium">Cycle</th>
-                  <th className="text-right pb-1.5 font-medium">Days</th>
-                  <th className="text-right pb-1.5 font-medium">Gross</th>
-                  <th className="text-right pb-1.5 font-medium">LOP</th>
-                  <th className="text-right pb-1.5 font-medium">Net Paid</th>
+      <Alert type="info"
+        message="Salaries already paid to the employee post-resignation. Uncheck to exclude, edit amount if wrong, or add months manually. This total is deducted from Final Summary."
+        className="mb-4" />
+
+      {rows.length > 0 && (
+        <div className="mb-4 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-100 text-slate-400">
+                <th className="text-left pb-1.5 font-medium w-8"></th>
+                <th className="text-left pb-1.5 font-medium">Month</th>
+                <th className="text-left pb-1.5 font-medium">Source</th>
+                <th className="text-right pb-1.5 font-medium">Amount</th>
+                <th className="text-left pb-1.5 font-medium">Note</th>
+                <th className="pb-1.5 w-8"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.key} className={`border-b border-slate-50 ${!r.included ? 'opacity-40' : ''}`}>
+                  <td className="py-1.5">
+                    <input type="checkbox" checked={r.included} onChange={() => toggleRow(r.key)} />
+                  </td>
+                  <td className="py-1.5 font-medium text-slate-700">{r.cycleMonth}</td>
+                  <td className="py-1.5 text-slate-500">{r.source === 'PAYROLL' ? 'Payroll' : 'Manual'}</td>
+                  <td className="py-1.5 text-right">
+                    <input
+                      type="number"
+                      className="input text-xs text-right w-24 py-1"
+                      value={r.netSalary}
+                      onChange={e => updateAmount(r.key, e.target.value)}
+                    />
+                  </td>
+                  <td className="py-1.5 text-slate-500">{r.note || '—'}</td>
+                  <td className="py-1.5 text-right">
+                    <button onClick={() => removeRow(r.key)} className="text-red-400 hover:text-red-600">
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {d.entries.map((e: any, i: number) => (
-                  <tr key={i} className="border-b border-slate-50">
-                    <td className="py-1.5 font-medium text-slate-700">{e.cycleMonth}</td>
-                    <td className="py-1.5 text-right text-slate-600">
-                      {e.isProrated ? `${e.payableDays}/${e.totalDays}` : 'Full'}
-                    </td>
-                    <td className="py-1.5 text-right">{fmt(e.proratedGross)}</td>
-                    <td className="py-1.5 text-right text-red-500">
-                      {e.lopDays > 0 ? `${e.lopDays}d / ${fmt(e.lopAmount)}` : '—'}
-                    </td>
-                    <td className="py-1.5 text-right font-semibold text-emerald-700">{fmt(e.netSalary)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="font-semibold text-slate-800 border-t border-slate-200">
-                  <td colSpan={4} className="py-1.5">Total Paid</td>
-                  <td className="py-1.5 text-right text-emerald-700">{fmt(d.totalPaid)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="font-semibold text-slate-800 border-t border-slate-200">
+                <td colSpan={3} className="py-1.5">Total (included)</td>
+                <td className="py-1.5 text-right text-red-600">{fmt(total)}</td>
+                <td colSpan={2}></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
+
+      <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl mb-4">
+        <p className="text-xs font-semibold text-amber-700 mb-2">Add a month manually</p>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+          <input className="input text-xs" placeholder="e.g. May 2026" value={newMonth}
+            onChange={e => setNewMonth(e.target.value)} />
+          <input className="input text-xs" type="number" placeholder="Amount" value={newAmount}
+            onChange={e => setNewAmount(e.target.value)} />
+          <input className="input text-xs sm:col-span-1" placeholder="Note (e.g. paid via bank)" value={newNote}
+            onChange={e => setNewNote(e.target.value)} />
+          <Button variant="ghost" onClick={addManualRow}>+ Add</Button>
+        </div>
+      </div>
 
       <div className="flex flex-col gap-2 mb-4">
         <label className="text-xs text-slate-500">Notes</label>
@@ -820,7 +888,8 @@ function Step9SalaryPaid({ data, savedOverride, onConfirm, isConfirmed }: any) {
           className="input resize-none text-sm" rows={2} placeholder="Optional notes…" />
       </div>
 
-      <Button onClick={() => onConfirm(d, { notes })} icon={<CheckCircle2 size={13} />} disabled={isConfirmed}>
+      <Button onClick={() => onConfirm(d, { rows, totalPaid: total, notes })}
+        icon={<CheckCircle2 size={13} />} disabled={isConfirmed}>
         {isConfirmed ? 'Confirmed' : 'Confirm Salary Paid Reference'}
       </Button>
     </StepCard>

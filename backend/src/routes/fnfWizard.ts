@@ -130,14 +130,14 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
     noticeRecoveryAmount = Math.round((grossMonthly / daysInMonth) * shortfallDays * 100) / 100
   }
 
-  // Salary already paid via payroll cycles post-resignation
+  // Salary already paid via payroll cycles from resignation month onward
   const resignMonthStart = new Date(resignationDate.getFullYear(), resignationDate.getMonth(), 1)
   const paidCycleEntries = await prisma.payrollEntry.findMany({
     where: {
       employeeId,
       cycle: {
         cycleStart: { gte: resignMonthStart },
-        status: { in: ['LOCKED', 'DISBURSED'] },
+        status: { in: ['LOCKED', 'DISBURSED', 'PROCESSED', 'COMPLETED'] },
       },
     },
     include: {
@@ -271,6 +271,7 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
       },
       salaryPaid: {
         entries: paidCycleEntries.map(e => ({
+          entryId:       e.id,
           cycleMonth:    e.cycle.payrollMonth,
           cycleStatus:   e.cycle.status,
           grossSalary:   Number(e.grossSalary),
@@ -284,6 +285,7 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
           tdsAmount:     Number(e.tdsAmount),
           lopDays:       Number(e.lopDays),
           lopAmount:     Number(e.lopAmount),
+          source:        'PAYROLL' as const,
         })),
         totalPaid: paidCycleEntries.reduce((s, e) => s + Number(e.netSalary), 0),
         totalGross: paidCycleEntries.reduce((s, e) => s + Number(e.proratedGross), 0),
@@ -403,6 +405,7 @@ fnfWizardRouter.post('/:employeeId/complete', async (req, res) => {
   const noticeStep     = getStep('NOTICE_RECOVERY')
   const tdsStep        = getStep('TDS')
   const bonusStep      = getStep('BONUS_PRORATION')
+  const salaryPaidStep = getStep('SALARY_PAID')
 
   const salaryAmount      = proratedStep?.override?.totalProratedSalary ?? calc.proratedSalary
   const reimbursements    = reimStep?.override?.total ?? calc.pendingReimbursements
@@ -414,7 +417,8 @@ fnfWizardRouter.post('/:employeeId/complete', async (req, res) => {
   const hyiRecovery       = hyi?.override?.hyiRecovery ?? calc.hyiRecovery
   const noticeRecovery    = noticeStep?.override?.recoveryAmount ?? 0
   const bonusRecovery     = bonusStep?.override?.bonusRecovery ?? 0
-  const otherDeductions   = noticeRecovery + bonusRecovery
+  const salaryAlreadyPaid = salaryPaidStep?.override?.totalPaid ?? 0
+  const otherDeductions   = noticeRecovery + bonusRecovery + salaryAlreadyPaid
 
   const lopDays           = proratedStep?.override?.totalLopDays ?? calc.lopDays
   const lopAmount         = proratedStep?.override?.totalLopAmount ?? calc.lopAmount
@@ -438,6 +442,7 @@ fnfWizardRouter.post('/:employeeId/complete', async (req, res) => {
     ...(excessLeaveAmount > 0 ? [{ label: 'Excess Leave Recovery', amount: excessLeaveAmount, type: 'deduction' as const }] : []),
     ...(noticeRecovery > 0 ? [{ label: 'Notice Period Recovery', amount: noticeRecovery, type: 'deduction' as const }] : []),
     ...(bonusRecovery  > 0 ? [{ label: 'Bonus Recovery', amount: bonusRecovery, type: 'deduction' as const }] : []),
+    ...(salaryAlreadyPaid > 0 ? [{ label: 'Salary Already Paid', amount: salaryAlreadyPaid, type: 'deduction' as const }] : []),
   ]
 
   const totalSalaryDays = calc.salaryDays
