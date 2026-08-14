@@ -400,10 +400,16 @@ function Step3ProratedSalary({ data, savedOverride, onConfirm, isConfirmed }: an
         </p>
       </div>
 
-      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl mb-4 text-xs text-slate-600 space-y-1">
+      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl mb-4 text-xs text-slate-600 space-y-1.5">
         <p className="font-semibold text-slate-700">Calculation</p>
-        <p>Full month → Prorated Salary = Gross Monthly (no proration)</p>
-        <p>LWD month → Prorated Salary = (Gross Monthly ÷ Total Days in Month) × Paid Days</p>
+        {d.cycles.map((c: any) => (
+          <p key={c.cycleLabel}>
+            {c.cycleLabel}: {c.salaryDays === c.totalDays
+              ? <>Full month → {fmt(c.proratedSalary)} = {fmt(c.grossMonthly)} (no proration)</>
+              : <>LWD month → {fmt(c.proratedSalary)} = ({fmt(c.grossMonthly)} ÷ {c.totalDays}) × {c.salaryDays} days</>
+            }
+          </p>
+        ))}
         <p className="text-amber-700 font-medium pt-1">
           HYI is excluded from Gross Monthly before this calculation — it is never part of pro-rated salary.
         </p>

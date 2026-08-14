@@ -92,7 +92,7 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
     where: {
       employeeId,
       status: { in: ['APPROVED', 'AUTO_APPROVED'] },
-      startDate: { gte: yearStart, lte: resignationDate },
+      startDate: { gte: yearStart, lte: lwd },
     },
     orderBy: { startDate: 'asc' },
   })
