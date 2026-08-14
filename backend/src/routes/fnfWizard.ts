@@ -130,13 +130,15 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
     noticeRecoveryAmount = Math.round((grossMonthly / daysInMonth) * shortfallDays * 100) / 100
   }
 
-  // Salary already paid via payroll cycles from resignation month onward
-  const resignMonthStart = new Date(resignationDate.getFullYear(), resignationDate.getMonth(), 1)
+  // Salary already paid via payroll cycles from resignation month onward.
+  // Cycles run 26th-25th and are labeled by payrollMonth (e.g. "2026-05" covers 26 Apr-25 May),
+  // so match by payrollMonth label, not cycleStart calendar date.
+  const resignPayrollMonth = `${resignationDate.getFullYear()}-${String(resignationDate.getMonth() + 1).padStart(2, '0')}`
   const paidCycleEntries = await prisma.payrollEntry.findMany({
     where: {
       employeeId,
       cycle: {
-        cycleStart: { gte: resignMonthStart },
+        payrollMonth: { gte: resignPayrollMonth },
         status: { in: ['LOCKED', 'DISBURSED'] },
       },
     },
