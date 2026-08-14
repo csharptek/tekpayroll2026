@@ -754,6 +754,7 @@ function Step8NoticeRecovery({ data, savedOverride, onConfirm, isConfirmed }: an
           <p className="font-semibold text-slate-700">Calculation</p>
           <p>Recovery = (Gross Monthly ÷ Days in LWD Month) × Shortfall Days</p>
           <p>Recovery = ({fmt(d.grossMonthly)} ÷ {d.daysInMonth}) × {d.shortfallDays} days = {fmt(d.recoveryAmount)}</p>
+          <p className="text-amber-700 font-medium pt-1">HYI excluded from Gross Monthly.</p>
         </div>
       )}
 

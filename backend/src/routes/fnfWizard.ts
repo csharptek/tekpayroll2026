@@ -128,7 +128,7 @@ fnfWizardRouter.get('/:employeeId/step-data', async (req, res) => {
   let noticeGrossMonthly = 0
   let noticeDaysInMonth = 0
   if (shortfallDays > 0 && salarySnap) {
-    noticeGrossMonthly = Number(salarySnap.grandTotalMonthly)
+    noticeGrossMonthly = Number(salarySnap.grandTotalMonthly) - Number(salarySnap.hyiMonthly)
     noticeDaysInMonth = new Date(lwd.getFullYear(), lwd.getMonth() + 1, 0).getDate()
     noticeRecoveryAmount = Math.round((noticeGrossMonthly / noticeDaysInMonth) * shortfallDays * 100) / 100
   }
