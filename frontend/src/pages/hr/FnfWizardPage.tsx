@@ -1142,6 +1142,7 @@ function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, c
   const tdsStep        = confirmedSteps['TDS']
   const bonusStep      = confirmedSteps['BONUS_PRORATION']
   const hyiStep        = confirmedSteps['HYI']
+  const salaryPaidStep = confirmedSteps['SALARY_PAID']
 
   const salaryAmount    = proratedStep?.totalProratedSalary ?? d.proratedSalary.totalProratedSalary
   const reimbursements  = reimStep?.total ?? d.reimbursements.total
@@ -1153,18 +1154,21 @@ function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, c
   const hyiRecovery     = hyiStep?.hyiRecovery ?? d.hyi.hyiRecovery
   const noticeRecovery  = noticeStep?.recoveryAmount ?? 0
   const bonusRecovery   = bonusStep?.bonusRecovery   ?? 0
+  const bonusDue        = bonusStep?.bonusDue        ?? 0
+  const salaryAlreadyPaid = salaryPaidStep?.totalPaid ?? 0
   const lopAmount       = d.leavesLop.totalLopAmount
   const excessLeave     = d.leavesLop.excessLeaveAmount || 0
 
-  const totalAdditions  = salaryAmount + reimbursements
+  const totalAdditions  = salaryAmount + reimbursements + bonusDue
   const totalDeductions = pfAmount + esiAmount + ptAmount + tdsAmount +
-    loanOutstanding + hyiRecovery + lopAmount + excessLeave + noticeRecovery + bonusRecovery
+    loanOutstanding + hyiRecovery + lopAmount + excessLeave + noticeRecovery + bonusRecovery + salaryAlreadyPaid
   const net = totalAdditions - totalDeductions
   const isNeg = net < 0
 
   const lines = [
     { label: 'Pro-rated Salary', amount: salaryAmount, type: 'addition' as const },
     ...(reimbursements > 0 ? [{ label: 'Reimbursements', amount: reimbursements, type: 'addition' as const }] : []),
+    ...(bonusDue > 0 ? [{ label: 'Bonus Due (Earned, Unpaid)', amount: bonusDue, type: 'addition' as const }] : []),
     { label: 'Employee PF', amount: pfAmount, type: 'deduction' as const },
     ...(esiAmount > 0 ? [{ label: 'ESI', amount: esiAmount, type: 'deduction' as const }] : []),
     ...(ptAmount  > 0 ? [{ label: 'Professional Tax', amount: ptAmount, type: 'deduction' as const }] : []),
@@ -1175,6 +1179,7 @@ function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, c
     ...(excessLeave > 0 ? [{ label: 'Excess Leave Recovery', amount: excessLeave, type: 'deduction' as const }] : []),
     ...(noticeRecovery > 0 ? [{ label: 'Notice Period Recovery', amount: noticeRecovery, type: 'deduction' as const }] : []),
     ...(bonusRecovery  > 0 ? [{ label: 'Bonus Recovery', amount: bonusRecovery, type: 'deduction' as const }] : []),
+    ...(salaryAlreadyPaid > 0 ? [{ label: 'Salary Already Paid', amount: salaryAlreadyPaid, type: 'deduction' as const }] : []),
   ]
 
   return (

@@ -419,6 +419,7 @@ fnfWizardRouter.post('/:employeeId/complete', async (req, res) => {
   const hyiRecovery       = hyi?.override?.hyiRecovery ?? calc.hyiRecovery
   const noticeRecovery    = noticeStep?.override?.recoveryAmount ?? 0
   const bonusRecovery     = bonusStep?.override?.bonusRecovery ?? 0
+  const bonusDue          = bonusStep?.override?.bonusDue ?? 0
   const salaryAlreadyPaid = salaryPaidStep?.override?.totalPaid ?? 0
   const otherDeductions   = noticeRecovery + bonusRecovery + salaryAlreadyPaid
 
@@ -428,12 +429,13 @@ fnfWizardRouter.post('/:employeeId/complete', async (req, res) => {
 
   const totalDeductions = pfAmount + esiAmount + ptAmount + tdsAmount +
     loanOutstanding + hyiRecovery + lopAmount + excessLeaveAmount + otherDeductions
-  const netPayable = Math.max(-999999, Math.round((salaryAmount + reimbursements - totalDeductions) * 100) / 100)
+  const netPayable = Math.max(-999999, Math.round((salaryAmount + reimbursements + bonusDue - totalDeductions) * 100) / 100)
   const isNeg = netPayable < 0
 
   const breakdown = [
     { label: `Pro-rated Salary (${calc.noticePeriodMonths} month(s))`, amount: salaryAmount, type: 'addition' as const },
     ...(reimbursements > 0 ? [{ label: 'Reimbursements', amount: reimbursements, type: 'addition' as const }] : []),
+    ...(bonusDue > 0 ? [{ label: 'Bonus Due (Earned, Unpaid)', amount: bonusDue, type: 'addition' as const }] : []),
     { label: 'Employee PF', amount: pfAmount, type: 'deduction' as const },
     ...(esiAmount > 0 ? [{ label: 'ESI', amount: esiAmount, type: 'deduction' as const }] : []),
     ...(ptAmount  > 0 ? [{ label: 'Professional Tax', amount: ptAmount, type: 'deduction' as const }] : []),
