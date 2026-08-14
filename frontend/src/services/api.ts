@@ -242,6 +242,7 @@ export const fnfApi = {
     reset:        (empId: string) => api.delete(`/api/fnf/wizard/${empId}`),
     addLeave:     (empId: string, data: { leaveKind: string; startDate: string; endDate: string; isHalfDay?: boolean; halfDaySlot?: string; reasonLabel?: string }) =>
       api.post(`/api/fnf/wizard/${empId}/add-leave`, data),
+    recalcHyi:    () => api.post(`/api/fnf/wizard/admin/recalc-hyi`),
   },
 }
 

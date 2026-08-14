@@ -1097,12 +1097,14 @@ function Step12Tds({ data, savedOverride, onConfirm, isConfirmed }: any) {
   )
 }
 
-function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, completedSettlement }: {
+function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, completedSettlement, onRecalcHyi, isRecalcing }: {
   stepData: any
   confirmedSteps: Record<string, any>
   onComplete: () => void
   isLoading: boolean
   completedSettlement: any
+  onRecalcHyi: () => void
+  isRecalcing: boolean
 }) {
   if (completedSettlement) {
     const net = Number(completedSettlement.settlement?.netPayable || 0)
@@ -1224,6 +1226,11 @@ function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, c
         </span>
       </div>
 
+      <Button variant="ghost" loading={isRecalcing} onClick={onRecalcHyi} icon={<RotateCcw size={13} />}
+        className="w-full justify-center mb-3">
+        Recalculate HYI (fix stale values)
+      </Button>
+
       <Button loading={isLoading} onClick={onComplete} icon={<CheckCircle2 size={13} />}
         className="w-full justify-center">
         Complete Wizard & Create/Update Settlement
@@ -1306,6 +1313,14 @@ export default function FnfWizardPage() {
     },
   })
 
+  const recalcHyiMut = useMutation({
+    mutationFn: () => fnfApi.wizard.recalcHyi(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fnf-wizard-session', employeeId] })
+      qc.invalidateQueries({ queryKey: ['fnf-wizard-step-data', employeeId] })
+    },
+  })
+
   const resetMut = useMutation({
     mutationFn: () => fnfApi.wizard.reset(employeeId!),
     onSuccess: () => {
@@ -1379,6 +1394,8 @@ export default function FnfWizardPage() {
           onComplete={() => completeMut.mutate()}
           isLoading={completeMut.isPending}
           completedSettlement={completedSettlement}
+          onRecalcHyi={() => recalcHyiMut.mutate()}
+          isRecalcing={recalcHyiMut.isPending}
         />
       )
       default: return null
