@@ -557,6 +557,40 @@ fnfWizardRouter.post('/:employeeId/add-leave', async (req, res) => {
   res.json({ success: true, data: application })
 })
 
+// ─── ONE-TIME: RECALC HYI RECOVERY FOR ALL CONFIRMED SESSIONS ─────────────────
+// Fixes stale hyiRecovery override values saved before the June-exclusion fix.
+// Re-runs per-month calc, keeps any manual month-level overrides, updates only
+// the total. Safe to run multiple times.
+fnfWizardRouter.post('/admin/recalc-hyi', requireSuperAdmin, async (req, res) => {
+  const steps = await prisma.fnfWizardStepData.findMany({
+    where: { stepKey: 'HYI', overrideData: { not: null } },
+    include: { session: true },
+  })
+
+  const results: any[] = []
+  for (const step of steps) {
+    const employeeId = step.session.employeeId
+    const override = step.overrideData as any
+    const hyiMonthOverrides = override?.hyiMonthOverrides
+
+    const calc = await calculateFnf(employeeId, undefined, hyiMonthOverrides)
+    const newTotal = calc.hyiRecovery
+    const oldTotal = override?.hyiRecovery
+
+    if (oldTotal !== newTotal) {
+      await prisma.fnfWizardStepData.update({
+        where: { id: step.id },
+        data: { overrideData: { ...override, hyiRecovery: newTotal } },
+      })
+      results.push({ employeeId, oldTotal, newTotal, updated: true })
+    } else {
+      results.push({ employeeId, oldTotal, newTotal, updated: false })
+    }
+  }
+
+  res.json({ success: true, count: results.length, results })
+})
+
 // ─── RESET SESSION ────────────────────────────────────────────────────────────
 fnfWizardRouter.delete('/:employeeId', async (req, res) => {
   await prisma.fnfWizardSession.deleteMany({ where: { employeeId: req.params.employeeId } })
