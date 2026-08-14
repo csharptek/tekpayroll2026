@@ -187,10 +187,11 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
   })
 
   const lwdMut = useMutation({
-    mutationFn: (payload: { lastWorkingDay: string; noticePeriodWaived: boolean }) =>
+    mutationFn: (payload: { lastWorkingDay: string; noticePeriodWaived: boolean; noticePeriodDays?: number }) =>
       exitApi.updateDetails(emp.id, {
         lastWorkingDay:     new Date(payload.lastWorkingDay).toISOString(),
         noticePeriodWaived: payload.noticePeriodWaived,
+        ...(payload.noticePeriodDays ? { noticePeriodDays: payload.noticePeriodDays } : {}),
       }),
     onSuccess: () => {
       setSuccess('Last working day updated')
@@ -345,9 +346,9 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
                       type="number"
                       min="1"
                       value={details.noticePeriodDays}
-                      disabled
+                      onChange={e => setDetails(p => ({ ...p, noticePeriodDays: e.target.value }))}
                     />
-                    <p className="text-xs text-slate-400 mt-1">Policy value. Edit separately if incorrect.</p>
+                    <p className="text-xs text-slate-400 mt-1">Policy value — used for shortfall recovery calculation.</p>
                   </Field>
                 </div>
                 <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -368,6 +369,7 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
                       lwdMut.mutate({
                         lastWorkingDay:     details.lastWorkingDay || previewLwd,
                         noticePeriodWaived: noticeWaived,
+                        noticePeriodDays:   details.noticePeriodDays ? Number(details.noticePeriodDays) : undefined,
                       })
                     }}
                   >
