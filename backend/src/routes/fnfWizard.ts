@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { authenticate, requireSuperAdmin } from '../middleware/auth'
 import { prisma } from '../utils/prisma'
+import { Prisma } from '@prisma/client'
 import { AppError } from '../middleware/errorHandler'
 import { calculateFnf } from '../services/fnfService'
 import { computeSalaryStructure, getSalaryInputForDate } from '../services/payrollEngine'
@@ -563,13 +564,20 @@ fnfWizardRouter.post('/:employeeId/add-leave', async (req, res) => {
 // the total. Safe to run multiple times.
 fnfWizardRouter.post('/admin/recalc-hyi', requireSuperAdmin, async (req, res) => {
   const steps = await prisma.fnfWizardStepData.findMany({
-    where: { stepKey: 'HYI', overrideData: { not: null } },
-    include: { session: true },
+    where: { stepKey: 'HYI', overrideData: { not: Prisma.JsonNull } },
   })
+
+  const sessionIds = [...new Set(steps.map(s => s.sessionId))]
+  const sessions = await prisma.fnfWizardSession.findMany({
+    where: { id: { in: sessionIds } },
+  })
+  const sessionMap = new Map(sessions.map(s => [s.id, s]))
 
   const results: any[] = []
   for (const step of steps) {
-    const employeeId = step.session.employeeId
+    const session = sessionMap.get(step.sessionId)
+    if (!session) continue
+    const employeeId = session.employeeId
     const override = step.overrideData as any
     const hyiMonthOverrides = override?.hyiMonthOverrides
 
