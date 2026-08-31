@@ -665,12 +665,84 @@ async function findLopMismatches() {
 // GET /api/leave/admin/lop-correction/preview
 leaveRouter.get('/admin/lop-correction/preview', requireSuperAdmin, async (_req, res) => {
   const mismatches = await findLopMismatches()
-  res.json({ success: true, data: { mismatches, total: mismatches.length } })
+  const balanceMismatches = await findBalanceLopMismatches()
+  res.json({ success: true, data: { mismatches, balanceMismatches, total: mismatches.length + balanceMismatches.length } })
 })
+
+// Replay each employee's approved leaves in application order and recompute
+// correct LOP based on quota consumption — catches cases where a cancelled
+// leave wrongly freed up quota that was already burned (balance-based bug),
+// independent of the trainee/probation/notice restriction bug above.
+async function findBalanceLopMismatches() {
+  const policy = await getLeavePolicy()
+  const annualByKind: Record<string, number> = {
+    SICK: policy.sickDaysPerYear,
+    CASUAL: policy.casualDaysPerYear,
+    PLANNED: policy.plannedDaysPerYear,
+  }
+
+  const apps = await prisma.lvApplication.findMany({
+    where: { status: { in: ['APPROVED', 'AUTO_APPROVED'] } },
+    include: { employee: { select: { id: true, name: true, employeeCode: true, isTrainee: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  // Group by employeeId + leaveKind + calendar year of leave startDate
+  const groups = new Map<string, typeof apps>()
+  for (const app of apps) {
+    const year = getLeaveYear(app.startDate)
+    const key = `${app.employeeId}::${app.leaveKind}::${year}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(app)
+  }
+
+  const mismatches: any[] = []
+
+  for (const [key, group] of groups) {
+    const [employeeId, leaveKind, yearStr] = key.split('::')
+    const emp = group[0].employee
+    if (emp.isTrainee) continue // trainees have 0 quota, handled by restriction-based check
+
+    const annual = annualByKind[leaveKind] || 0
+    let usedSoFar = 0 // running quota consumption (excludes LOP portion — matches original quota concept)
+
+    for (const app of group) {
+      const totalDays = Number(app.totalDays)
+      const storedLop = Number(app.lopDays)
+
+      const available = annual - usedSoFar
+      const correctLop = available < totalDays ? Math.round((totalDays - Math.max(0, available)) * 100) / 100 : 0
+      const nonLopConsumed = totalDays - correctLop
+      usedSoFar += nonLopConsumed
+
+      if (Math.abs(correctLop - storedLop) > 0.01) {
+        mismatches.push({
+          applicationId: app.id,
+          employeeId,
+          employeeName: emp.name,
+          employeeCode: emp.employeeCode,
+          leaveKind,
+          startDate: app.startDate,
+          endDate: app.endDate,
+          totalDays,
+          currentLopDays: storedLop,
+          correctLopDays: correctLop,
+          reason: `Balance replay (${yearStr}) — quota consumption mismatch`,
+        })
+      }
+    }
+  }
+
+  return mismatches
+}
 
 // POST /api/leave/admin/lop-correction/apply
 leaveRouter.post('/admin/lop-correction/apply', requireSuperAdmin, async (_req, res) => {
-  const mismatches = await findLopMismatches()
+  const restrictionMismatches = await findLopMismatches()
+  const balanceMismatches = await findBalanceLopMismatches()
+  // De-dupe: if an application appears in both, restriction-based (forceLop) wins
+  const restrictionIds = new Set(restrictionMismatches.map((m: any) => m.applicationId))
+  const mismatches = [...restrictionMismatches, ...balanceMismatches.filter((m: any) => !restrictionIds.has(m.applicationId))]
   const results: any[] = []
 
   for (const m of mismatches) {
