@@ -294,6 +294,10 @@ export const leaveApi = {
   balanceAdjustEmployees: (year?: number) => api.get('/api/leave/balance-adjust/employees', { params: year ? { year } : {} }),
   balanceAdjust:      (data: any) => api.put('/api/leave/balance-adjust', data),
   bulkEntry:          (entries: any[]) => api.post('/api/leave/bulk-entry', { entries }),
+
+  // LOP Correction
+  lopCorrectionPreview: () => api.get('/api/leave/admin/lop-correction/preview'),
+  lopCorrectionApply:   () => api.post('/api/leave/admin/lop-correction/apply', {}),
 }
 
 export const policiesApi = {

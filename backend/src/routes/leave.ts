@@ -599,3 +599,127 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
   const errorCount   = results.filter(r => r.status === 'error').length
   res.status(200).json({ success: true, data: { results, successCount, errorCount } })
 })
+
+// ─── LOP CORRECTION (retroactive fix for usedDays/forced-LOP bug) ─────────────
+
+async function findLopMismatches() {
+  const apps = await prisma.lvApplication.findMany({
+    where: { status: { in: ['APPROVED', 'AUTO_APPROVED'] } },
+    include: { employee: { select: { id: true, name: true, employeeCode: true, isTrainee: true, status: true, joiningDate: true } } },
+    orderBy: { startDate: 'asc' },
+  })
+
+  const mismatches: any[] = []
+
+  for (const app of apps) {
+    const restriction = await getEmployeeLeaveRestriction(app.employeeId)
+    const forceLop = ['TRAINEE', 'PROBATION', 'NOTICE'].includes(restriction.type)
+
+    const currentLop = Number(app.lopDays)
+    const totalDays = Number(app.totalDays)
+
+    // Case 1: should have been forced LOP but wasn't
+    const expectedLopIfForced = forceLop ? totalDays : null
+    const missedForcedLop = forceLop && currentLop < totalDays
+
+    if (missedForcedLop) {
+      mismatches.push({
+        applicationId: app.id,
+        employeeId: app.employeeId,
+        employeeName: app.employee.name,
+        employeeCode: app.employee.employeeCode,
+        leaveKind: app.leaveKind,
+        startDate: app.startDate,
+        endDate: app.endDate,
+        totalDays,
+        currentLopDays: currentLop,
+        correctLopDays: expectedLopIfForced,
+        reason: `${restriction.type} — should be fully LOP`,
+      })
+    }
+  }
+
+  return mismatches
+}
+
+// GET /api/leave/admin/lop-correction/preview
+leaveRouter.get('/admin/lop-correction/preview', requireSuperAdmin, async (_req, res) => {
+  const mismatches = await findLopMismatches()
+  res.json({ success: true, data: { mismatches, total: mismatches.length } })
+})
+
+// POST /api/leave/admin/lop-correction/apply
+leaveRouter.post('/admin/lop-correction/apply', requireSuperAdmin, async (_req, res) => {
+  const mismatches = await findLopMismatches()
+  const results: any[] = []
+
+  for (const m of mismatches) {
+    try {
+      const app = await prisma.lvApplication.findUnique({ where: { id: m.applicationId } })
+      if (!app) { results.push({ applicationId: m.applicationId, status: 'error', message: 'not found' }); continue }
+
+      const oldLop = Number(app.lopDays)
+      const newLop = m.correctLopDays
+      const lopDelta = newLop - oldLop // additional LOP days to apply
+      const year = getCurrentLeaveYear()
+
+      await prisma.lvApplication.update({
+        where: { id: m.applicationId },
+        data: { isLop: true, lopDays: newLop },
+      })
+
+      // usedDays already includes totalDays post-fix logic (no change needed there
+      // since usedDays was set to totalDays regardless of lop split at write-time
+      // for records written by old code, usedDays may be totalDays - oldLop — correct it)
+      const entitlement = await prisma.leaveEntitlement.findUnique({
+        where: { employeeId_leaveKind_year: { employeeId: app.employeeId, leaveKind: app.leaveKind, year } },
+      })
+      if (entitlement) {
+        await prisma.leaveEntitlement.update({
+          where: { employeeId_leaveKind_year: { employeeId: app.employeeId, leaveKind: app.leaveKind, year } },
+          data: {
+            usedDays: { increment: lopDelta }, // bring usedDays up to full totalDays
+            lopDays:  { increment: lopDelta },
+          },
+        })
+      }
+
+      // Create/update LOP entry in matching payroll cycle
+      let cycle = await prisma.payrollCycle.findFirst({
+        where: {
+          status: { in: ['DRAFT', 'CALCULATED'] },
+          cycleStart: { lte: app.startDate },
+          cycleEnd:   { gte: app.startDate },
+        },
+      })
+      if (!cycle) {
+        cycle = await prisma.payrollCycle.findFirst({
+          where: { status: { in: ['DRAFT', 'CALCULATED'] } },
+          orderBy: { cycleStart: 'desc' },
+        })
+      }
+      if (cycle && lopDelta > 0) {
+        await prisma.lopEntry.upsert({
+          where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: app.employeeId } },
+          create: { cycleId: cycle.id, employeeId: app.employeeId, lopDays: lopDelta },
+          update: { lopDays: { increment: lopDelta } },
+        })
+      }
+
+      results.push({
+        applicationId: m.applicationId,
+        employeeName: m.employeeName,
+        status: 'success',
+        oldLopDays: oldLop,
+        newLopDays: newLop,
+        cycleUpdated: cycle?.payrollMonth || null,
+      })
+    } catch (err: any) {
+      results.push({ applicationId: m.applicationId, status: 'error', message: err.message })
+    }
+  }
+
+  const successCount = results.filter(r => r.status === 'success').length
+  const errorCount = results.filter(r => r.status === 'error').length
+  res.json({ success: true, data: { results, successCount, errorCount } })
+})
