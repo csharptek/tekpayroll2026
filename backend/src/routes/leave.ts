@@ -8,6 +8,7 @@ import {
   requestCancellation, cancelLeaveDirectly, approveCancellationRequest,
   declineCancellationRequest, triggerYearEndRollover, seedDefaultLeaveReasons,
   grantJoiningLeaves, getCurrentLeaveYear, countWorkingDays,
+  getEmployeeLeaveRestriction,
 } from '../services/leaveService'
 
 export const leaveRouter = Router()
@@ -524,9 +525,15 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
       const available = Number(entitlement.totalDays) + Number(entitlement.carryForward)
                       - Number(entitlement.usedDays) - Number(entitlement.pendingDays)
 
-      // Admin can force isLop; otherwise auto-detect from balance
-      const isLop   = forceIsLop === true ? true : available < totalDays
-      const lopDays = isLop ? (forceIsLop === true ? totalDays : Math.max(0, totalDays - Math.max(0, available))) : 0
+      // Trainee/probation/notice always forced LOP regardless of balance
+      const restriction = await getEmployeeLeaveRestriction(employeeId)
+      const forceLop = ['TRAINEE', 'PROBATION', 'NOTICE'].includes(restriction.type)
+
+      // Admin can force isLop; else forced by restriction; else auto-detect from balance
+      const isLop   = forceLop ? true : (forceIsLop === true ? true : available < totalDays)
+      const lopDays = isLop
+        ? (forceLop || forceIsLop === true ? totalDays : Math.max(0, totalDays - Math.max(0, available)))
+        : 0
 
       const application = await prisma.lvApplication.create({
         data: {
@@ -549,21 +556,30 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
         },
       })
 
-      // Update entitlement
+      // Update entitlement (usedDays tracks all consumed days, LOP included)
       await prisma.leaveEntitlement.update({
         where: { employeeId_leaveKind_year: { employeeId, leaveKind, year } },
         data: {
-          usedDays: { increment: totalDays - lopDays },
+          usedDays: { increment: totalDays },
           lopDays:  { increment: lopDays },
         },
       })
 
       // Create LOP entry in payroll if isLop
       if (isLop && lopDays > 0) {
-        const cycle = await prisma.payrollCycle.findFirst({
-          where: { status: { in: ['DRAFT', 'CALCULATED'] } },
-          orderBy: { cycleStart: 'desc' },
+        let cycle = await prisma.payrollCycle.findFirst({
+          where: {
+            status: { in: ['DRAFT', 'CALCULATED'] },
+            cycleStart: { lte: startDate },
+            cycleEnd:   { gte: startDate },
+          },
         })
+        if (!cycle) {
+          cycle = await prisma.payrollCycle.findFirst({
+            where: { status: { in: ['DRAFT', 'CALCULATED'] } },
+            orderBy: { cycleStart: 'desc' },
+          })
+        }
         if (cycle) {
           await prisma.lopEntry.upsert({
             where: { cycleId_employeeId: { cycleId: cycle.id, employeeId } },

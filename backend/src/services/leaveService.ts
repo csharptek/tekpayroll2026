@@ -379,7 +379,7 @@ export async function applyLeave(params: {
     await prisma.leaveEntitlement.update({
       where: { employeeId_leaveKind_year: { employeeId, leaveKind, year } },
       data: {
-        usedDays: { increment: totalDays - lopDays },
+        usedDays: { increment: totalDays },
         lopDays:  { increment: lopDays },
       },
     })
@@ -438,7 +438,7 @@ export async function approveLeave(
     where: { employeeId_leaveKind_year: { employeeId: app.employeeId, leaveKind: app.leaveKind, year } },
     data: {
       pendingDays: { decrement: Number(app.totalDays) },
-      usedDays:    { increment: Number(app.totalDays) - Number(app.lopDays) },
+      usedDays:    { increment: Number(app.totalDays) },
       lopDays:     { increment: Number(app.lopDays) },
     },
   })
