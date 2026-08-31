@@ -155,28 +155,30 @@ export type LeaveRestriction =
   | { type: 'NOTICE' }
   | { type: 'NONE' }
 
-export async function getEmployeeLeaveRestriction(employeeId: string): Promise<LeaveRestriction> {
+export async function getEmployeeLeaveRestriction(employeeId: string, asOfDate?: Date): Promise<LeaveRestriction> {
   const emp = await prisma.employee.findUnique({
     where: { id: employeeId },
     select: {
       status: true,
       isTrainee: true,
       joiningDate: true,
+      resignationSubmittedAt: true,
       employmentDetail: { select: { probationMonths: true } },
     },
   })
   if (!emp) return { type: 'NONE' }
 
+  const checkDate = asOfDate || new Date()
+
   if (emp.isTrainee) return { type: 'TRAINEE' }
-  if (emp.status === 'ON_NOTICE') return { type: 'NOTICE' }
+  if (emp.resignationSubmittedAt && checkDate >= new Date(emp.resignationSubmittedAt)) return { type: 'NOTICE' }
 
   const policy = await getLeavePolicy()
   const probMonths = emp.employmentDetail?.probationMonths ?? policy.probationMonths
   const probEnd = new Date(emp.joiningDate)
   probEnd.setMonth(probEnd.getMonth() + probMonths)
-  const today = new Date(); today.setHours(0, 0, 0, 0)
 
-  if (probEnd > today) return { type: 'PROBATION', probationEndDate: probEnd }
+  if (probEnd > checkDate) return { type: 'PROBATION', probationEndDate: probEnd }
   return { type: 'NONE' }
 }
 
@@ -317,7 +319,7 @@ export async function applyLeave(params: {
   const isBackdated = startDate < today
 
   // Check restriction status
-  const restriction = await getEmployeeLeaveRestriction(employeeId)
+  const restriction = await getEmployeeLeaveRestriction(employeeId, startDate)
   const isOnNotice   = restriction.type === 'NOTICE'
   const isOnProbation = restriction.type === 'PROBATION'
   const isTrainee    = restriction.type === 'TRAINEE'

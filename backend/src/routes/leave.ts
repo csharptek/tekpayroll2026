@@ -526,7 +526,7 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
                       - Number(entitlement.usedDays) - Number(entitlement.pendingDays)
 
       // Trainee/probation/notice always forced LOP regardless of balance
-      const restriction = await getEmployeeLeaveRestriction(employeeId)
+      const restriction = await getEmployeeLeaveRestriction(employeeId, startDate)
       const forceLop = ['TRAINEE', 'PROBATION', 'NOTICE'].includes(restriction.type)
 
       // Admin can force isLop; else forced by restriction; else auto-detect from balance
@@ -605,20 +605,35 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
 async function findLopMismatches() {
   const apps = await prisma.lvApplication.findMany({
     where: { status: { in: ['APPROVED', 'AUTO_APPROVED'] } },
-    include: { employee: { select: { id: true, name: true, employeeCode: true, isTrainee: true, status: true, joiningDate: true } } },
+    include: { employee: { select: { id: true, name: true, employeeCode: true, isTrainee: true, status: true, joiningDate: true, resignationSubmittedAt: true, employmentDetail: { select: { probationMonths: true } } } } },
     orderBy: { startDate: 'asc' },
   })
 
   const mismatches: any[] = []
+  const policy = await getLeavePolicy()
 
   for (const app of apps) {
-    const restriction = await getEmployeeLeaveRestriction(app.employeeId)
-    const forceLop = ['TRAINEE', 'PROBATION', 'NOTICE'].includes(restriction.type)
+    const emp = app.employee
+    const leaveDate = new Date(app.startDate)
 
+    // Evaluate restriction AS OF the leave's start date, not current status
+    let restrictionType: 'TRAINEE' | 'PROBATION' | 'NOTICE' | 'NONE' = 'NONE'
+
+    if (emp.isTrainee) {
+      restrictionType = 'TRAINEE'
+    } else if (emp.resignationSubmittedAt && leaveDate >= new Date(emp.resignationSubmittedAt)) {
+      restrictionType = 'NOTICE'
+    } else {
+      const probMonths = emp.employmentDetail?.probationMonths ?? policy.probationMonths
+      const probEnd = new Date(emp.joiningDate)
+      probEnd.setMonth(probEnd.getMonth() + probMonths)
+      if (probEnd > leaveDate) restrictionType = 'PROBATION'
+    }
+
+    const forceLop = restrictionType !== 'NONE'
     const currentLop = Number(app.lopDays)
     const totalDays = Number(app.totalDays)
 
-    // Case 1: should have been forced LOP but wasn't
     const expectedLopIfForced = forceLop ? totalDays : null
     const missedForcedLop = forceLop && currentLop < totalDays
 
@@ -626,15 +641,15 @@ async function findLopMismatches() {
       mismatches.push({
         applicationId: app.id,
         employeeId: app.employeeId,
-        employeeName: app.employee.name,
-        employeeCode: app.employee.employeeCode,
+        employeeName: emp.name,
+        employeeCode: emp.employeeCode,
         leaveKind: app.leaveKind,
         startDate: app.startDate,
         endDate: app.endDate,
         totalDays,
         currentLopDays: currentLop,
         correctLopDays: expectedLopIfForced,
-        reason: `${restriction.type} — should be fully LOP`,
+        reason: `${restrictionType} (as of leave date) — should be fully LOP`,
       })
     }
   }
