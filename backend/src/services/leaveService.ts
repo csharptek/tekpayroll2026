@@ -818,34 +818,41 @@ export async function triggerYearEndRollover(triggeredById: string, triggeredByN
 // Creates a LOP entry in the existing LOP table linked to leave
 
 async function createLopFromLeave(employeeId: string, leaveApplicationId: string, lopDays: number, leaveStartDate: Date) {
-  // Find the cycle whose date range contains the leave start date (DRAFT or CALCULATED)
-  // Fall back to latest DRAFT/CALCULATED if no exact match (e.g. future leave)
-  let cycle = await prisma.payrollCycle.findFirst({
+  // Find the cycle whose date range actually contains the leave start date
+  const matchedCycle = await prisma.payrollCycle.findFirst({
     where: {
-      status: { in: ['DRAFT', 'CALCULATED'] },
       cycleStart: { lte: leaveStartDate },
       cycleEnd:   { gte: leaveStartDate },
     },
   })
-  if (!cycle) {
-    // No cycle covers this date — use latest active cycle as fallback
-    cycle = await prisma.payrollCycle.findFirst({
-      where: { status: { in: ['DRAFT', 'CALCULATED'] } },
-      orderBy: { cycleStart: 'desc' },
+
+  if (matchedCycle) {
+    if (!['DRAFT', 'CALCULATED'].includes(matchedCycle.status)) {
+      // That month's payroll is already locked/processed — do not silently
+      // charge this LOP to whatever cycle is currently open instead.
+      console.error(`[LOP] Cycle ${matchedCycle.payrollMonth} for leave ${leaveApplicationId} is locked (${matchedCycle.status}) — LOP not applied, needs manual payroll correction`)
+      return
+    }
+    await prisma.lopEntry.upsert({
+      where: { cycleId_employeeId: { cycleId: matchedCycle.id, employeeId } },
+      create: { cycleId: matchedCycle.id, employeeId, lopDays },
+      update: { lopDays: { increment: lopDays } },
     })
+    return
   }
-  if (!cycle) return // No active cycle at all
+
+  // No cycle covers this date at all (e.g. future leave, cycle not created yet)
+  // — safe to use latest open cycle as fallback.
+  const fallbackCycle = await prisma.payrollCycle.findFirst({
+    where: { status: { in: ['DRAFT', 'CALCULATED'] } },
+    orderBy: { cycleStart: 'desc' },
+  })
+  if (!fallbackCycle) return
 
   await prisma.lopEntry.upsert({
-    where: { cycleId_employeeId: { cycleId: cycle.id, employeeId } },
-    create: {
-      cycleId: cycle.id,
-      employeeId,
-      lopDays: lopDays,
-    },
-    update: {
-      lopDays: { increment: lopDays },
-    },
+    where: { cycleId_employeeId: { cycleId: fallbackCycle.id, employeeId } },
+    create: { cycleId: fallbackCycle.id, employeeId, lopDays },
+    update: { lopDays: { increment: lopDays } },
   })
 }
 

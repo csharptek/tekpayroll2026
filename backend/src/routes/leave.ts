@@ -8,7 +8,7 @@ import {
   requestCancellation, cancelLeaveDirectly, approveCancellationRequest,
   declineCancellationRequest, triggerYearEndRollover, seedDefaultLeaveReasons,
   grantJoiningLeaves, getCurrentLeaveYear, countWorkingDays,
-  getEmployeeLeaveRestriction,
+  getEmployeeLeaveRestriction, getLeaveYear,
 } from '../services/leaveService'
 
 export const leaveRouter = Router()
@@ -567,14 +567,19 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
 
       // Create LOP entry in payroll if isLop
       if (isLop && lopDays > 0) {
-        let cycle = await prisma.payrollCycle.findFirst({
-          where: {
-            status: { in: ['DRAFT', 'CALCULATED'] },
-            cycleStart: { lte: startDate },
-            cycleEnd:   { gte: startDate },
-          },
+        const matchedCycle = await prisma.payrollCycle.findFirst({
+          where: { cycleStart: { lte: startDate }, cycleEnd: { gte: startDate } },
         })
-        if (!cycle) {
+        let cycle: typeof matchedCycle | null = null
+        if (matchedCycle) {
+          if (!['DRAFT', 'CALCULATED'].includes(matchedCycle.status)) {
+            // Historical month already locked/processed — do not misattribute
+            // this LOP to whatever cycle happens to be open right now.
+            console.error(`[LOP] Cycle ${matchedCycle.payrollMonth} locked (${matchedCycle.status}) for backdated entry — LOP not applied, needs manual payroll correction`)
+          } else {
+            cycle = matchedCycle
+          }
+        } else {
           cycle = await prisma.payrollCycle.findFirst({
             where: { status: { in: ['DRAFT', 'CALCULATED'] } },
             orderBy: { cycleStart: 'desc' },
@@ -676,7 +681,7 @@ leaveRouter.post('/admin/lop-correction/apply', requireSuperAdmin, async (_req, 
       const oldLop = Number(app.lopDays)
       const newLop = m.correctLopDays
       const lopDelta = newLop - oldLop // additional LOP days to apply
-      const year = getCurrentLeaveYear()
+      const year = getLeaveYear(app.startDate)
 
       await prisma.lvApplication.update({
         where: { id: m.applicationId },
@@ -697,28 +702,36 @@ leaveRouter.post('/admin/lop-correction/apply', requireSuperAdmin, async (_req, 
             lopDays:  { increment: lopDelta },
           },
         })
+      } else {
+        results.push({ applicationId: m.applicationId, employeeName: m.employeeName, status: 'error', message: `No leaveEntitlement row found for year ${year} — balance not corrected, review manually` })
+        continue
       }
 
-      // Create/update LOP entry in matching payroll cycle
-      let cycle = await prisma.payrollCycle.findFirst({
+      // Locate the cycle matching this leave's own month — must NOT fall back
+      // to "latest open cycle" if that historical cycle is locked/processed,
+      // or LOP would be wrongly charged to the current month's payroll.
+      const matchedCycle = await prisma.payrollCycle.findFirst({
         where: {
-          status: { in: ['DRAFT', 'CALCULATED'] },
           cycleStart: { lte: app.startDate },
           cycleEnd:   { gte: app.startDate },
         },
       })
-      if (!cycle) {
-        cycle = await prisma.payrollCycle.findFirst({
-          where: { status: { in: ['DRAFT', 'CALCULATED'] } },
-          orderBy: { cycleStart: 'desc' },
-        })
-      }
-      if (cycle && lopDelta > 0) {
+
+      let cycleNote: string
+      if (matchedCycle && ['DRAFT', 'CALCULATED'].includes(matchedCycle.status)) {
         await prisma.lopEntry.upsert({
-          where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: app.employeeId } },
-          create: { cycleId: cycle.id, employeeId: app.employeeId, lopDays: lopDelta },
+          where: { cycleId_employeeId: { cycleId: matchedCycle.id, employeeId: app.employeeId } },
+          create: { cycleId: matchedCycle.id, employeeId: app.employeeId, lopDays: lopDelta },
           update: { lopDays: { increment: lopDelta } },
         })
+        cycleNote = matchedCycle.payrollMonth
+      } else if (matchedCycle) {
+        // Cycle exists but is locked/processed — do not touch payroll silently.
+        // Balance/lopDays on the application itself is still corrected above;
+        // this cycle's payroll amount needs a manual adjustment entry.
+        cycleNote = `LOCKED (${matchedCycle.payrollMonth}) — payroll NOT auto-adjusted, needs manual correction`
+      } else {
+        cycleNote = 'No payroll cycle found for this date — payroll NOT adjusted'
       }
 
       results.push({
@@ -727,7 +740,7 @@ leaveRouter.post('/admin/lop-correction/apply', requireSuperAdmin, async (_req, 
         status: 'success',
         oldLopDays: oldLop,
         newLopDays: newLop,
-        cycleUpdated: cycle?.payrollMonth || null,
+        cycleUpdated: cycleNote,
       })
     } catch (err: any) {
       results.push({ applicationId: m.applicationId, status: 'error', message: err.message })
