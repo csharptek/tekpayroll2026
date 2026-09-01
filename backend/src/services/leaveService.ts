@@ -173,8 +173,10 @@ export async function getEmployeeLeaveRestriction(employeeId: string, asOfDate?:
   if (emp.isTrainee) return { type: 'TRAINEE' }
   if (emp.resignationSubmittedAt && checkDate >= new Date(emp.resignationSubmittedAt)) return { type: 'NOTICE' }
 
-  const policy = await getLeavePolicy()
-  const probMonths = emp.employmentDetail?.probationMonths ?? policy.probationMonths
+  // Probation applies ONLY when explicitly configured on the employee's
+  // employment detail — joiningDate seed data is unreliable, so never infer
+  // probation from policy defaults.
+  const probMonths = emp.employmentDetail?.probationMonths ?? 0
   const probEnd = new Date(emp.joiningDate)
   probEnd.setMonth(probEnd.getMonth() + probMonths)
 
