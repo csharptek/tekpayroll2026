@@ -605,221 +605,242 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
   res.status(200).json({ success: true, data: { results, successCount, errorCount } })
 })
 
-// ─── LOP CORRECTION (retroactive fix for usedDays/forced-LOP bug) ─────────────
+// ─── LOP REBUILD (deterministic recompute of leave balances & LOP) ──────────
+//
+// Recomputes, from lvApplication rows (source of truth), the correct values of:
+//   1. each application's isLop / lopDays
+//   2. each leaveEntitlement's usedDays / pendingDays / lopDays  (SET, not increment)
+//   3. each open payroll cycle's leave-derived lopEntry rows      (SET, not increment)
+// totalDays / carryForward / activatesOn on entitlements are never modified.
+// Locked/processed cycles are never modified — diffs are reported for manual action.
 
-async function findLopMismatches() {
+type RebuildPlan = {
+  applications: Array<{
+    applicationId: string, employeeId: string, employeeName: string, employeeCode: string,
+    leaveKind: string, startDate: Date, endDate: Date, totalDays: number,
+    currentLopDays: number, correctLopDays: number, reason: string,
+  }>,
+  entitlements: Array<{
+    employeeId: string, employeeName: string, employeeCode: string, leaveKind: string, year: number,
+    current: { usedDays: number, pendingDays: number, lopDays: number },
+    correct: { usedDays: number, pendingDays: number, lopDays: number },
+  }>,
+  lopEntries: Array<{
+    cycleId: string, payrollMonth: string, cycleStatus: string, editable: boolean,
+    employeeId: string, employeeName: string, employeeCode: string,
+    currentLopDays: number, correctLopDays: number,
+  }>,
+}
+
+async function buildLopRebuildPlan(): Promise<RebuildPlan> {
   const apps = await prisma.lvApplication.findMany({
-    where: { status: { in: ['APPROVED', 'AUTO_APPROVED'] } },
-    include: { employee: { select: { id: true, name: true, employeeCode: true, isTrainee: true, status: true, joiningDate: true, resignationSubmittedAt: true, employmentDetail: { select: { probationMonths: true } } } } },
-    orderBy: { startDate: 'asc' },
+    where: { status: { in: ['PENDING', 'APPROVED', 'AUTO_APPROVED'] } },
+    include: { employee: { select: { id: true, name: true, employeeCode: true } } },
+    orderBy: { createdAt: 'asc' },
   })
 
-  const mismatches: any[] = []
-  const policy = await getLeavePolicy()
+  const entitlements = await prisma.leaveEntitlement.findMany({
+    include: { employee: { select: { id: true, name: true, employeeCode: true } } },
+  })
+  const entMap = new Map<string, any>(entitlements.map((e: any) => [`${e.employeeId}::${e.leaveKind}::${e.year}`, e]))
+
+  // ── Pass 1: replay approved apps chronologically per employee+kind+year ──
+  const usedSoFar = new Map<string, number>()   // quota consumed incl. LOP
+  const correctLopByApp = new Map<string, number>()
+  const reasonByApp = new Map<string, string>()
 
   for (const app of apps) {
-    const emp = app.employee
-    const leaveDate = new Date(app.startDate)
-
-    // Evaluate restriction AS OF the leave's start date, not current status
-    let restrictionType: 'TRAINEE' | 'PROBATION' | 'NOTICE' | 'NONE' = 'NONE'
-
-    if (emp.isTrainee) {
-      restrictionType = 'TRAINEE'
-    } else if (emp.resignationSubmittedAt && leaveDate >= new Date(emp.resignationSubmittedAt)) {
-      restrictionType = 'NOTICE'
-    } else {
-      const probMonths = emp.employmentDetail?.probationMonths ?? policy.probationMonths
-      const probEnd = new Date(emp.joiningDate)
-      probEnd.setMonth(probEnd.getMonth() + probMonths)
-      if (probEnd > leaveDate) restrictionType = 'PROBATION'
-    }
-
-    const forceLop = restrictionType !== 'NONE'
-    const currentLop = Number(app.lopDays)
+    if (app.status === 'PENDING') continue
+    const year = getLeaveYear(app.startDate)
+    const key = `${app.employeeId}::${app.leaveKind}::${year}`
+    const ent = entMap.get(key)
     const totalDays = Number(app.totalDays)
 
-    const expectedLopIfForced = forceLop ? totalDays : null
-    const missedForcedLop = forceLop && currentLop < totalDays
+    const restriction = await getEmployeeLeaveRestriction(app.employeeId, new Date(app.startDate))
+    const forceLop = ['TRAINEE', 'PROBATION', 'NOTICE'].includes(restriction.type)
 
-    if (missedForcedLop) {
-      mismatches.push({
-        applicationId: app.id,
-        employeeId: app.employeeId,
-        employeeName: emp.name,
-        employeeCode: emp.employeeCode,
-        leaveKind: app.leaveKind,
-        startDate: app.startDate,
-        endDate: app.endDate,
-        totalDays,
-        currentLopDays: currentLop,
-        correctLopDays: expectedLopIfForced,
-        reason: `${restrictionType} (as of leave date) — should be fully LOP`,
+    let correctLop: number
+    let reason: string
+    if (forceLop) {
+      correctLop = totalDays
+      reason = `${restriction.type} as of leave date — fully LOP`
+    } else if (!ent) {
+      correctLop = totalDays
+      reason = `No entitlement row for ${year} — fully LOP`
+    } else {
+      const quota = Number(ent.totalDays) + Number(ent.carryForward)
+      const consumed = usedSoFar.get(key) ?? 0
+      const available = Math.max(0, quota - consumed)
+      correctLop = available < totalDays ? Math.round((totalDays - available) * 100) / 100 : 0
+      reason = correctLop > 0 ? `Quota ${quota}, already consumed ${consumed} at apply time` : ''
+    }
+
+    usedSoFar.set(key, (usedSoFar.get(key) ?? 0) + totalDays)
+    correctLopByApp.set(app.id, correctLop)
+    if (reason) reasonByApp.set(app.id, reason)
+  }
+
+  // ── Pass 2: aggregate correct entitlement values ──
+  const agg = new Map<string, { usedDays: number, pendingDays: number, lopDays: number }>()
+  for (const app of apps) {
+    const year = getLeaveYear(app.startDate)
+    const key = `${app.employeeId}::${app.leaveKind}::${year}`
+    if (!agg.has(key)) agg.set(key, { usedDays: 0, pendingDays: 0, lopDays: 0 })
+    const a = agg.get(key)!
+    const totalDays = Number(app.totalDays)
+    if (app.status === 'PENDING') {
+      a.pendingDays = Math.round((a.pendingDays + totalDays) * 100) / 100
+    } else {
+      a.usedDays = Math.round((a.usedDays + totalDays) * 100) / 100
+      a.lopDays  = Math.round((a.lopDays + (correctLopByApp.get(app.id) ?? 0)) * 100) / 100
+    }
+  }
+
+  // ── Pass 3: aggregate correct leave-derived LOP per payroll cycle ──
+  const cycles = await prisma.payrollCycle.findMany()
+  const lopByCycleEmp = new Map<string, number>()
+  for (const app of apps) {
+    if (app.status === 'PENDING') continue
+    const lop = correctLopByApp.get(app.id) ?? 0
+    if (lop <= 0) continue
+    const cycle = cycles.find(c => c.cycleStart <= app.startDate && c.cycleEnd >= app.startDate)
+    if (!cycle) continue
+    const k = `${cycle.id}::${app.employeeId}`
+    lopByCycleEmp.set(k, Math.round(((lopByCycleEmp.get(k) ?? 0) + lop) * 100) / 100)
+  }
+
+  const empInfo = new Map<string, any>(apps.map((a: any) => [a.employeeId, a.employee]))
+  const plan: RebuildPlan = { applications: [], entitlements: [], lopEntries: [] }
+
+  // Application diffs
+  for (const app of apps) {
+    if (app.status === 'PENDING') continue
+    const correctLop = correctLopByApp.get(app.id) ?? 0
+    const currentLop = Number(app.lopDays)
+    if (Math.abs(correctLop - currentLop) > 0.01) {
+      plan.applications.push({
+        applicationId: app.id, employeeId: app.employeeId,
+        employeeName: app.employee.name, employeeCode: app.employee.employeeCode,
+        leaveKind: app.leaveKind, startDate: app.startDate, endDate: app.endDate,
+        totalDays: Number(app.totalDays), currentLopDays: currentLop, correctLopDays: correctLop,
+        reason: reasonByApp.get(app.id) || 'Recomputed by replay',
       })
     }
   }
 
-  return mismatches
+  // Entitlement diffs (covers every entitlement row, incl. ones with zero apps)
+  for (const ent of entitlements) {
+    const key = `${ent.employeeId}::${ent.leaveKind}::${ent.year}`
+    const correct = agg.get(key) ?? { usedDays: 0, pendingDays: 0, lopDays: 0 }
+    const current = { usedDays: Number(ent.usedDays), pendingDays: Number(ent.pendingDays), lopDays: Number(ent.lopDays) }
+    if (Math.abs(current.usedDays - correct.usedDays) > 0.01 ||
+        Math.abs(current.pendingDays - correct.pendingDays) > 0.01 ||
+        Math.abs(current.lopDays - correct.lopDays) > 0.01) {
+      plan.entitlements.push({
+        employeeId: ent.employeeId, employeeName: ent.employee.name, employeeCode: ent.employee.employeeCode,
+        leaveKind: ent.leaveKind, year: ent.year, current, correct,
+      })
+    }
+  }
+
+  // LopEntry diffs — existing rows vs computed, plus computed rows that don't exist
+  const existingLopEntries = await prisma.lopEntry.findMany()
+  const seen = new Set<string>()
+  for (const le of existingLopEntries) {
+    const cycle = cycles.find(c => c.id === le.cycleId)
+    if (!cycle) continue
+    const k = `${le.cycleId}::${le.employeeId}`
+    seen.add(k)
+    const correct = lopByCycleEmp.get(k) ?? 0
+    const current = Number(le.lopDays)
+    if (Math.abs(correct - current) > 0.01) {
+      const emp = empInfo.get(le.employeeId)
+      plan.lopEntries.push({
+        cycleId: cycle.id, payrollMonth: cycle.payrollMonth, cycleStatus: cycle.status,
+        editable: ['DRAFT', 'CALCULATED'].includes(cycle.status),
+        employeeId: le.employeeId, employeeName: emp?.name || le.employeeId, employeeCode: emp?.employeeCode || '',
+        currentLopDays: current, correctLopDays: correct,
+      })
+    }
+  }
+  for (const [k, correct] of lopByCycleEmp) {
+    if (seen.has(k) || correct <= 0) continue
+    const [cycleId, employeeId] = k.split('::')
+    const cycle = cycles.find(c => c.id === cycleId)!
+    const emp = empInfo.get(employeeId)
+    plan.lopEntries.push({
+      cycleId, payrollMonth: cycle.payrollMonth, cycleStatus: cycle.status,
+      editable: ['DRAFT', 'CALCULATED'].includes(cycle.status),
+      employeeId, employeeName: emp?.name || employeeId, employeeCode: emp?.employeeCode || '',
+      currentLopDays: 0, correctLopDays: correct,
+    })
+  }
+
+  return plan
 }
 
 // GET /api/leave/admin/lop-correction/preview
 leaveRouter.get('/admin/lop-correction/preview', requireSuperAdmin, async (_req, res) => {
-  const mismatches = await findLopMismatches()
-  const balanceMismatches = await findBalanceLopMismatches()
-  res.json({ success: true, data: { mismatches, balanceMismatches, total: mismatches.length + balanceMismatches.length } })
+  const plan = await buildLopRebuildPlan()
+  res.json({ success: true, data: {
+    ...plan,
+    total: plan.applications.length + plan.entitlements.length + plan.lopEntries.filter(l => l.editable).length,
+    lockedCycleChanges: plan.lopEntries.filter(l => !l.editable).length,
+  } })
 })
-
-// Replay each employee's approved leaves in application order and recompute
-// correct LOP based on quota consumption — catches cases where a cancelled
-// leave wrongly freed up quota that was already burned (balance-based bug),
-// independent of the trainee/probation/notice restriction bug above.
-async function findBalanceLopMismatches() {
-  const policy = await getLeavePolicy()
-  const annualByKind: Record<string, number> = {
-    SICK: policy.sickDaysPerYear,
-    CASUAL: policy.casualDaysPerYear,
-    PLANNED: policy.plannedDaysPerYear,
-  }
-
-  const apps = await prisma.lvApplication.findMany({
-    where: { status: { in: ['APPROVED', 'AUTO_APPROVED'] } },
-    include: { employee: { select: { id: true, name: true, employeeCode: true, isTrainee: true } } },
-    orderBy: { createdAt: 'asc' },
-  })
-
-  // Group by employeeId + leaveKind + calendar year of leave startDate
-  const groups = new Map<string, typeof apps>()
-  for (const app of apps) {
-    const year = getLeaveYear(app.startDate)
-    const key = `${app.employeeId}::${app.leaveKind}::${year}`
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(app)
-  }
-
-  const mismatches: any[] = []
-
-  for (const [key, group] of groups) {
-    const [employeeId, leaveKind, yearStr] = key.split('::')
-    const emp = group[0].employee
-    if (emp.isTrainee) continue // trainees have 0 quota, handled by restriction-based check
-
-    const annual = annualByKind[leaveKind] || 0
-    let usedSoFar = 0 // running quota consumption (excludes LOP portion — matches original quota concept)
-
-    for (const app of group) {
-      const totalDays = Number(app.totalDays)
-      const storedLop = Number(app.lopDays)
-
-      const available = annual - usedSoFar
-      const correctLop = available < totalDays ? Math.round((totalDays - Math.max(0, available)) * 100) / 100 : 0
-      const nonLopConsumed = totalDays - correctLop
-      usedSoFar += nonLopConsumed
-
-      if (Math.abs(correctLop - storedLop) > 0.01) {
-        mismatches.push({
-          applicationId: app.id,
-          employeeId,
-          employeeName: emp.name,
-          employeeCode: emp.employeeCode,
-          leaveKind,
-          startDate: app.startDate,
-          endDate: app.endDate,
-          totalDays,
-          currentLopDays: storedLop,
-          correctLopDays: correctLop,
-          reason: `Balance replay (${yearStr}) — quota consumption mismatch`,
-        })
-      }
-    }
-  }
-
-  return mismatches
-}
 
 // POST /api/leave/admin/lop-correction/apply
 leaveRouter.post('/admin/lop-correction/apply', requireSuperAdmin, async (_req, res) => {
-  const restrictionMismatches = await findLopMismatches()
-  const balanceMismatches = await findBalanceLopMismatches()
-  // De-dupe: if an application appears in both, restriction-based (forceLop) wins
-  const restrictionIds = new Set(restrictionMismatches.map((m: any) => m.applicationId))
-  const mismatches = [...restrictionMismatches, ...balanceMismatches.filter((m: any) => !restrictionIds.has(m.applicationId))]
+  const plan = await buildLopRebuildPlan()
   const results: any[] = []
 
-  for (const m of mismatches) {
+  for (const a of plan.applications) {
     try {
-      const app = await prisma.lvApplication.findUnique({ where: { id: m.applicationId } })
-      if (!app) { results.push({ applicationId: m.applicationId, status: 'error', message: 'not found' }); continue }
-
-      const oldLop = Number(app.lopDays)
-      const newLop = m.correctLopDays
-      const lopDelta = newLop - oldLop // additional LOP days to apply
-      const year = getLeaveYear(app.startDate)
-
       await prisma.lvApplication.update({
-        where: { id: m.applicationId },
-        data: { isLop: true, lopDays: newLop },
+        where: { id: a.applicationId },
+        data: { isLop: a.correctLopDays > 0, lopDays: a.correctLopDays },
       })
-
-      // usedDays already includes totalDays post-fix logic (no change needed there
-      // since usedDays was set to totalDays regardless of lop split at write-time
-      // for records written by old code, usedDays may be totalDays - oldLop — correct it)
-      const entitlement = await prisma.leaveEntitlement.findUnique({
-        where: { employeeId_leaveKind_year: { employeeId: app.employeeId, leaveKind: app.leaveKind, year } },
-      })
-      if (entitlement) {
-        await prisma.leaveEntitlement.update({
-          where: { employeeId_leaveKind_year: { employeeId: app.employeeId, leaveKind: app.leaveKind, year } },
-          data: {
-            usedDays: { increment: lopDelta }, // bring usedDays up to full totalDays
-            lopDays:  { increment: lopDelta },
-          },
-        })
-      } else {
-        results.push({ applicationId: m.applicationId, employeeName: m.employeeName, status: 'error', message: `No leaveEntitlement row found for year ${year} — balance not corrected, review manually` })
-        continue
-      }
-
-      // Locate the cycle matching this leave's own month — must NOT fall back
-      // to "latest open cycle" if that historical cycle is locked/processed,
-      // or LOP would be wrongly charged to the current month's payroll.
-      const matchedCycle = await prisma.payrollCycle.findFirst({
-        where: {
-          cycleStart: { lte: app.startDate },
-          cycleEnd:   { gte: app.startDate },
-        },
-      })
-
-      let cycleNote: string
-      if (matchedCycle && ['DRAFT', 'CALCULATED'].includes(matchedCycle.status)) {
-        await prisma.lopEntry.upsert({
-          where: { cycleId_employeeId: { cycleId: matchedCycle.id, employeeId: app.employeeId } },
-          create: { cycleId: matchedCycle.id, employeeId: app.employeeId, lopDays: lopDelta },
-          update: { lopDays: { increment: lopDelta } },
-        })
-        cycleNote = matchedCycle.payrollMonth
-      } else if (matchedCycle) {
-        // Cycle exists but is locked/processed — do not touch payroll silently.
-        // Balance/lopDays on the application itself is still corrected above;
-        // this cycle's payroll amount needs a manual adjustment entry.
-        cycleNote = `LOCKED (${matchedCycle.payrollMonth}) — payroll NOT auto-adjusted, needs manual correction`
-      } else {
-        cycleNote = 'No payroll cycle found for this date — payroll NOT adjusted'
-      }
-
-      results.push({
-        applicationId: m.applicationId,
-        employeeName: m.employeeName,
-        status: 'success',
-        oldLopDays: oldLop,
-        newLopDays: newLop,
-        cycleUpdated: cycleNote,
-      })
+      results.push({ type: 'application', id: a.applicationId, employeeName: a.employeeName, status: 'success', detail: `LOP ${a.currentLopDays} → ${a.correctLopDays}` })
     } catch (err: any) {
-      results.push({ applicationId: m.applicationId, status: 'error', message: err.message })
+      results.push({ type: 'application', id: a.applicationId, status: 'error', message: err.message })
+    }
+  }
+
+  for (const e of plan.entitlements) {
+    try {
+      await prisma.leaveEntitlement.update({
+        where: { employeeId_leaveKind_year: { employeeId: e.employeeId, leaveKind: e.leaveKind as any, year: e.year } },
+        data: { usedDays: e.correct.usedDays, pendingDays: e.correct.pendingDays, lopDays: e.correct.lopDays },
+      })
+      results.push({ type: 'entitlement', id: `${e.employeeCode}/${e.leaveKind}/${e.year}`, employeeName: e.employeeName, status: 'success', detail: `used ${e.current.usedDays}→${e.correct.usedDays}, pending ${e.current.pendingDays}→${e.correct.pendingDays}, lop ${e.current.lopDays}→${e.correct.lopDays}` })
+    } catch (err: any) {
+      results.push({ type: 'entitlement', id: `${e.employeeCode}/${e.leaveKind}/${e.year}`, status: 'error', message: err.message })
+    }
+  }
+
+  for (const l of plan.lopEntries) {
+    if (!l.editable) {
+      results.push({ type: 'lopEntry', id: `${l.payrollMonth}/${l.employeeCode}`, employeeName: l.employeeName, status: 'skipped', detail: `Cycle ${l.payrollMonth} is ${l.cycleStatus} — LOP ${l.currentLopDays} should be ${l.correctLopDays}, correct manually` })
+      continue
+    }
+    try {
+      if (l.correctLopDays <= 0) {
+        await prisma.lopEntry.deleteMany({ where: { cycleId: l.cycleId, employeeId: l.employeeId } })
+      } else {
+        await prisma.lopEntry.upsert({
+          where: { cycleId_employeeId: { cycleId: l.cycleId, employeeId: l.employeeId } },
+          create: { cycleId: l.cycleId, employeeId: l.employeeId, lopDays: l.correctLopDays },
+          update: { lopDays: l.correctLopDays },
+        })
+      }
+      results.push({ type: 'lopEntry', id: `${l.payrollMonth}/${l.employeeCode}`, employeeName: l.employeeName, status: 'success', detail: `LOP ${l.currentLopDays} → ${l.correctLopDays}` })
+    } catch (err: any) {
+      results.push({ type: 'lopEntry', id: `${l.payrollMonth}/${l.employeeCode}`, status: 'error', message: err.message })
     }
   }
 
   const successCount = results.filter(r => r.status === 'success').length
   const errorCount = results.filter(r => r.status === 'error').length
-  res.json({ success: true, data: { results, successCount, errorCount } })
+  const skippedCount = results.filter(r => r.status === 'skipped').length
+  res.json({ success: true, data: { results, successCount, errorCount, skippedCount } })
 })

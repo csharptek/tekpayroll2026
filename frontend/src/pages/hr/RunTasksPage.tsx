@@ -372,27 +372,12 @@ type MigrationResult = {
   errors: string[]
 }
 
-// ─── LOP CORRECTION CARD ────────────────────────────────────────────────────
+// ─── LOP REBUILD CARD ───────────────────────────────────────────────────────
 
-type LopMismatch = {
-  applicationId: string
-  employeeId: string
-  employeeName: string
-  employeeCode: string
-  leaveKind: string
-  startDate: string
-  endDate: string
-  totalDays: number
-  currentLopDays: number
-  correctLopDays: number
-  reason: string
-}
-
-type LopApplyResult = {
-  successCount: number
-  errorCount: number
-  results: Array<{ applicationId: string; employeeName?: string; status: string; oldLopDays?: number; newLopDays?: number; cycleUpdated?: string; message?: string }>
-}
+type LopAppDiff = { applicationId: string; employeeName: string; employeeCode: string; leaveKind: string; startDate: string; endDate: string; totalDays: number; currentLopDays: number; correctLopDays: number; reason: string }
+type LopEntDiff = { employeeName: string; employeeCode: string; leaveKind: string; year: number; current: { usedDays: number; pendingDays: number; lopDays: number }; correct: { usedDays: number; pendingDays: number; lopDays: number } }
+type LopCycleDiff = { payrollMonth: string; cycleStatus: string; editable: boolean; employeeName: string; employeeCode: string; currentLopDays: number; correctLopDays: number }
+type LopApplyResult = { successCount: number; errorCount: number; skippedCount: number; results: Array<{ type: string; id: string; employeeName?: string; status: string; detail?: string; message?: string }> }
 
 function LopCorrectionCard() {
   const [previewed, setPreviewed] = useState(false)
@@ -406,109 +391,85 @@ function LopCorrectionCard() {
     enabled: false,
   })
 
-  const mismatches: LopMismatch[] = (previewQuery.data as any)?.data?.data?.mismatches ?? []
-  const total: number = (previewQuery.data as any)?.data?.data?.total ?? 0
+  const data = (previewQuery.data as any)?.data?.data
+  const applications: LopAppDiff[] = data?.applications ?? []
+  const entitlementDiffs: LopEntDiff[] = data?.entitlements ?? []
+  const cycleDiffs: LopCycleDiff[] = data?.lopEntries ?? []
+  const total: number = data?.total ?? 0
+  const lockedChanges: number = data?.lockedCycleChanges ?? 0
 
   async function handlePreview() {
-    setError(null)
-    setResult(null)
+    setError(null); setResult(null)
     await previewQuery.refetch()
     setPreviewed(true)
   }
 
   async function handleApply() {
-    if (!window.confirm(`Correct LOP for ${total} leave record(s)?\n\nThis updates leave balances and payroll LOP entries for the matching cycle. This cannot be undone.`)) return
-    setApplying(true)
-    setError(null)
-    setResult(null)
+    if (!window.confirm(`Rebuild leave balances & LOP?\n\n${applications.length} leave record(s), ${entitlementDiffs.length} balance row(s), ${cycleDiffs.filter(c => c.editable).length} open-cycle LOP entr(ies) will be SET to recomputed values.\n${lockedChanges} locked-cycle difference(s) will be reported only.\n\nThis cannot be undone.`)) return
+    setApplying(true); setError(null); setResult(null)
     try {
       const res = await leaveApi.lopCorrectionApply()
       setResult((res as any).data?.data)
       previewQuery.refetch()
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || 'Correction failed')
+      setError(e?.response?.data?.message || e?.message || 'Rebuild failed')
     } finally {
       setApplying(false)
     }
   }
 
-  const hasMismatches = total > 0
+  const hasChanges = total > 0 || lockedChanges > 0
 
   return (
     <Card>
       <div className="p-4 flex gap-4">
-        <div className="mt-0.5 shrink-0 text-red-500">
-          <ShieldAlert size={22} />
-        </div>
-
+        <div className="mt-0.5 shrink-0 text-red-500"><ShieldAlert size={22} /></div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="font-semibold text-gray-800">LOP Correction</p>
+              <p className="font-semibold text-gray-800">Leave Balance & LOP Rebuild</p>
               <p className="text-sm text-gray-500 mt-0.5">
-                Fix leave records where trainee/probation/notice employees were not forced LOP. Updates balances & payroll cycle LOP entries.
+                Recomputes every leave's LOP, all leave balances, and open-cycle payroll LOP entries from scratch. Locked cycles are never modified.
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
-              <button
-                onClick={handlePreview}
-                disabled={previewQuery.isFetching}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors disabled:opacity-50"
-              >
-                {previewQuery.isFetching
-                  ? <Loader2 size={14} className="animate-spin" />
-                  : <Eye size={14} />}
+              <button onClick={handlePreview} disabled={previewQuery.isFetching}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors disabled:opacity-50">
+                {previewQuery.isFetching ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
                 Preview
               </button>
-              {previewed && hasMismatches && (
-                <button
-                  onClick={handleApply}
-                  disabled={applying}
-                  className={clsx(
-                    'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                    applying
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-red-600 hover:bg-red-700 text-white'
-                  )}
-                >
-                  {applying
-                    ? <><Loader2 size={14} className="animate-spin" /> Correcting...</>
-                    : <><ShieldAlert size={14} /> Correct {total}</>}
+              {previewed && total > 0 && (
+                <button onClick={handleApply} disabled={applying}
+                  className={clsx('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                    applying ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 text-white')}>
+                  {applying ? <><Loader2 size={14} className="animate-spin" /> Rebuilding...</> : <><ShieldAlert size={14} /> Rebuild {total}</>}
                 </button>
               )}
             </div>
           </div>
 
-          {/* Preview results */}
           {previewed && !previewQuery.isFetching && (
-            <div className={clsx(
-              'mt-3 rounded-lg border p-3 text-sm space-y-2',
-              hasMismatches ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'
-            )}>
+            <div className={clsx('mt-3 rounded-lg border p-3 text-sm space-y-3',
+              hasChanges ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50')}>
               <div className="flex items-center gap-2">
-                {hasMismatches
-                  ? <AlertCircle size={14} className="text-red-600" />
-                  : <CheckCircle size={14} className="text-green-600" />}
-                <span className={clsx('font-medium', hasMismatches ? 'text-red-700' : 'text-green-700')}>
-                  {hasMismatches ? `${total} mismatched record(s) found — ready to correct` : 'No mismatches found'}
+                {hasChanges ? <AlertCircle size={14} className="text-red-600" /> : <CheckCircle size={14} className="text-green-600" />}
+                <span className={clsx('font-medium', hasChanges ? 'text-red-700' : 'text-green-700')}>
+                  {hasChanges
+                    ? `${applications.length} leave record(s), ${entitlementDiffs.length} balance row(s), ${cycleDiffs.length} cycle LOP entr(ies) differ${lockedChanges > 0 ? ` — ${lockedChanges} in locked cycles (report-only)` : ''}`
+                    : 'Everything already consistent — nothing to rebuild'}
                 </span>
               </div>
 
-              {hasMismatches && mismatches.length > 0 && (
-                <div className="mt-2 overflow-x-auto">
+              {applications.length > 0 && (
+                <div className="overflow-x-auto">
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Leave records</p>
                   <table className="w-full text-xs text-gray-700">
-                    <thead>
-                      <tr className="text-left text-gray-500 border-b border-red-200">
-                        <th className="pb-1 pr-3">Employee</th>
-                        <th className="pb-1 pr-3">Type</th>
-                        <th className="pb-1 pr-3">Dates</th>
-                        <th className="pb-1 pr-3">Current LOP</th>
-                        <th className="pb-1 pr-3">Correct LOP</th>
-                        <th className="pb-1">Reason</th>
-                      </tr>
-                    </thead>
+                    <thead><tr className="text-left text-gray-500 border-b border-red-200">
+                      <th className="pb-1 pr-3">Employee</th><th className="pb-1 pr-3">Type</th><th className="pb-1 pr-3">Dates</th>
+                      <th className="pb-1 pr-3">LOP now</th><th className="pb-1 pr-3">LOP correct</th><th className="pb-1">Reason</th>
+                    </tr></thead>
                     <tbody>
-                      {mismatches.map(m => (
+                      {applications.map(m => (
                         <tr key={m.applicationId} className="border-b border-red-100 last:border-0">
                           <td className="py-1 pr-3">{m.employeeName} <span className="text-gray-400">({m.employeeCode})</span></td>
                           <td className="py-1 pr-3">{m.leaveKind}</td>
@@ -522,41 +483,75 @@ function LopCorrectionCard() {
                   </table>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Apply result */}
-          {result && (
-            <div className={clsx(
-              'mt-3 rounded-lg border p-3 text-sm space-y-2',
-              result.errorCount === 0 ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'
-            )}>
-              <div className="flex items-center gap-2">
-                {result.errorCount === 0
-                  ? <CheckCircle size={14} className="text-green-600" />
-                  : <AlertCircle size={14} className="text-amber-600" />}
-                <span className={clsx('font-medium', result.errorCount === 0 ? 'text-green-700' : 'text-amber-700')}>
-                  {result.errorCount === 0
-                    ? `All ${result.successCount} record(s) corrected successfully`
-                    : `${result.successCount} corrected, ${result.errorCount} failed`}
-                </span>
-              </div>
-              <div className="text-xs text-gray-600 space-y-0.5">
-                {result.results.filter(r => r.status === 'success').map(r => (
-                  <div key={r.applicationId}>
-                    {r.employeeName}: {r.oldLopDays} → {r.newLopDays} LOP days {r.cycleUpdated ? `(cycle ${r.cycleUpdated})` : ''}
-                  </div>
-                ))}
-              </div>
-              {result.results.filter(r => r.status === 'error').length > 0 && (
-                <div className="text-xs text-red-700 bg-red-100 rounded p-2 space-y-0.5">
-                  {result.results.filter(r => r.status === 'error').map((r, i) => <div key={i}>{r.message}</div>)}
+              {entitlementDiffs.length > 0 && (
+                <div className="overflow-x-auto">
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Balance rows</p>
+                  <table className="w-full text-xs text-gray-700">
+                    <thead><tr className="text-left text-gray-500 border-b border-red-200">
+                      <th className="pb-1 pr-3">Employee</th><th className="pb-1 pr-3">Kind</th><th className="pb-1 pr-3">Year</th>
+                      <th className="pb-1 pr-3">Used</th><th className="pb-1 pr-3">Pending</th><th className="pb-1">LOP</th>
+                    </tr></thead>
+                    <tbody>
+                      {entitlementDiffs.map((e, i) => (
+                        <tr key={i} className="border-b border-red-100 last:border-0">
+                          <td className="py-1 pr-3">{e.employeeName} <span className="text-gray-400">({e.employeeCode})</span></td>
+                          <td className="py-1 pr-3">{e.leaveKind}</td>
+                          <td className="py-1 pr-3">{e.year}</td>
+                          <td className="py-1 pr-3">{e.current.usedDays} → <span className="font-medium text-red-700">{e.correct.usedDays}</span></td>
+                          <td className="py-1 pr-3">{e.current.pendingDays} → <span className="font-medium text-red-700">{e.correct.pendingDays}</span></td>
+                          <td className="py-1">{e.current.lopDays} → <span className="font-medium text-red-700">{e.correct.lopDays}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {cycleDiffs.length > 0 && (
+                <div className="overflow-x-auto">
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Payroll cycle LOP entries</p>
+                  <table className="w-full text-xs text-gray-700">
+                    <thead><tr className="text-left text-gray-500 border-b border-red-200">
+                      <th className="pb-1 pr-3">Cycle</th><th className="pb-1 pr-3">Employee</th>
+                      <th className="pb-1 pr-3">LOP now</th><th className="pb-1 pr-3">LOP correct</th><th className="pb-1">Action</th>
+                    </tr></thead>
+                    <tbody>
+                      {cycleDiffs.map((c, i) => (
+                        <tr key={i} className="border-b border-red-100 last:border-0">
+                          <td className="py-1 pr-3">{c.payrollMonth} <span className="text-gray-400">({c.cycleStatus})</span></td>
+                          <td className="py-1 pr-3">{c.employeeName} <span className="text-gray-400">({c.employeeCode})</span></td>
+                          <td className="py-1 pr-3">{c.currentLopDays}</td>
+                          <td className="py-1 pr-3 font-medium text-red-700">{c.correctLopDays}</td>
+                          <td className="py-1">{c.editable ? 'Will update' : <span className="text-amber-700 font-medium">Locked — manual</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
           )}
 
-          {/* Error */}
+          {result && (
+            <div className={clsx('mt-3 rounded-lg border p-3 text-sm space-y-2',
+              result.errorCount === 0 ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50')}>
+              <div className="flex items-center gap-2">
+                {result.errorCount === 0 ? <CheckCircle size={14} className="text-green-600" /> : <AlertCircle size={14} className="text-amber-600" />}
+                <span className={clsx('font-medium', result.errorCount === 0 ? 'text-green-700' : 'text-amber-700')}>
+                  {result.successCount} updated{result.skippedCount > 0 ? `, ${result.skippedCount} locked-cycle skipped` : ''}{result.errorCount > 0 ? `, ${result.errorCount} failed` : ''}
+                </span>
+              </div>
+              <div className="text-xs text-gray-600 space-y-0.5 max-h-48 overflow-y-auto">
+                {result.results.map((r, i) => (
+                  <div key={i} className={clsx(r.status === 'error' && 'text-red-700', r.status === 'skipped' && 'text-amber-700')}>
+                    [{r.type}] {r.employeeName || r.id}: {r.detail || r.message}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               <XCircle size={14} className="inline mr-1" />{error}
