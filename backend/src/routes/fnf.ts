@@ -120,7 +120,7 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
     finalSettlement = await prisma.fnfSettlement.update({
       where: { id: settlement.id },
       data:  { pdfUrl, pdfKey },
-      include: { employee: true },
+      include: { employee: { include: { bankDetail: true } } },
     })
   } catch (e: any) {
     console.error('[FNF PDF] Generation failed:', e.message)
