@@ -483,10 +483,14 @@ function SettleModal({ settlement, open, onClose }: { settlement: any; open: boo
 
 function StatementButton({ settlement }: { settlement: any }) {
   const qc = useQueryClient()
+  const [fixedNotice, setFixedNotice] = useState(false)
   const genMut = useMutation({
     mutationFn: () => fnfApi.generatePdf(settlement.id),
     onSuccess:  (res) => {
       qc.invalidateQueries({ queryKey: ['fnf-list'] })
+      if (res?.data?.data?.netPayableFixed) {
+        setFixedNotice(true); setTimeout(() => setFixedNotice(false), 4000)
+      }
       const url = res?.data?.data?.pdfUrl
       if (url) window.open(url, '_blank')
     },
@@ -494,15 +498,18 @@ function StatementButton({ settlement }: { settlement: any }) {
 
   if (settlement.pdfUrl) {
     return (
-      <div className="inline-flex gap-1">
-        <Button variant="secondary" size="sm" icon={<FileText size={12} />}
-          onClick={() => window.open(settlement.pdfUrl, '_blank')}>
-          Statement
-        </Button>
-        <Button variant="secondary" size="sm" icon={<RefreshCw size={12} />}
-          loading={genMut.isPending} onClick={() => genMut.mutate()} title="Regenerate with latest data/template">
-          Regenerate
-        </Button>
+      <div className="inline-flex flex-col items-start gap-1">
+        <div className="inline-flex gap-1">
+          <Button variant="secondary" size="sm" icon={<FileText size={12} />}
+            onClick={() => window.open(settlement.pdfUrl, '_blank')}>
+            Statement
+          </Button>
+          <Button variant="secondary" size="sm" icon={<RefreshCw size={12} />}
+            loading={genMut.isPending} onClick={() => genMut.mutate()} title="Regenerate with latest data/template">
+            Regenerate
+          </Button>
+        </div>
+        {fixedNotice && <span className="text-[10px] text-emerald-600">Net payable corrected</span>}
       </div>
     )
   }

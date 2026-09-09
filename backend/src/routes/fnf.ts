@@ -142,16 +142,24 @@ fnfRouter.post('/:id/generate-pdf', async (req, res) => {
   // overrides and notice/bonus recovery. Re-running calculateFnf() here would drop
   // all of that and could generate a statement that doesn't match the wizard's total.
   const calc = buildCalcFromSettlement(settlement)
+
+  // Self-heal: settlements saved before the netPayable sign bug was fixed still carry
+  // a corrupted (always-positive) netPayable column. buildCalcFromSettlement derives
+  // the correct signed value from the breakdown — persist it back so the F&F list and
+  // any other reader of settlement.netPayable also picks up the fix, not just this PDF.
+  const storedNetPayable = Number(settlement.netPayable)
+  const netPayableFixed  = storedNetPayable !== calc.netPayable
+
   const { generateFnfStatementPdf } = await import('../services/fnfPdfService')
   const { pdfUrl, pdfKey } = await generateFnfStatementPdf(calc, settlement.employee)
 
   const updated = await prisma.fnfSettlement.update({
     where: { id: settlement.id },
-    data:  { pdfUrl, pdfKey },
+    data:  { pdfUrl, pdfKey, ...(netPayableFixed ? { netPayable: calc.netPayable } : {}) },
     include: { employee: true },
   })
 
-  res.json({ success: true, data: updated })
+  res.json({ success: true, data: updated, netPayableFixed })
 })
 
 // Send the F&F statement PDF to the configured HR/Finance notification list

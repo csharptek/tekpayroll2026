@@ -102,7 +102,6 @@ function monthLabel(date: Date): string {
 // bonus recovery/due — none of which calculateFnf() knows about on its own).
 // Re-running calculateFnf() here would silently drop every wizard override.
 export function buildCalcFromSettlement(settlement: any): FnfCalculation {
-  const netPayable = Number(settlement.netPayable)
   const breakdown: FnfCalculation['breakdown'] = settlement.breakdownJson ? JSON.parse(settlement.breakdownJson) : []
   const cycles: FnfCycleBreakdown[] = settlement.cyclesJson ? JSON.parse(settlement.cyclesJson) : []
   const hyiRecoveryDetail: HyiRecoveryDetailRow[] = settlement.hyiRecoveryDetailJson ? JSON.parse(settlement.hyiRecoveryDetailJson) : []
@@ -110,6 +109,12 @@ export function buildCalcFromSettlement(settlement: any): FnfCalculation {
 
   const totalAdditions  = r2(breakdown.filter(b => b.type === 'addition').reduce((s, b) => s + Number(b.amount), 0))
   const totalDeductions = r2(breakdown.filter(b => b.type === 'deduction').reduce((s, b) => s + Number(b.amount), 0))
+  // Derive netPayable from the breakdown line items rather than trusting the stored
+  // column directly — settlements saved before the Math.abs() sign bug was fixed have
+  // a corrupted (always-positive) netPayable column, while their breakdownJson was
+  // always correct. Recomputing here makes every statement/PDF self-heal on next
+  // generation; callers should also persist this back onto the row (see fnf.ts).
+  const netPayable = breakdown.length > 0 ? r2(totalAdditions - totalDeductions) : Number(settlement.netPayable)
   const excessLeaveDays   = r2(excessLeaveDetail.reduce((s, r) => s + Number(r.excessDays || 0), 0))
   const excessLeaveAmount = r2(excessLeaveDetail.reduce((s, r) => s + Number(r.excessAmount || 0), 0))
 
