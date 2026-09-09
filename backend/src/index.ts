@@ -43,7 +43,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
   process.env.LANDING_URL || '',
