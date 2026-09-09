@@ -1143,7 +1143,7 @@ function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, c
             {isNeg ? 'Recoverable from Employee' : 'Net Payable to Employee'}
           </span>
           <span className={clsx('text-xl font-display font-bold', isNeg ? 'text-red-800' : 'text-emerald-800')}>
-            {fmt(net)}
+            {fmt(Math.abs(net))}
           </span>
         </div>
         <div className="space-y-1 mb-4">

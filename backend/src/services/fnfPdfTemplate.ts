@@ -16,8 +16,19 @@ function fmtDate(d: Date | string): string {
 }
 
 export function generateFnfStatementHTML(calc: FnfCalculation, employee: any): string {
-  const additions  = calc.breakdown.filter(b => b.type === 'addition')
+  // Payslip-style earnings breakup: component totals (Basic/HRA/Transport/FBP) instead
+  // of one lump "Salary" line — this is the employee's final payslip, not just a summary.
+  const salaryLabelPrefix = 'Salary '
+  const nonSalaryAdditions = calc.breakdown.filter(b => b.type === 'addition' && !b.label.startsWith(salaryLabelPrefix) && b.label !== 'Salary')
+  const earningsRows = [
+    ...(calc.totalBasic     > 0 ? [{ label: 'Basic Salary',    amount: calc.totalBasic }]     : []),
+    ...(calc.totalHra       > 0 ? [{ label: 'HRA',             amount: calc.totalHra }]       : []),
+    ...(calc.totalTransport > 0 ? [{ label: 'Transportation',  amount: calc.totalTransport }] : []),
+    ...(calc.totalFbp       > 0 ? [{ label: 'FBP',             amount: calc.totalFbp }]       : []),
+    ...nonSalaryAdditions,
+  ]
   const deductions = calc.breakdown.filter(b => b.type === 'deduction')
+  const bank = employee.bankDetail
 
   const rowHTML = (label: string, amount: number) =>
     `<tr><td>${label}</td><td style="text-align:right">₹ ${fmt(amount)}</td></tr>`
@@ -84,6 +95,9 @@ export function generateFnfStatementHTML(calc: FnfCalculation, employee: any): s
     .net-box.negative { background: #991b1b; }
     .net-label { font-size: 12px; font-weight: 600; opacity: 0.9; }
     .net-amount { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+    .bank-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; display: flex; gap: 20px; font-size: 10px; }
+    .bank-item .bl { color: #94a3b8; }
+    .bank-item .bv { font-weight: 600; margin-top: 1px; }
     .section { margin: 14px 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
     .section-title { background: #f8fafc; padding: 8px 14px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: .05em; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
     table.detail-table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
@@ -102,7 +116,7 @@ export function generateFnfStatementHTML(calc: FnfCalculation, employee: any): s
     <div>
       <div class="company-name">${COMPANY_LEGAL}</div>
       <div class="company-brand">(${COMPANY_BRAND})</div>
-      <div class="doc-title">Full &amp; Final Settlement Statement</div>
+      <div class="doc-title">Full &amp; Final Settlement Statement — Final Payslip</div>
     </div>
     <div class="doc-meta">
       <div class="date">Generated ${today}</div>
@@ -116,6 +130,8 @@ export function generateFnfStatementHTML(calc: FnfCalculation, employee: any): s
       <div class="info-row"><span class="label">Employee ID</span><span class="value">${employee.employeeCode}</span></div>
       <div class="info-row"><span class="label">Designation</span><span class="value">${employee.jobTitle || '—'}</span></div>
       <div class="info-row"><span class="label">Department</span><span class="value">${employee.department || '—'}</span></div>
+      <div class="info-row"><span class="label">PAN</span><span class="value">${employee.panNumber || '—'}</span></div>
+      <div class="info-row"><span class="label">PF Number</span><span class="value">${employee.pfNumber || '—'}</span></div>
     </div>
     <div class="info-box">
       <h4>Separation Details</h4>
@@ -135,7 +151,7 @@ export function generateFnfStatementHTML(calc: FnfCalculation, employee: any): s
     <div class="salary-box earnings-box">
       <h4>Earnings</h4>
       <table class="salary-table">
-        <tbody>${additions.map(r => rowHTML(r.label, r.amount)).join('')}</tbody>
+        <tbody>${earningsRows.map(r => rowHTML(r.label, r.amount)).join('')}</tbody>
         <tfoot><tr class="total-row"><td>Total Earnings</td><td style="text-align:right">₹ ${fmt(calc.totalAdditions)}</td></tr></tfoot>
       </table>
     </div>
@@ -152,6 +168,14 @@ export function generateFnfStatementHTML(calc: FnfCalculation, employee: any): s
     <div class="net-label">${netLabel}</div>
     <div class="net-amount">₹ ${fmt(netAbs)}</div>
   </div>
+
+  ${bank && !calc.isNegative ? `
+  <div class="bank-box">
+    <div class="bank-item"><div class="bl">Bank Name</div><div class="bv">${bank.bankName}</div></div>
+    <div class="bank-item"><div class="bl">Account Number</div><div class="bv">${'•'.repeat(8)}${bank.accountNumber.slice(-4)}</div></div>
+    <div class="bank-item"><div class="bl">IFSC Code</div><div class="bv">${bank.ifscCode}</div></div>
+    <div class="bank-item"><div class="bl">Account Name</div><div class="bv">${bank.accountName}</div></div>
+  </div>` : ''}
 
   ${cycleRows ? `
   <div class="section">

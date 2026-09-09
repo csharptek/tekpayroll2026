@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { Download, FileText, Lock, Eye, EyeOff } from 'lucide-react'
 import { payslipApi, employeeApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
-import { PageHeader, Card, Table, Th, Td, Tr, EmptyState, Skeleton, StatusBadge, Rupee } from '../../components/ui'
+import { PageHeader, Card, Table, Th, Td, Tr, EmptyState, Skeleton, StatusBadge, Rupee, NetPayable } from '../../components/ui'
 import { format } from 'date-fns'
 
 const SESSION_KEY = 'payslip_unlocked'
@@ -154,7 +154,7 @@ export default function MyPayslipsPage() {
               <p className="font-semibold text-slate-800">Full &amp; Final Settlement Statement</p>
               <p className="text-xs text-slate-400 mt-0.5">
                 {fnfStatement.lastWorkingDay && `Last working day ${format(new Date(fnfStatement.lastWorkingDay), 'dd MMM yyyy')} · `}
-                Net payable <Rupee amount={fnfStatement.netPayable} />
+                Net payable <NetPayable amount={fnfStatement.netPayable} />
               </p>
             </div>
             {fnfStatement.pdfUrl ? (

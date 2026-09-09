@@ -43,7 +43,7 @@ export async function sendEmail(to: string, subject: string, htmlBody: string) {
 }
 
 export async function sendEmailWithAttachment(
-  to: string,
+  to: string | string[],
   subject: string,
   htmlBody: string,
   attachmentName: string,
@@ -59,12 +59,17 @@ export async function sendEmailWithAttachment(
       console.warn('[EMAIL] Graph API not configured — skipping email')
       return
     }
+    const toList = Array.isArray(to) ? to : [to]
+    if (toList.length === 0) {
+      console.warn('[EMAIL] No TO recipients — skipping')
+      return
+    }
     const token = await getAccessToken(cfg.tenantId, cfg.clientId, cfg.clientSecret)
     const payload: any = {
       message: {
         subject,
         body: { contentType: 'HTML', content: htmlBody },
-        toRecipients: [{ emailAddress: { address: to } }],
+        toRecipients: toList.map(e => ({ emailAddress: { address: e } })),
         attachments: [
           {
             '@odata.type': '#microsoft.graph.fileAttachment',

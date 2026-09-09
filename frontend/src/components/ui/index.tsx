@@ -387,6 +387,19 @@ export function Rupee({ amount, className }: { amount: number | string; classNam
   )
 }
 
+// F&F net payable can be negative (employee owes company). Shows the absolute
+// amount with a "Recoverable" tag instead of a bare minus sign.
+export function NetPayable({ amount, className }: { amount: number | string; className?: string }) {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
+  const isNeg = num < 0
+  return (
+    <span className={clsx(className, isNeg && 'text-red-600')}>
+      <Rupee amount={Math.abs(num)} />
+      {isNeg && <span className="ml-1 text-xs font-semibold align-middle">(Recoverable)</span>}
+    </span>
+  )
+}
+
 // ─── SEARCH BAR ──────────────────────────────────────────────────────────────
 
 export function SearchBar({ value, onChange, placeholder = 'Search...' }: {

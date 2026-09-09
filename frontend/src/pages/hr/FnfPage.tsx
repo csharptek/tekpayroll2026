@@ -9,7 +9,7 @@ import { format } from 'date-fns'
 import { fnfApi } from '../../services/api'
 import {
   PageHeader, Button, Card, Modal, Alert, Skeleton,
-  Table, Th, Td, Tr, EmptyState, Rupee, StatusBadge
+  Table, Th, Td, Tr, EmptyState, Rupee, NetPayable, StatusBadge
 } from '../../components/ui'
 import clsx from 'clsx'
 
@@ -399,7 +399,7 @@ function ApproveModal({ settlement, open, onClose, viewOnly = false }: { settlem
           ))}
           <div className="flex justify-between font-bold text-brand-700 pt-2">
             <span>Net Payable</span>
-            <Rupee amount={settlement.netPayable} className="text-base" />
+            <NetPayable amount={settlement.netPayable} className="text-base" />
           </div>
         </div>
 
@@ -441,8 +441,8 @@ function SettleModal({ settlement, open, onClose }: { settlement: any; open: boo
     >
       <div className="space-y-4">
         <p className="text-sm text-slate-600">
-          Confirm that <strong>{settlement.employee?.name}</strong>'s F&F payment of{' '}
-          <strong>₹{Number(settlement.netPayable).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong> has been disbursed.
+          Confirm that <strong>{settlement.employee?.name}</strong>'s F&F {Number(settlement.netPayable) < 0 ? 'recovery' : 'payment'} of{' '}
+          <strong>₹{Math.abs(Number(settlement.netPayable)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong> has been {Number(settlement.netPayable) < 0 ? 'recovered' : 'disbursed'}.
         </p>
         <div className="flex flex-col gap-1">
           <label className="label">Notes (optional)</label>
@@ -483,6 +483,33 @@ function StatementButton({ settlement }: { settlement: any }) {
       loading={genMut.isPending} onClick={() => genMut.mutate()}>
       Generate Statement
     </Button>
+  )
+}
+
+function SendToHrButton({ settlement }: { settlement: any }) {
+  const qc = useQueryClient()
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
+  const mut = useMutation({
+    mutationFn: () => fnfApi.emailToHr(settlement.id),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ['fnf-list'] })
+      setSent(true); setTimeout(() => setSent(false), 3000)
+    },
+    onError: (e: any) => {
+      setError(e?.response?.data?.error || 'Send failed')
+      setTimeout(() => setError(''), 4000)
+    },
+  })
+
+  return (
+    <div className="inline-flex flex-col items-start gap-1">
+      <Button variant="secondary" size="sm" icon={<Mail size={12} />}
+        loading={mut.isPending} onClick={() => mut.mutate()}>
+        {sent ? 'Sent!' : 'Send Email to HR'}
+      </Button>
+      {error && <span className="text-[10px] text-red-600">{error}</span>}
+    </div>
   )
 }
 
@@ -651,7 +678,7 @@ export default function FnfPage() {
                     <Td className="text-sm">{s.lastWorkingDay ? format(new Date(s.lastWorkingDay), 'dd MMM yyyy') : '—'}</Td>
                     <Td className="text-right text-emerald-600 font-semibold"><Rupee amount={additions} /></Td>
                     <Td className="text-right text-red-600 font-semibold"><Rupee amount={deductions} /></Td>
-                    <Td className="text-right font-bold text-brand-700"><Rupee amount={s.netPayable} /></Td>
+                    <Td className="text-right font-bold text-brand-700"><NetPayable amount={s.netPayable} /></Td>
                     <Td>
                       <div className="flex gap-2">
                         <Button variant="secondary" size="sm" icon={<Eye size={12} />}
@@ -659,6 +686,7 @@ export default function FnfPage() {
                           View
                         </Button>
                         <StatementButton settlement={s} />
+                        <SendToHrButton settlement={s} />
                         <Button size="sm" icon={<CheckCircle2 size={12} />} onClick={() => setApproveTarget(s)}>
                           Approve
                         </Button>
@@ -694,10 +722,11 @@ export default function FnfPage() {
                   </Td>
                   <Td>{s.approvedByName || '—'}</Td>
                   <Td>{s.approvedAt ? format(new Date(s.approvedAt), 'dd MMM yyyy') : '—'}</Td>
-                  <Td className="text-right font-bold text-brand-700"><Rupee amount={s.netPayable} /></Td>
+                  <Td className="text-right font-bold text-brand-700"><NetPayable amount={s.netPayable} /></Td>
                   <Td>
                     <div className="flex gap-2">
                       <StatementButton settlement={s} />
+                      <SendToHrButton settlement={s} />
                       <Button variant="secondary" size="sm" icon={<Mail size={12} />} onClick={() => setEmailTarget(s)}>
                         Email
                       </Button>
@@ -740,7 +769,7 @@ export default function FnfPage() {
                   </Td>
                   <Td>{s.approvedByName || '—'}</Td>
                   <Td>{s.approvedAt ? format(new Date(s.approvedAt), 'dd MMM yyyy') : '—'}</Td>
-                  <Td className="text-right font-bold"><Rupee amount={s.netPayable} /></Td>
+                  <Td className="text-right font-bold"><NetPayable amount={s.netPayable} /></Td>
                   <Td className="text-xs text-slate-400">{s.notes || '—'}</Td>
                   <Td><StatementButton settlement={s} /></Td>
                   <Td>

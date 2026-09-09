@@ -10,6 +10,10 @@ export interface FnfCycleBreakdown {
   salaryDays:    number
   grossMonthly:  number
   proratedSalary:number
+  basicMonthly:  number  // prorated component breakup — statement renders as a payslip-style line-item breakdown
+  hraMonthly:    number
+  transportMonthly: number
+  fbpMonthly:    number
   pfAmount:      number
   esiAmount:     number
   ptAmount:      number
@@ -30,6 +34,10 @@ export interface FnfCalculation {
   noticePeriodMonths:number // distinct calendar months touched, resignation → LWD
   grossSalary:       number
   proratedSalary:    number
+  totalBasic:        number  // component totals across all cycles — statement's payslip-style earnings breakup
+  totalHra:          number
+  totalTransport:    number
+  totalFbp:          number
   pendingReimbursements: number
   pfAmount:          number
   esiAmount:         number
@@ -86,6 +94,68 @@ function monthEnd(date: Date): Date {
 }
 function monthLabel(date: Date): string {
   return date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+}
+
+// Rebuilds an FnfCalculation-shaped object from a saved FnfSettlement row —
+// used for statement/PDF generation so the document matches exactly what was
+// confirmed in the wizard (manual PF/ESI/PT/TDS overrides, notice recovery,
+// bonus recovery/due — none of which calculateFnf() knows about on its own).
+// Re-running calculateFnf() here would silently drop every wizard override.
+export function buildCalcFromSettlement(settlement: any): FnfCalculation {
+  const netPayable = Number(settlement.netPayable)
+  const breakdown: FnfCalculation['breakdown'] = settlement.breakdownJson ? JSON.parse(settlement.breakdownJson) : []
+  const cycles: FnfCycleBreakdown[] = settlement.cyclesJson ? JSON.parse(settlement.cyclesJson) : []
+  const hyiRecoveryDetail: HyiRecoveryDetailRow[] = settlement.hyiRecoveryDetailJson ? JSON.parse(settlement.hyiRecoveryDetailJson) : []
+  const excessLeaveDetail: ExcessLeaveDetailRow[] = settlement.excessLeaveDetailJson ? JSON.parse(settlement.excessLeaveDetailJson) : []
+
+  const totalAdditions  = r2(breakdown.filter(b => b.type === 'addition').reduce((s, b) => s + Number(b.amount), 0))
+  const totalDeductions = r2(breakdown.filter(b => b.type === 'deduction').reduce((s, b) => s + Number(b.amount), 0))
+  const excessLeaveDays   = r2(excessLeaveDetail.reduce((s, r) => s + Number(r.excessDays || 0), 0))
+  const excessLeaveAmount = r2(excessLeaveDetail.reduce((s, r) => s + Number(r.excessAmount || 0), 0))
+
+  const resignationDate: Date = settlement.resignationDate
+  const lwd: Date             = settlement.lastWorkingDay
+  const noticePeriodMonths =
+    (lwd.getFullYear() * 12 + lwd.getMonth()) -
+    (resignationDate.getFullYear() * 12 + resignationDate.getMonth()) + 1
+
+  return {
+    employeeId:        settlement.employeeId,
+    employeeName:      settlement.employee.name,
+    resignationDate,
+    lastWorkingDay:    lwd,
+    cycleStart:        cycles[0]?.cycleStart || resignationDate,
+    salaryDays:        settlement.salaryDays,
+    totalCycleDays:    cycles.reduce((s, c) => s + Number(c.totalDays || 0), 0),
+    noticePeriodDays:  settlement.noticePeriosDays,
+    noticePeriodMonths,
+    grossSalary:       cycles[0]?.grossMonthly || 0,
+    proratedSalary:    Number(settlement.salaryAmount),
+    totalBasic:        r2(cycles.reduce((s, c: any) => s + Number(c.basicMonthly || 0), 0)),
+    totalHra:          r2(cycles.reduce((s, c: any) => s + Number(c.hraMonthly || 0), 0)),
+    totalTransport:    r2(cycles.reduce((s, c: any) => s + Number(c.transportMonthly || 0), 0)),
+    totalFbp:          r2(cycles.reduce((s, c: any) => s + Number(c.fbpMonthly || 0), 0)),
+    pendingReimbursements: Number(settlement.reimbursements),
+    pfAmount:          Number(settlement.pfAmount),
+    esiAmount:         Number(settlement.esiAmount),
+    ptAmount:          Number(settlement.ptAmount),
+    tdsAmount:         Number(settlement.tdsAmount),
+    loanOutstanding:   Number(settlement.loanOutstanding),
+    otherDeductions:   Number(settlement.otherDeductions),
+    hyiRecovery:       Number(settlement.incentiveRecovery),
+    hyiRecoveryDetail,
+    lopDays:           r2(cycles.reduce((s, c) => s + Number(c.lopDays || 0), 0)),
+    lopAmount:         r2(cycles.reduce((s, c) => s + Number(c.lopAmount || 0), 0)),
+    excessLeaveDays,
+    excessLeaveAmount,
+    excessLeaveDetail,
+    totalAdditions,
+    totalDeductions,
+    netPayable,
+    isNegative:        netPayable < 0,
+    cycles,
+    breakdown,
+  }
 }
 
 export async function calculateFnf(
@@ -163,6 +233,14 @@ export async function calculateFnf(
       const proratedSalary = isLwdMonth
         ? r2((grossMonthly / totalDays) * salaryDays)
         : grossMonthly
+      // Component breakup — same proration rule as gross, purely for the statement's
+      // payslip-style earnings display. Components should sum back to proratedSalary
+      // (HYI/bonus already zeroed above, so gross = basic + hra + transport + fbp).
+      const prorateComp = (v: number) => isLwdMonth ? r2((v / totalDays) * salaryDays) : v
+      const basicMonthly      = prorateComp(salary.basicMonthly)
+      const hraMonthly        = prorateComp(salary.hraMonthly)
+      const transportMonthly  = prorateComp(salary.transportMonthly)
+      const fbpMonthly        = prorateComp(salary.fbpMonthly)
       const pfAmount  = isLwdMonth ? r2((salary.employeePfMonthly / totalDays) * salaryDays) : salary.employeePfMonthly
       const esiAmount = isLwdMonth ? r2((computeEsi(salary.esiBase) / totalDays) * salaryDays) : computeEsi(salary.esiBase)
       const ptAmount  = await computePt(grossMonthly, employee.state || '')
@@ -187,6 +265,10 @@ export async function calculateFnf(
         salaryDays,
         grossMonthly:   grossMonthly,
         proratedSalary,
+        basicMonthly,
+        hraMonthly,
+        transportMonthly,
+        fbpMonthly,
         pfAmount,
         esiAmount,
         ptAmount,
@@ -202,6 +284,10 @@ export async function calculateFnf(
   // ─── AGGREGATE ────────────────────────────────────────────────────────────
   const totalSalaryDays    = cycles.reduce((s, c) => s + c.salaryDays, 0)
   const totalProratedSalary = r2(cycles.reduce((s, c) => s + c.proratedSalary, 0))
+  const totalBasic          = r2(cycles.reduce((s, c) => s + c.basicMonthly, 0))
+  const totalHra            = r2(cycles.reduce((s, c) => s + c.hraMonthly, 0))
+  const totalTransport      = r2(cycles.reduce((s, c) => s + c.transportMonthly, 0))
+  const totalFbp            = r2(cycles.reduce((s, c) => s + c.fbpMonthly, 0))
   const totalPf            = r2(cycles.reduce((s, c) => s + c.pfAmount, 0))
   const totalEsi           = r2(cycles.reduce((s, c) => s + c.esiAmount, 0))
   const totalPt            = r2(cycles.reduce((s, c) => s + c.ptAmount, 0))
@@ -385,6 +471,10 @@ export async function calculateFnf(
     noticePeriodMonths,
     grossSalary:           cycles[0]?.grossMonthly || 0,
     proratedSalary:        totalProratedSalary,
+    totalBasic,
+    totalHra,
+    totalTransport,
+    totalFbp,
     pendingReimbursements,
     pfAmount:              totalPf,
     esiAmount:             totalEsi,

@@ -4,7 +4,7 @@ import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
 import { AuditAction } from '@prisma/client'
-import { calculateFnf } from '../services/fnfService'
+import { calculateFnf, buildCalcFromSettlement } from '../services/fnfService'
 
 export const fnfRouter = Router()
 fnfRouter.use(authenticate, requireSuperAdmin)
@@ -99,7 +99,7 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
       excessLeaveDetailJson: JSON.stringify(calc.excessLeaveDetail || []),
       status:            'INITIATED',
     },
-    include: { employee: true },
+    include: { employee: { include: { bankDetail: true } } },
   })
 
   await createAuditLog({
@@ -133,12 +133,15 @@ fnfRouter.post('/initiate/:employeeId', async (req, res) => {
 fnfRouter.post('/:id/generate-pdf', async (req, res) => {
   const settlement = await prisma.fnfSettlement.findUnique({
     where: { id: req.params.id },
-    include: { employee: true },
+    include: { employee: { include: { bankDetail: true } } },
   })
   if (!settlement) throw new AppError('Settlement not found', 404)
 
-  const storedOverrides = settlement.hyiOverridesJson ? JSON.parse(settlement.hyiOverridesJson) : undefined
-  const calc = await calculateFnf(settlement.employeeId, settlement.lastWorkingDay, storedOverrides)
+  // Build the statement from the settlement's own saved data (breakdown/cycles/
+  // netPayable) — this is what the wizard confirmed, including manual PF/ESI/PT/TDS
+  // overrides and notice/bonus recovery. Re-running calculateFnf() here would drop
+  // all of that and could generate a statement that doesn't match the wizard's total.
+  const calc = buildCalcFromSettlement(settlement)
   const { generateFnfStatementPdf } = await import('../services/fnfPdfService')
   const { pdfUrl, pdfKey } = await generateFnfStatementPdf(calc, settlement.employee)
 
@@ -149,6 +152,68 @@ fnfRouter.post('/:id/generate-pdf', async (req, res) => {
   })
 
   res.json({ success: true, data: updated })
+})
+
+// Send the F&F statement PDF to the configured HR/Finance notification list
+// (Notifications settings → "F&F Statement — Send to HR"). Manual button next to
+// "Generate Statement" — generates the PDF first if it hasn't been generated yet.
+fnfRouter.post('/:id/email-hr', async (req, res) => {
+  const settlement = await prisma.fnfSettlement.findUnique({
+    where: { id: req.params.id },
+    include: { employee: { include: { bankDetail: true } } },
+  })
+  if (!settlement) throw new AppError('Settlement not found', 404)
+
+  const { getNotifConfig, renderTemplate } = await import('../services/notificationService')
+  const cfg = await getNotifConfig('FNF_STATEMENT_TO_HR')
+  if (cfg.to.length === 0) {
+    throw new AppError('No recipients configured — set them under Notifications → F&F Statement — Send to HR', 400)
+  }
+
+  let pdfKey = settlement.pdfKey
+  let pdfUrl = settlement.pdfUrl
+  if (!pdfKey) {
+    const calc = buildCalcFromSettlement(settlement)
+    const { generateFnfStatementPdf } = await import('../services/fnfPdfService')
+    const generated = await generateFnfStatementPdf(calc, settlement.employee)
+    pdfUrl = generated.pdfUrl
+    pdfKey = generated.pdfKey
+    await prisma.fnfSettlement.update({ where: { id: settlement.id }, data: { pdfUrl, pdfKey } })
+  }
+
+  const { downloadPayslipPdf } = await import('../utils/payslipBlob')
+  const { sendEmailWithAttachment, emailWrap } = await import('../services/emailService')
+
+  const buffer   = await downloadPayslipPdf(pdfKey)
+  const filename = pdfKey.split('/').pop() || `FNF-${settlement.employee.employeeCode}.pdf`
+
+  const netPayable = Number(settlement.netPayable)
+  const vars = {
+    employeeName: settlement.employee.name,
+    employeeCode: settlement.employee.employeeCode,
+    lwd:          settlement.lastWorkingDay.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+    amount:       `₹${Math.abs(netPayable).toLocaleString('en-IN')}${netPayable < 0 ? ' (Recoverable)' : ''}`,
+  }
+  const subject = cfg.subject ? renderTemplate(cfg.subject, vars) : `F&F Statement — ${vars.employeeName} (${vars.employeeCode})`
+  const html = emailWrap(`
+    <h2 style="color:#1f4e79;margin:0 0 16px">Full &amp; Final Settlement Statement</h2>
+    <p style="color:#475569">F&amp;F statement for <strong>${vars.employeeName}</strong> (${vars.employeeCode}) is attached.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">
+      <tr><td style="padding:8px 0;color:#64748b;width:160px">Last Working Day</td><td style="color:#1e293b;font-weight:600">${vars.lwd}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b">${netPayable < 0 ? 'Recoverable from Employee' : 'Net Payable'}</td><td style="color:#1e293b;font-weight:600">${vars.amount}</td></tr>
+    </table>`)
+
+  await sendEmailWithAttachment(cfg.to, subject, html, filename, buffer.toString('base64'), 'application/pdf', cfg.cc)
+
+  await createAuditLog({
+    user: req.user!,
+    action: AuditAction.FNF_APPROVE,
+    recordId: settlement.id,
+    targetEmployeeId: settlement.employeeId,
+    description: `F&F statement emailed to HR (${cfg.to.join(', ')}) for ${settlement.employee.name}`,
+  })
+
+  res.json({ success: true, data: { sentTo: cfg.to, cc: cfg.cc } })
 })
 
 fnfRouter.post('/:id/approve', async (req, res) => {
@@ -198,7 +263,7 @@ fnfRouter.put('/:id', async (req, res) => {
   const newOther = req.body.otherDeductions != null ? Number(req.body.otherDeductions) : Number(settlement.otherDeductions)
   const totalDed = Number(settlement.pfAmount) + Number(settlement.esiAmount) + Number(settlement.ptAmount) +
     newTds + Number(settlement.incentiveRecovery) + Number(settlement.loanOutstanding) + newOther
-  const netPayable = Math.max(0, Number(settlement.salaryAmount) + Number(settlement.reimbursements) - totalDed)
+  const netPayable = Math.round((Number(settlement.salaryAmount) + Number(settlement.reimbursements) - totalDed) * 100) / 100
 
   const updated = await prisma.fnfSettlement.update({
     where: { id: req.params.id },

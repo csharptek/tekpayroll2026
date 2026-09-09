@@ -22,6 +22,7 @@ export type NotifType =
   | 'REIMBURSEMENT_ADDED'
   | 'ASSET_ASSIGNED'
   | 'FNF_SETTLEMENT_READY'
+  | 'FNF_STATEMENT_TO_HR'
 
 export async function getNotifConfig(type: NotifType) {
   const keys = [

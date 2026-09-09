@@ -41,7 +41,11 @@ async function uploadFnfStatement(buffer: Buffer, blobKey: string): Promise<stri
 
 export async function generateFnfStatementPdf(
   calc: FnfCalculation,
-  employee: { name: string; employeeCode: string; jobTitle?: string | null; department?: string | null }
+  employee: {
+    name: string; employeeCode: string; jobTitle?: string | null; department?: string | null
+    panNumber?: string | null; pfNumber?: string | null
+    bankDetail?: { bankName: string; accountNumber: string; ifscCode: string; accountName: string } | null
+  }
 ): Promise<{ pdfUrl: string; pdfKey: string }> {
   const html   = generateFnfStatementHTML(calc, employee)
   const buffer = await generatePDF(html)

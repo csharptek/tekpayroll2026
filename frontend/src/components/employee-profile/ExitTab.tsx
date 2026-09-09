@@ -117,8 +117,10 @@ function TentativeFnfPanel({ empId, lwdDate }: { empId: string; lwdDate: string 
       </div>
       {/* Net */}
       <div className="px-4 py-3 bg-white border-t border-slate-200 flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-700">Net Payable</span>
-        <span className="text-base font-bold text-brand-600">₹{Number(data.netPayable).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+        <span className="text-sm font-semibold text-slate-700">{data.isNegative ? 'Recoverable from Employee' : 'Net Payable'}</span>
+        <span className={`text-base font-bold ${data.isNegative ? 'text-red-600' : 'text-brand-600'}`}>
+          ₹{Math.abs(Number(data.netPayable)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+        </span>
       </div>
       <p className="text-xs text-slate-400 px-4 pb-3">* Tentative estimate. Actual F&amp;F may vary based on final approvals.</p>
     </div>

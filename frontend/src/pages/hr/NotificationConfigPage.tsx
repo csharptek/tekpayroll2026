@@ -27,6 +27,7 @@ type NotifType =
   | 'REIMBURSEMENT_ADDED'
   | 'ASSET_ASSIGNED'
   | 'FNF_SETTLEMENT_READY'
+  | 'FNF_STATEMENT_TO_HR'
 
 interface NotifDef {
   type:         NotifType
@@ -105,6 +106,15 @@ const NOTIFS: NotifDef[] = [
     defaultSubject: 'Resignation Withdrawn — {employeeName} ({employeeCode})',
     vars: ['employeeName', 'employeeCode'],
     bodyPreview: 'Employee name/code, status restored to Active',
+  },
+  {
+    type: 'FNF_STATEMENT_TO_HR',
+    title: 'F&F Statement — Send to HR',
+    audience: 'HR',
+    description: 'Sent when "Send Email to HR" is clicked on an F&F settlement — delivers the settlement statement PDF as an attachment. Not automatic; triggered manually per settlement.',
+    defaultSubject: 'F&F Statement — {employeeName} ({employeeCode})',
+    vars: ['employeeName', 'employeeCode', 'lwd', 'amount'],
+    bodyPreview: 'F&F statement PDF attached; employee name/code, last working day, net amount (or recoverable amount) in the body.',
   },
   // ── Employee notifications ───────────────────────────────────────────────
   {
