@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   GitMerge, Calculator, CheckCircle2, Eye,
-  Calendar, AlertTriangle, Banknote, IndianRupee, FileText, Wand2, Mail,
+  Calendar, AlertTriangle, Banknote, IndianRupee, FileText, Wand2, Mail, RefreshCw,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { fnfApi } from '../../services/api'
@@ -12,6 +12,28 @@ import {
   Table, Th, Td, Tr, EmptyState, Rupee, NetPayable, StatusBadge
 } from '../../components/ui'
 import clsx from 'clsx'
+
+// ─── SETTLEMENT TOTALS (from stored breakdown — matches Net Payable exactly) ──
+// Settlement columns (pfAmount, esiAmount, etc.) don't cover every deduction
+// (LOP, excess leave, notice/bonus recovery live only in breakdownJson), so
+// summing individual columns undercounts and won't reconcile with netPayable.
+// breakdownJson is the full, confirmed line-item list — sum that instead.
+function settlementTotals(s: any): { additions: number; deductions: number } {
+  try {
+    const breakdown = s.breakdownJson ? JSON.parse(s.breakdownJson) : null
+    if (breakdown && breakdown.length) {
+      const additions  = breakdown.filter((b: any) => b.type === 'addition').reduce((sum: number, b: any) => sum + Number(b.amount), 0)
+      const deductions = breakdown.filter((b: any) => b.type === 'deduction').reduce((sum: number, b: any) => sum + Number(b.amount), 0)
+      return { additions, deductions }
+    }
+  } catch { /* fall through to legacy estimate below */ }
+  // Fallback for older settlements saved before breakdownJson existed — an
+  // approximation only; LOP/excess-leave/notice/bonus recovery are not included.
+  const additions  = Number(s.salaryAmount) + Number(s.reimbursements)
+  const deductions = Number(s.pfAmount) + Number(s.esiAmount) + Number(s.ptAmount) +
+    Number(s.tdsAmount) + Number(s.incentiveRecovery) + Number(s.loanOutstanding) + Number(s.otherDeductions)
+  return { additions, deductions }
+}
 
 // ─── EXPANDABLE CALCULATION DETAILS PANEL ─────────────────────────────────
 
@@ -472,10 +494,16 @@ function StatementButton({ settlement }: { settlement: any }) {
 
   if (settlement.pdfUrl) {
     return (
-      <Button variant="secondary" size="sm" icon={<FileText size={12} />}
-        onClick={() => window.open(settlement.pdfUrl, '_blank')}>
-        Statement
-      </Button>
+      <div className="inline-flex gap-1">
+        <Button variant="secondary" size="sm" icon={<FileText size={12} />}
+          onClick={() => window.open(settlement.pdfUrl, '_blank')}>
+          Statement
+        </Button>
+        <Button variant="secondary" size="sm" icon={<RefreshCw size={12} />}
+          loading={genMut.isPending} onClick={() => genMut.mutate()} title="Regenerate with latest data/template">
+          Regenerate
+        </Button>
+      </div>
     )
   }
   return (
@@ -666,9 +694,7 @@ export default function FnfPage() {
             </thead>
             <tbody>
               {initiated.map((s: any) => {
-                const additions  = Number(s.salaryAmount) + Number(s.reimbursements)
-                const deductions = Number(s.pfAmount) + Number(s.esiAmount) + Number(s.ptAmount) +
-                  Number(s.tdsAmount) + Number(s.incentiveRecovery) + Number(s.loanOutstanding) + Number(s.otherDeductions)
+                const { additions, deductions } = settlementTotals(s)
                 return (
                   <Tr key={s.id}>
                     <Td>
@@ -707,6 +733,7 @@ export default function FnfPage() {
             <thead>
               <tr className="border-b border-slate-100">
                 <Th>Employee</Th>
+                <Th>LWD</Th>
                 <Th>Approved By</Th>
                 <Th>Approved On</Th>
                 <Th className="text-right">Net Payable</Th>
@@ -720,6 +747,7 @@ export default function FnfPage() {
                     <p className="font-semibold text-slate-800">{s.employee?.name}</p>
                     <p className="text-xs text-slate-400">{s.employee?.department}</p>
                   </Td>
+                  <Td className="text-sm">{s.lastWorkingDay ? format(new Date(s.lastWorkingDay), 'dd MMM yyyy') : '—'}</Td>
                   <Td>{s.approvedByName || '—'}</Td>
                   <Td>{s.approvedAt ? format(new Date(s.approvedAt), 'dd MMM yyyy') : '—'}</Td>
                   <Td className="text-right font-bold text-brand-700"><NetPayable amount={s.netPayable} /></Td>
@@ -752,6 +780,7 @@ export default function FnfPage() {
             <thead>
               <tr className="border-b border-slate-100">
                 <Th>Employee</Th>
+                <Th>LWD</Th>
                 <Th>Approved By</Th>
                 <Th>Approved On</Th>
                 <Th className="text-right">Net Paid</Th>
@@ -767,6 +796,7 @@ export default function FnfPage() {
                     <p className="font-semibold text-slate-800">{s.employee?.name}</p>
                     <p className="text-xs text-slate-400">{s.employee?.department}</p>
                   </Td>
+                  <Td className="text-sm">{s.lastWorkingDay ? format(new Date(s.lastWorkingDay), 'dd MMM yyyy') : '—'}</Td>
                   <Td>{s.approvedByName || '—'}</Td>
                   <Td>{s.approvedAt ? format(new Date(s.approvedAt), 'dd MMM yyyy') : '—'}</Td>
                   <Td className="text-right font-bold"><NetPayable amount={s.netPayable} /></Td>
