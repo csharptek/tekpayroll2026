@@ -13,12 +13,21 @@ employeeProfileRouter.use(authenticate)
 
 // ─── VOLUME STORAGE HELPER (Railway volume, replaces Azure Blob) ─────────────
 
+const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (_req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
-    cb(null, allowed.includes(file.mimetype))
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      cb(new AppError(
+        `Unsupported file type (${file.mimetype || 'unknown'}). Use JPG, PNG or WEBP. iPhone photos saved as HEIC must be converted to JPG first.`,
+        400,
+        'UNSUPPORTED_FILE_TYPE'
+      ))
+      return
+    }
+    cb(null, true)
   },
 })
 

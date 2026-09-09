@@ -177,6 +177,19 @@ export default function ExitTab({ emp, isHR, isSuperAdmin, onSaved }: {
     notes:         exitData?.exitInterview?.notes         || '',
   })
 
+  // Sync interview state when exitData loads/changes — without this, the form
+  // is initialized blank before the query resolves and Save silently
+  // overwrites already-saved interview data with empty values.
+  useEffect(() => {
+    if (exitData) {
+      setInterview({
+        isDone:        exitData.exitInterview?.isDone        || false,
+        interviewDate: exitData.exitInterview?.interviewDate?.slice(0, 10) || '',
+        notes:         exitData.exitInterview?.notes         || '',
+      })
+    }
+  }, [exitData])
+
   const detailsMut = useMutation({
     mutationFn: () => exitApi.updateDetails(emp.id, {
       exitType:          details.exitType,

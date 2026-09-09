@@ -19,6 +19,17 @@ export function errorHandler(
 ) {
   console.error(`[ERROR] ${err.name}: ${err.message}`);
 
+  // Multer upload errors (wrong field name, file too large, etc.)
+  if (err.name === 'MulterError') {
+    const multerErr = err as any;
+    const message = multerErr.code === 'LIMIT_FILE_SIZE'
+      ? 'File is too large. Max size is 10MB.'
+      : multerErr.code === 'LIMIT_UNEXPECTED_FILE'
+      ? 'Unexpected upload field. Please retry.'
+      : `Upload failed: ${multerErr.message}`;
+    return res.status(400).json({ success: false, error: message, code: multerErr.code });
+  }
+
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
       success: false,
