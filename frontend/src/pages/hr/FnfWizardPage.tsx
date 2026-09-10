@@ -1255,9 +1255,11 @@ function Step13FinalSummary({ stepData, confirmedSteps, onComplete, isLoading, c
         Recalculate HYI (fix stale values)
       </Button>
 
-      <Button loading={isLoading} onClick={onComplete} icon={<CheckCircle2 size={13} />}
+      <Button loading={isLoading} onClick={() => {
+          if (window.confirm('This will finalize the F&F settlement. You can still reopen and redo this wizard later. Continue?')) onComplete()
+        }} icon={<CheckCircle2 size={13} />}
         className="w-full justify-center">
-        Complete Wizard & Create/Update Settlement
+        FINAL EXIT COMPLETE
       </Button>
     </StepCard>
   )

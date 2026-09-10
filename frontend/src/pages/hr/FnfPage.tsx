@@ -814,6 +814,10 @@ export default function FnfPage() {
                       <Button variant="secondary" size="sm" icon={<Eye size={12} />} onClick={() => setViewTarget(s)}>
                         View
                       </Button>
+                      <Button variant="secondary" size="sm" icon={<Wand2 size={12} />}
+                        onClick={() => navigate(`/hr/fnf/wizard/${s.employeeId}`)}>
+                        Reopen Wizard
+                      </Button>
                       <Button variant="secondary" size="sm" icon={<Mail size={12} />} onClick={() => setEmailTarget(s)}>
                         Email
                       </Button>
