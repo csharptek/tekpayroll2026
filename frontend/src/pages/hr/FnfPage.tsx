@@ -720,6 +720,10 @@ export default function FnfPage() {
                         </Button>
                         <StatementButton settlement={s} />
                         <SendToHrButton settlement={s} />
+                        <Button variant="secondary" size="sm" icon={<Wand2 size={12} />}
+                          onClick={() => navigate(`/hr/fnf/wizard/${s.employeeId}`)}>
+                          Reopen Wizard
+                        </Button>
                         <Button size="sm" icon={<CheckCircle2 size={12} />} onClick={() => setApproveTarget(s)}>
                           Approve
                         </Button>
@@ -762,6 +766,10 @@ export default function FnfPage() {
                     <div className="flex gap-2">
                       <StatementButton settlement={s} />
                       <SendToHrButton settlement={s} />
+                      <Button variant="secondary" size="sm" icon={<Wand2 size={12} />}
+                        onClick={() => navigate(`/hr/fnf/wizard/${s.employeeId}`)}>
+                        Reopen Wizard
+                      </Button>
                       <Button variant="secondary" size="sm" icon={<Mail size={12} />} onClick={() => setEmailTarget(s)}>
                         Email
                       </Button>
