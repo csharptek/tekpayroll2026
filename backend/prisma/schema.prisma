@@ -108,6 +108,7 @@ enum AuditAction {
   LOAN_CLOSE
   SYNC_TRIGGER
   SALARY_REVISION
+  PAYROLL_INCENTIVE_ADJUST
 }
 
 enum SyncType {
@@ -386,6 +387,7 @@ model PayrollEntry {
 
   // Additions
   incentive       Decimal            @default(0) @db.Decimal(12, 2)   // monthly incentive
+  incentiveTdsAmount Decimal         @default(0) @db.Decimal(12, 2)   // 10% TDS on incentive
   reimbursementTotal Decimal         @default(0) @db.Decimal(12, 2)
 
   // Deductions

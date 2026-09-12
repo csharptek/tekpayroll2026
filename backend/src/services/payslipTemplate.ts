@@ -67,6 +67,7 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
   const hyi       = Number((entry as any).hyi || 0)
   const gross     = Number((entry as any).proratedGross)
   const incentive = Number(entry.incentive)
+  const incentiveTds = Number((entry as any).incentiveTdsAmount || 0)
   const reimb     = Number(entry.reimbursementTotal)
   const pf        = Number(entry.pfAmount)
   const employerPf= Number((entry as any).employerPfAmount || 0)
@@ -91,7 +92,7 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
   const hyiProrated       = r2(hyi       * ratio)
 
   const totalEarnings   = gross + incentive + reimb
-  const totalDeductions = pf + esi + pt + tds + lop + loan + incRec
+  const totalDeductions = pf + esi + pt + tds + lop + loan + incRec + incentiveTds
 
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   const { mmYyyy, monthLabel } = parseMonth(cycle.payrollMonth)
@@ -124,6 +125,7 @@ export function generatePayslipHTML(entry: FullEntry, leaveBalance?: {
     ...(esi  > 0 ? [{ label: 'ESI — Employee',           amount: esi  }] : []),
     ...(pt   > 0 ? [{ label: 'Professional Tax',         amount: pt   }] : []),
     ...(tds  > 0 ? [{ label: 'TDS',                      amount: tds  }] : []),
+    ...(incentiveTds > 0 ? [{ label: 'TDS on Incentive', amount: incentiveTds }] : []),
     ...(lop  > 0 ? [{ label: `Loss of Pay (${Number(entry.lopDays)} days)`, amount: lop }] : []),
     ...(loan > 0 ? [{ label: 'Loan EMI Deduction',       amount: loan }] : []),
     ...(incRec > 0 ? [{ label: 'Incentive Recovery',     amount: incRec }] : []),

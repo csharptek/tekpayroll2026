@@ -55,6 +55,7 @@ export interface DeductionResult {
   lop:               number
   incentiveRecovery: number
   loanDeduction:     number
+  incentiveTds:      number
 }
 
 export interface PayrollCalculation {
@@ -63,9 +64,12 @@ export interface PayrollCalculation {
   isBonusMonth:   boolean
   annualBonus:    number
   reimbursements: number
+  incentive:      number
   deductions:     DeductionResult
   netSalary:      number
 }
+
+export const INCENTIVE_TDS_PERCENT = 10
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
@@ -495,6 +499,8 @@ export async function calculatePayrollForEmployee(params: {
   lopDays:         number
   tdsMonthly:      number
   reimbursements:  number
+  incentive?:      number
+  incentiveTds?:   number
   employeeStatus?: string
   esiConfig?: Awaited<ReturnType<typeof getEsiConfig>>
   prebuiltSalary?: SalaryStructure
@@ -503,6 +509,10 @@ export async function calculatePayrollForEmployee(params: {
 }): Promise<PayrollCalculation> {
 
   const esiConfig  = params.esiConfig ?? await getEsiConfig()
+  const incentive  = params.incentive ?? 0
+  const incentiveTds = params.incentiveTds !== undefined
+    ? params.incentiveTds
+    : r2(incentive * INCENTIVE_TDS_PERCENT / 100)
 
   // ── TRAINEE: flat stipend, no CTC formula, no ESI/PF/PT ──────────────────
   if (params.isTrainee && params.stipendMonthly) {
@@ -517,10 +527,11 @@ export async function calculatePayrollForEmployee(params: {
       lop:               lopAmount,
       incentiveRecovery: 0,
       loanDeduction,
+      incentiveTds,
     }
 
-    const totalDeductions = deductions.tds + deductions.lop + deductions.loanDeduction
-    const netSalary = r2(Math.max(0, proration.proratedGross + params.reimbursements - totalDeductions))
+    const totalDeductions = deductions.tds + deductions.lop + deductions.loanDeduction + deductions.incentiveTds
+    const netSalary = r2(Math.max(0, proration.proratedGross + params.reimbursements + incentive - totalDeductions))
 
     // Build a minimal SalaryStructure so rest of system (payroll entry) works unchanged
     const traineeSalary: SalaryStructure = {
@@ -550,6 +561,7 @@ export async function calculatePayrollForEmployee(params: {
       isBonusMonth:   false,
       annualBonus:    0,
       reimbursements: params.reimbursements,
+      incentive,
       deductions,
       netSalary,
     }
@@ -608,14 +620,16 @@ export async function calculatePayrollForEmployee(params: {
     lop:               lopAmount,
     incentiveRecovery: 0,
     loanDeduction,
+    incentiveTds,
   }
 
-  // Net = proratedGross + annualBonus (if March) + reimbursements - all deductions
+  // Net = proratedGross + annualBonus (if March) + reimbursements + incentive - all deductions
   const totalDeductions = deductions.pf + deductions.esi + deductions.pt +
-    deductions.tds + deductions.lop + deductions.incentiveRecovery + deductions.loanDeduction
+    deductions.tds + deductions.lop + deductions.incentiveRecovery + deductions.loanDeduction +
+    deductions.incentiveTds
 
   const netSalary = r2(Math.max(0,
-    proration.proratedGross + annualBonus + params.reimbursements - totalDeductions
+    proration.proratedGross + annualBonus + params.reimbursements + incentive - totalDeductions
   ))
 
   return {
@@ -624,6 +638,7 @@ export async function calculatePayrollForEmployee(params: {
     isBonusMonth: bonusMonth,
     annualBonus,
     reimbursements: params.reimbursements,
+    incentive,
     deductions,
     netSalary,
   }

@@ -138,6 +138,12 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
       // TDS is manually set per employee — always use live employee record value, not snapshot
       const tdsMonthly = Number(emp.tdsMonthly ?? 0) || revisionInput.tdsMonthly
 
+      // Preserve any manually-set incentive across re-runs of the same cycle
+      const existingEntry = await prisma.payrollEntry.findUnique({
+        where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: emp.id } },
+        select: { incentive: true },
+      })
+
       const calc = await calculatePayrollForEmployee({
         employeeId:      emp.id,
         salaryInput:     revisionInput,
@@ -151,6 +157,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         lopDays:         Number(lopEntry?.lopDays || 0),
         tdsMonthly:      tdsMonthly,
         reimbursements:  Number(reimbs._sum.amount || 0),
+        incentive:       Number(existingEntry?.incentive || 0),
         employeeStatus:  emp.status,
         prebuiltSalary:  revisionInput.prebuiltSalary,
         isTrainee:       emp.isTrainee,
@@ -179,7 +186,8 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
           payableDays:       calc.proration.payableDays,
           isProrated:        calc.proration.isProrated,
           proratedGross:     calc.proration.proratedGross,
-          incentive:         0,
+          incentive:         calc.incentive,
+          incentiveTdsAmount: calc.deductions.incentiveTds,
           reimbursementTotal: calc.reimbursements,
           lopDays:           Number(lopEntry?.lopDays || 0),
           lopAmount:         calc.deductions.lop,
@@ -209,6 +217,8 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
           payableDays:       calc.proration.payableDays,
           isProrated:        calc.proration.isProrated,
           proratedGross:     calc.proration.proratedGross,
+          incentive:         calc.incentive,
+          incentiveTdsAmount: calc.deductions.incentiveTds,
           reimbursementTotal: calc.reimbursements,
           lopDays:           Number(lopEntry?.lopDays || 0),
           lopAmount:         calc.deductions.lop,
@@ -517,7 +527,7 @@ payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
     throw new AppError('Cannot edit a locked or disbursed cycle', 400)
   }
 
-  const { lopDays, tdsAmount, reimbursements, adjustmentNote } = req.body
+  const { lopDays, tdsAmount, reimbursements, adjustmentNote, incentive, incentiveTdsAmount } = req.body
 
   const emp = await prisma.employee.findUnique({ where: { id: entry.employeeId } })
   if (!emp) throw new AppError('Employee not found', 404)
@@ -528,6 +538,8 @@ payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
   const finalLopDays      = lopDays      !== undefined ? Number(lopDays)      : Number(entry.lopDays)
   const finalTds          = tdsAmount    !== undefined ? Number(tdsAmount)    : Number(entry.tdsAmount)
   const finalReimb        = reimbursements !== undefined ? Number(reimbursements) : Number(entry.reimbursementTotal)
+  const finalIncentive    = incentive    !== undefined ? Number(incentive)    : Number(entry.incentive)
+  const finalIncentiveTds = incentiveTdsAmount !== undefined ? Number(incentiveTdsAmount) : undefined
 
   const calc = await calculatePayrollForEmployee({
     employeeId:     emp.id,
@@ -542,6 +554,8 @@ payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
     lopDays:        finalLopDays,
     tdsMonthly:     finalTds,
     reimbursements: finalReimb,
+    incentive:      finalIncentive,
+    incentiveTds:   finalIncentiveTds,
     employeeStatus: emp.status,
     prebuiltSalary: revisionInput.prebuiltSalary,
     isTrainee:      emp.isTrainee,
@@ -566,6 +580,8 @@ payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
       payableDays:        calc.proration.payableDays,
       isProrated:         calc.proration.isProrated,
       proratedGross:      calc.proration.proratedGross,
+      incentive:          calc.incentive,
+      incentiveTdsAmount: calc.deductions.incentiveTds,
       reimbursementTotal: finalReimb,
       lopDays:            finalLopDays,
       lopAmount:          calc.deductions.lop,
@@ -597,6 +613,90 @@ payrollRouter.put('/entries/:id', requireSuperAdmin, async (req, res) => {
       totalEsi:            allEntries.reduce((s, e) => s + Number(e.esiAmount),          0),
       totalEmployerEsi:    allEntries.reduce((s, e) => s + Number((e as any).employerEsiAmount || 0), 0),
     },
+  })
+
+  res.json({ success: true, data: updated })
+})
+
+// ─── ADD INCENTIVE ON A LOCKED/DISBURSED CYCLE (single employee) ─────────────
+// Scoped correction — does NOT unlock the cycle, does NOT touch other employees.
+// Use for backdated incentives after the cycle is already locked/disbursed.
+// Follow up with POST /payslips/regenerate/:entryId to regenerate that payslip.
+
+payrollRouter.put('/entries/:id/incentive-locked', requireSuperAdmin, async (req, res) => {
+  const entry = await prisma.payrollEntry.findUnique({
+    where: { id: req.params.id },
+    include: { cycle: true },
+  })
+  if (!entry) throw new AppError('Entry not found', 404)
+  if (entry.cycle.status !== 'LOCKED' && entry.cycle.status !== 'DISBURSED') {
+    throw new AppError('Use PUT /entries/:id for an unlocked cycle', 400)
+  }
+
+  const { incentive, incentiveTdsAmount, note } = req.body
+  if (incentive === undefined) throw new AppError('incentive amount is required', 400)
+  if (!note) throw new AppError('note (reason) is required', 400)
+
+  const emp = await prisma.employee.findUnique({ where: { id: entry.employeeId } })
+  if (!emp) throw new AppError('Employee not found', 404)
+
+  const revisionInput = await getSalaryInputForDate(emp.id, entry.cycle.cycleStart)
+  const finalIncentive    = Number(incentive)
+  const finalIncentiveTds = incentiveTdsAmount !== undefined ? Number(incentiveTdsAmount) : undefined
+
+  // Keep all other entry values (lop/tds/reimbursements) exactly as already locked —
+  // only the incentive + its TDS are added on top.
+  const calc = await calculatePayrollForEmployee({
+    employeeId:      emp.id,
+    salaryInput:     revisionInput,
+    state:           emp.state || '',
+    joiningDate:     emp.joiningDate,
+    lastWorkingDay:  emp.lastWorkingDay,
+    resignationDate: emp.resignationDate,
+    cycleStart:      entry.cycle.cycleStart,
+    cycleEnd:        entry.cycle.cycleEnd,
+    payrollMonth:    entry.cycle.payrollMonth,
+    lopDays:         Number(entry.lopDays),
+    tdsMonthly:      Number(entry.tdsAmount),
+    reimbursements:  Number(entry.reimbursementTotal),
+    incentive:       finalIncentive,
+    incentiveTds:    finalIncentiveTds,
+    employeeStatus:  emp.status,
+    prebuiltSalary:  revisionInput.prebuiltSalary,
+    isTrainee:       emp.isTrainee,
+    stipendMonthly:  emp.isTrainee && emp.stipendMonthly ? Number(emp.stipendMonthly) : undefined,
+  })
+
+  const updated = await prisma.payrollEntry.update({
+    where: { id: req.params.id },
+    data: {
+      incentive:          calc.incentive,
+      incentiveTdsAmount: calc.deductions.incentiveTds,
+      netSalary:          calc.netSalary,
+      adjustmentNote:     `[Locked-cycle incentive] ${note}`,
+      adjustedBy:         req.user!.id,
+      status:             'ADJUSTED',
+    },
+  })
+
+  // Update cycle totals
+  const allEntries = await prisma.payrollEntry.findMany({
+    where: { cycleId: entry.cycleId },
+    select: { grossSalary: true, netSalary: true, pfAmount: true, esiAmount: true },
+  })
+  await prisma.payrollCycle.update({
+    where: { id: entry.cycleId },
+    data: {
+      totalGross: allEntries.reduce((s, e) => s + Number(e.grossSalary), 0),
+      totalNet:   allEntries.reduce((s, e) => s + Number(e.netSalary),   0),
+    },
+  })
+
+  await createAuditLog({
+    user: req.user!,
+    action: AuditAction.PAYROLL_INCENTIVE_ADJUST,
+    recordId: entry.id,
+    description: `Locked-cycle incentive ₹${finalIncentive} added for ${emp.name} — ${entry.cycle.payrollMonth}: ${note}`,
   })
 
   res.json({ success: true, data: updated })
