@@ -20,6 +20,7 @@ import PayrollCyclesPage from './pages/hr/PayrollCyclesPage'
 import PayrollRunDetailPage from './pages/hr/PayrollRunDetailPage'
 import PayrollPreviewPage from './pages/hr/PayrollPreviewPage'
 import LopManagementPage from './pages/hr/LopManagementPage'
+import IncentivesPage from './pages/hr/IncentivesPage'
 import ReimbursementsPage from './pages/hr/ReimbursementsPage'
 import LoansPage from './pages/hr/LoansPage'
 import LoanDetailPage from './pages/hr/LoanDetailPage'
@@ -138,6 +139,7 @@ export default function App() {
           <Route path="payroll/:id/run" element={<RequireAuth roles={['SUPER_ADMIN']}><RunPayrollPage /></RequireAuth>} />
           <Route path="payroll/:id/detail" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollRunDetailPage /></RequireAuth>} />
           <Route path="payroll/:id/lop" element={<RequireAuth roles={['SUPER_ADMIN']}><LopManagementPage /></RequireAuth>} />
+          <Route path="incentives" element={<RequireAuth roles={['SUPER_ADMIN']}><IncentivesPage /></RequireAuth>} />
           <Route path="reimbursements" element={<RequireAuth roles={['SUPER_ADMIN']}><ReimbursementsPage /></RequireAuth>} />
           <Route path="payslips" element={<RequireAuth roles={['SUPER_ADMIN']}><PayslipGenerationPage /></RequireAuth>} />
           <Route path="payslip-vault" element={<RequireAuth roles={['SUPER_ADMIN']}><PayslipVaultPage /></RequireAuth>} />

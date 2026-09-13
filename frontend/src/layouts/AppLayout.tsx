@@ -10,7 +10,7 @@ import {
   RefreshCw, ScrollText, FileSearch, DollarSign, Table2,
   UserCircle, Banknote, ClipboardList, Edit3, CalendarDays,
   CalendarCheck, CalendarClock, Palmtree, BookOpen, Timer, Package, Bell, Percent, MessageSquareOff, RotateCcw,
-  Archive,
+  Archive, Gift,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -93,6 +93,7 @@ const SUPER_ADMIN_NAV = [
       { label: 'Bulk Edit Salaries',  icon: Table2,     to: '/hr/salaries-bulk-edit' },
       { label: 'Loans & Advances',    icon: Wallet,     to: '/hr/loans' },
       { label: 'Reimbursements',      icon: Receipt,    to: '/hr/reimbursements' },
+      { label: 'Incentives',          icon: Gift,       to: '/hr/incentives' },
       { label: 'F&F Settlement',      icon: GitMerge,   to: '/hr/fnf' },
       { label: 'TDS Management',       icon: Percent,    to: '/hr/tds' },
     ]

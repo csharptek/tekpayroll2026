@@ -117,6 +117,9 @@ export const payrollApi = {
   unlock: (id: string, reason: string) => api.post(`/api/payroll/cycles/${id}/unlock`, { reason }),
   disburse: (id: string) => api.post(`/api/payroll/cycles/${id}/disburse`),
   adjustEntry: (id: string, data: any) => api.put(`/api/payroll/entries/${id}`, data),
+  setIncentiveLocked: (id: string, data: { incentive: number; incentiveTdsAmount?: number; note: string }) =>
+    api.put(`/api/payroll/entries/${id}/incentive-locked`, data),
+  entriesForEmployee: (employeeId: string) => api.get(`/api/payroll/employee/${employeeId}`),
   preview: (data: any) => api.post('/api/payroll/dry-run', data),
   // PayrollSkip
   getSkips: (payrollMonth: string) => api.get(`/api/payroll/skips/${payrollMonth}`),
@@ -159,6 +162,7 @@ export const payslipApi = {
   forEmployee: (employeeId: string) => api.get(`/api/payslips/employee/${employeeId}`),
   generate: (cycleId: string) => api.post(`/api/payslips/generate/${cycleId}`),
   previewUrl: (payslipId: string) => api.get(`/api/payslips/${payslipId}/preview-url`),
+  regenerate: (entryId: string) => api.post(`/api/payslips/regenerate/${entryId}`),
   emailOne: (payslipId: string) => api.post(`/api/payslips/email/${payslipId}`),
   emailAll: (cycleId: string) => api.post(`/api/payslips/email-all/${cycleId}`),
   // Payslip password
