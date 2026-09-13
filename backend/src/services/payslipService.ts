@@ -31,6 +31,7 @@ async function computeYtd(employeeId: string, payrollMonth: string): Promise<Pay
       basic: true, proratedGross: true, netSalary: true,
       pfAmount: true, employerPfAmount: true, esiAmount: true,
       tdsAmount: true, ptAmount: true, lopAmount: true,
+      incentive: true, incentiveTdsAmount: true,
       isProrated: true, totalDays: true, payableDays: true,
     },
   })
@@ -41,12 +42,12 @@ async function computeYtd(employeeId: string, payrollMonth: string): Promise<Pay
   for (const e of entries) {
     const ratio = e.isProrated && Number(e.totalDays) > 0 ? Number(e.payableDays) / Number(e.totalDays) : 1
     acc.basic      += r2(Number(e.basic) * ratio)
-    acc.gross      += Number(e.proratedGross)
+    acc.gross      += Number(e.proratedGross) + Number(e.incentive || 0)
     acc.net        += Number(e.netSalary)
     acc.employeePf += Number(e.pfAmount)
     acc.employerPf += Number((e as any).employerPfAmount || 0)
     acc.esi        += Number(e.esiAmount)
-    acc.tds        += Number(e.tdsAmount)
+    acc.tds        += Number(e.tdsAmount) + Number((e as any).incentiveTdsAmount || 0)
     acc.pt         += Number(e.ptAmount)
     acc.lop        += Number(e.lopAmount)
   }
