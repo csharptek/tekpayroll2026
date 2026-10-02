@@ -114,6 +114,7 @@ export async function buildExtraRows(
     const lopDays = Math.max(0, Number(lopOverride[r.employeeId] ?? mt?.lopDays ?? 0))
 
     const basic = r2(r.basic * ratio)
+    const effRatio = Math.max(0, payable - lopDays) / total   // LOP reduces PF/ESI base
     out.push({
       employeeId: r.employeeId,
       name:       r.name,
@@ -122,8 +123,8 @@ export async function buildExtraRows(
       transport:  r2(r.transport * ratio),
       fbp:        r2(r.fbp * ratio),
       hyi:        r2(r.hyi * ratio),
-      pf:         r2(Math.min(Math.round(basic * 0.12), 1800)),
-      esi:        r2(r.employeeEsi * ratio),
+      pf:         r2(Math.min(Math.round(r.basic * effRatio * 0.12), 1800)),
+      esi:        r2(r.employeeEsi * effRatio),
       pt:         r2(r.pt),
       lop:        computeLop(r.grossMonthly, total, lopDays),
       gross:      r2(r.grossMonthly * ratio),
