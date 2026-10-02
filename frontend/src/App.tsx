@@ -36,6 +36,7 @@ import ConfigPage from './pages/hr/ConfigPage'
 import SalaryCalculatorPage from './pages/hr/SalaryCalculatorPage'
 import SalaryCalculatorNewEsicPage from './pages/hr/SalaryCalculatorNewEsicPage'
 import SalaryBreakupsPage from './pages/hr/SalaryBreakupsPage'
+import PfSheetsPage from './pages/hr/PfSheetsPage'
 import SyncPage from './pages/hr/SyncPage'
 import BulkImportPage from './pages/hr/BulkImportPage'
 import BulkEditEmployeesPage from './pages/hr/BulkEditEmployeesPage'
@@ -122,6 +123,7 @@ export default function App() {
           <Route path="salary-calculator" element={<SalaryCalculatorPage />} />
           <Route path="salary-calculator-new-esic" element={<SalaryCalculatorNewEsicPage />} />
           <Route path="salary-breakups" element={<RequireAuth roles={['SUPER_ADMIN']}><SalaryBreakupsPage /></RequireAuth>} />
+          <Route path="pf-sheets" element={<RequireAuth roles={['SUPER_ADMIN']}><PfSheetsPage /></RequireAuth>} />
           <Route path="leaves" element={<HRLeavePage />} />
           <Route path="public-holidays" element={<PublicHolidaysPage />} />
           <Route path="leave-config" element={<LeaveConfigPage />} />

@@ -1,13 +1,16 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Download, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 import { payrollApi } from '../../services/api'
+import PfSheetModal from '../../components/PfSheetModal'
 import { PageHeader, Button, Card, StatusBadge, Rupee, Table, Th, Td, Tr, Skeleton } from '../../components/ui'
 
 export default function PayrollRunDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [pfOpen, setPfOpen] = useState(false)
 
   const { data: cycle, isLoading } = useQuery({
     queryKey: ['payroll-cycle', id],
@@ -28,10 +31,17 @@ export default function PayrollRunDetailPage() {
         actions={
           <div className="flex gap-2">
             <Button variant="ghost" icon={<ArrowLeft size={14} />} onClick={() => navigate('/hr/payroll')}>Back</Button>
-            <Button variant="secondary" icon={<Download size={14} />}>Export Excel</Button>
+            <Button
+              variant="secondary"
+              icon={<Download size={14} />}
+              disabled={cycle.status === 'DRAFT'}
+              onClick={() => setPfOpen(true)}
+            >PF Sheet</Button>
           </div>
         }
       />
+
+      <PfSheetModal cycleId={id!} open={pfOpen} onClose={() => setPfOpen(false)} />
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

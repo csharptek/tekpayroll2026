@@ -125,6 +125,14 @@ export const payrollApi = {
   getSkips: (payrollMonth: string) => api.get(`/api/payroll/skips/${payrollMonth}`),
   addSkip: (data: { employeeId: string; payrollMonth: string; reason?: string }) => api.post('/api/payroll/skips', data),
   removeSkip: (id: string) => api.delete(`/api/payroll/skips/${id}`),
+  // PF Sheet
+  pfSheetEmployees: (cycleId: string) => api.get(`/api/payroll/cycles/${cycleId}/pf-sheet/employees`),
+  pfSheetExport: (cycleId: string, data: { entryEmployeeIds: string[]; extraEmployeeIds: string[]; note?: string }) =>
+    api.post(`/api/payroll/cycles/${cycleId}/pf-sheet/export`, data, { responseType: 'blob' }),
+  pfSheets: (year?: string) => api.get('/api/payroll/pf-sheets', { params: year ? { year } : {} }),
+  pfSheet: (id: string) => api.get(`/api/payroll/pf-sheets/${id}`),
+  pfSheetDownload: (id: string) => api.get(`/api/payroll/pf-sheets/${id}/download`, { responseType: 'blob' }),
+  pfSheetDelete: (id: string) => api.delete(`/api/payroll/pf-sheets/${id}`),
 }
 
 export const lopApi = {

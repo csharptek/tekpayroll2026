@@ -5,6 +5,8 @@ import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
 import { AuditAction, PayrollStatus } from '@prisma/client'
 import { calculatePayrollForEmployee, isBonusMonth, getEsiConfig, getSalaryInputForDate } from '../services/payrollEngine'
+import { buildEntryRows, buildExtraRows, writePfSheet } from '../services/pfSheetService'
+import { saveFile, readFile, deleteFile } from '../utils/fileStorage'
 
 export const payrollRouter = Router()
 payrollRouter.use(authenticate)
@@ -756,5 +758,144 @@ payrollRouter.post('/skips', requireSuperAdmin, async (req, res) => {
 // DELETE remove a skip
 payrollRouter.delete('/skips/:id', requireSuperAdmin, async (req, res) => {
   await prisma.payrollSkip.delete({ where: { id: req.params.id } })
+  res.json({ success: true })
+})
+
+
+// ─── PF SHEET ─────────────────────────────────────────────────────────────────
+
+const PF_CONTAINER = 'pf-sheets'
+const PF_ALLOWED: PayrollStatus[] = [PayrollStatus.CALCULATED, PayrollStatus.LOCKED, PayrollStatus.DISBURSED]
+
+// Employees for the PF sheet window: in-cycle entries + candidates to add
+payrollRouter.get('/cycles/:id/pf-sheet/employees', requireSuperAdmin, async (req, res) => {
+  const cycle = await prisma.payrollCycle.findUnique({ where: { id: req.params.id } })
+  if (!cycle) throw new AppError('Payroll cycle not found', 404)
+  if (!PF_ALLOWED.includes(cycle.status)) throw new AppError('Payroll not calculated yet', 400)
+
+  const entries = await prisma.payrollEntry.findMany({
+    where: { cycleId: cycle.id },
+    include: { employee: { select: { id: true, name: true, employeeCode: true, department: true } } },
+  })
+  const entryIds = entries.map(e => e.employeeId)
+
+  const [others, skips] = await Promise.all([
+    prisma.employee.findMany({
+      where: { status: { in: ['ACTIVE', 'ON_NOTICE'] }, id: { notIn: entryIds } },
+      select: { id: true, name: true, employeeCode: true, department: true, status: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.payrollSkip.findMany({ where: { payrollMonth: cycle.payrollMonth }, select: { employeeId: true, reason: true } }),
+  ])
+  const skipMap = new Map(skips.map(s => [s.employeeId, s.reason || 'Skipped']))
+
+  res.json({
+    success: true,
+    data: {
+      cycleId: cycle.id,
+      payrollMonth: cycle.payrollMonth,
+      status: cycle.status,
+      entries: entries
+        .map(e => ({
+          id: e.employee.id, name: e.employee.name, employeeCode: e.employee.employeeCode,
+          department: e.employee.department, gross: Number(e.proratedGross), net: Number(e.netSalary),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      others: others.map(o => ({ ...o, skipReason: skipMap.get(o.id) || null })),
+    },
+  })
+})
+
+// Generate + save + return the sheet
+payrollRouter.post('/cycles/:id/pf-sheet/export', requireSuperAdmin, async (req, res) => {
+  const cycle = await prisma.payrollCycle.findUnique({ where: { id: req.params.id } })
+  if (!cycle) throw new AppError('Payroll cycle not found', 404)
+  if (!PF_ALLOWED.includes(cycle.status)) throw new AppError('Payroll not calculated yet', 400)
+
+  const entryEmployeeIds: string[] = Array.isArray(req.body?.entryEmployeeIds) ? req.body.entryEmployeeIds : []
+  const extraRaw: string[] = Array.isArray(req.body?.extraEmployeeIds) ? req.body.extraEmployeeIds : []
+  const note: string | null = req.body?.note ? String(req.body.note).slice(0, 500) : null
+  if (!entryEmployeeIds.length && !extraRaw.length) throw new AppError('Select at least one employee', 400)
+
+  const entryRows = await buildEntryRows(cycle.id, entryEmployeeIds)
+  const entryIdSet = new Set((await prisma.payrollEntry.findMany({ where: { cycleId: cycle.id }, select: { employeeId: true } })).map(e => e.employeeId))
+  const extraIds = extraRaw.filter(id => !entryIdSet.has(id))
+  const extraRows = await buildExtraRows(cycle.payrollMonth, extraIds)
+
+  const rows = [...entryRows, ...extraRows]
+  if (!rows.length) throw new AppError('No employees to export', 400)
+
+  const buf = await writePfSheet(rows)
+  const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
+  const fileName = `pf-sheet-${cycle.payrollMonth}.xlsx`
+  const fileKey = `${cycle.payrollMonth}/pf-sheet-${cycle.payrollMonth}-${stamp}.xlsx`
+  await saveFile(PF_CONTAINER, fileKey, buf)
+
+  const rec = await prisma.pfSheetExport.create({
+    data: {
+      cycleId: cycle.id,
+      payrollMonth: cycle.payrollMonth,
+      entryEmployeeIds: entryRows.map(r => r.employeeId),
+      extraEmployeeIds: extraRows.map(r => r.employeeId),
+      employeeCount: rows.length,
+      fileKey, fileName, note,
+      generatedById: req.user!.id,
+      generatedByName: req.user!.name,
+    },
+  })
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+  res.setHeader('X-Pf-Sheet-Id', rec.id)
+  res.send(buf)
+})
+
+// History list
+payrollRouter.get('/pf-sheets', requireSuperAdmin, async (req, res) => {
+  const year = req.query.year ? String(req.query.year) : ''
+  const list = await prisma.pfSheetExport.findMany({
+    where: year ? { payrollMonth: { startsWith: year } } : {},
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+  })
+  res.json({
+    success: true,
+    data: list.map(({ entryEmployeeIds, extraEmployeeIds, fileKey, ...rest }) => ({
+      ...rest,
+      paidCount: entryEmployeeIds.length,
+      extraCount: extraEmployeeIds.length,
+    })),
+  })
+})
+
+// History detail — employee list
+payrollRouter.get('/pf-sheets/:id', requireSuperAdmin, async (req, res) => {
+  const rec = await prisma.pfSheetExport.findUnique({ where: { id: req.params.id } })
+  if (!rec) throw new AppError('PF sheet not found', 404)
+  const emps = await prisma.employee.findMany({
+    where: { id: { in: [...rec.entryEmployeeIds, ...rec.extraEmployeeIds] } },
+    select: { id: true, name: true, employeeCode: true, department: true },
+    orderBy: { name: 'asc' },
+  })
+  const extra = new Set(rec.extraEmployeeIds)
+  res.json({ success: true, data: { ...rec, employees: emps.map(e => ({ ...e, isExtra: extra.has(e.id) })) } })
+})
+
+// History download — saved file
+payrollRouter.get('/pf-sheets/:id/download', requireSuperAdmin, async (req, res) => {
+  const rec = await prisma.pfSheetExport.findUnique({ where: { id: req.params.id } })
+  if (!rec) throw new AppError('PF sheet not found', 404)
+  const buf = await readFile(PF_CONTAINER, rec.fileKey)
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="${rec.fileName}"`)
+  res.send(buf)
+})
+
+// History delete
+payrollRouter.delete('/pf-sheets/:id', requireSuperAdmin, async (req, res) => {
+  const rec = await prisma.pfSheetExport.findUnique({ where: { id: req.params.id } })
+  if (!rec) throw new AppError('PF sheet not found', 404)
+  await deleteFile(PF_CONTAINER, rec.fileKey)
+  await prisma.pfSheetExport.delete({ where: { id: rec.id } })
   res.json({ success: true })
 })

@@ -8,7 +8,7 @@ import { computeSalaryStructure, getEsiConfig, getSalaryInputForDate, computePt 
 export const salaryBreakupsRouter = Router();
 salaryBreakupsRouter.use(authenticate, requireSuperAdmin);
 
-interface BreakupRow {
+export interface BreakupRow {
   employeeId:       string;
   employeeCode:     string;
   name:             string;
@@ -37,7 +37,7 @@ interface BreakupRow {
 
 // ─── Helper: build breakup rows for a given month ────────────────────────────
 
-async function buildBreakups(
+export async function buildBreakups(
   employees: Array<{ id: string; employeeCode: string; name: string; jobTitle: string | null; department: string | null; state: string | null; status: string }>,
   asOf: Date
 ): Promise<BreakupRow[]> {

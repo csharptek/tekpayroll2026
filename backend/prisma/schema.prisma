@@ -1743,3 +1743,23 @@ model FnfWizardStepData {
   @@unique([sessionId, stepKey])
   @@index([sessionId])
 }
+
+// ─── PF SHEET EXPORT HISTORY ─────────────────────────────────────────────────
+
+model PfSheetExport {
+  id               String   @id @default(cuid())
+  cycleId          String
+  payrollMonth     String   // YYYY-MM
+  entryEmployeeIds String[] // employees with payroll entry in the cycle
+  extraEmployeeIds String[] // manually added (temp leave etc.)
+  employeeCount    Int
+  fileKey          String
+  fileName         String
+  note             String?  @db.Text
+  generatedById    String
+  generatedByName  String
+  createdAt        DateTime @default(now())
+
+  @@index([payrollMonth])
+  @@index([cycleId])
+}
