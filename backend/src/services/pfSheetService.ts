@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
 import { prisma } from '../utils/prisma'
 import { buildBreakups } from '../routes/salaryBreakups'
+import { computeProration, computeLop } from './payrollEngine'
 
 export interface PfSlipRow {
   employeeId: string
@@ -54,11 +55,43 @@ export async function buildEntryRows(cycleId: string, employeeIds?: string[]): P
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// ─── Rows from salary structure (temp leave etc.) ────────────────────────────
+// ─── Rows for employees not in payroll (skipped / temp leave / exited) ───────
+// Same proration + LOP rules as payroll. PF/ESI follow the prorated earnings.
 
-export async function buildExtraRows(payrollMonth: string, employeeIds: string[]): Promise<PfSlipRow[]> {
+export interface PfCycle { id: string; payrollMonth: string; cycleStart: Date; cycleEnd: Date }
+export interface ExtraMeta { totalDays: number; payableDays: number; lopDays: number }
+
+export async function getExtraMeta(cycle: PfCycle, employeeIds: string[]): Promise<Record<string, ExtraMeta>> {
+  if (!employeeIds.length) return {}
+  const [emps, lops] = await Promise.all([
+    prisma.employee.findMany({
+      where: { id: { in: employeeIds } },
+      select: { id: true, joiningDate: true, lastWorkingDay: true },
+    }),
+    prisma.lopEntry.findMany({
+      where: { cycleId: cycle.id, employeeId: { in: employeeIds } },
+      select: { employeeId: true, lopDays: true },
+    }),
+  ])
+  const lopMap = new Map<string, number>(lops.map((l: any) => [l.employeeId, Number(l.lopDays)] as [string, number]))
+  const out: Record<string, ExtraMeta> = {}
+  for (const e of emps) {
+    const p = computeProration(0, cycle.cycleStart, cycle.cycleEnd, e.joiningDate, e.lastWorkingDay)
+    let payable = p.payableDays
+    if (e.lastWorkingDay && e.lastWorkingDay < cycle.cycleStart) payable = 0
+    if (e.joiningDate && e.joiningDate > cycle.cycleEnd) payable = 0
+    out[e.id] = { totalDays: p.totalDays, payableDays: payable, lopDays: lopMap.get(e.id) || 0 }
+  }
+  return out
+}
+
+export async function buildExtraRows(
+  cycle: PfCycle,
+  employeeIds: string[],
+  lopOverride: Record<string, number> = {}
+): Promise<PfSlipRow[]> {
   if (!employeeIds.length) return []
-  const [y, m] = payrollMonth.split('-').map(n => parseInt(n))
+  const [y, m] = cycle.payrollMonth.split('-').map(n => parseInt(n))
   const asOf = new Date(y, m, 0, 23, 59, 59)
 
   const employees = await prisma.employee.findMany({
@@ -66,23 +99,38 @@ export async function buildExtraRows(payrollMonth: string, employeeIds: string[]
     select: { id: true, employeeCode: true, name: true, jobTitle: true, department: true, state: true, status: true },
     orderBy: { name: 'asc' },
   })
-  const rows = await buildBreakups(employees, asOf)
+  const [rows, meta] = await Promise.all([
+    buildBreakups(employees, asOf),
+    getExtraMeta(cycle, employeeIds),
+  ])
 
-  return rows.map((r): PfSlipRow => ({
-    employeeId: r.employeeId,
-    name:       r.name,
-    basic:      r2(r.basic),
-    hra:        r2(r.hra),
-    transport:  r2(r.transport),
-    fbp:        r2(r.fbp),
-    hyi:        r2(r.hyi),
-    pf:         r2(r.employeePf),
-    esi:        r2(r.employeeEsi),
-    pt:         r2(r.pt),
-    lop:        0,
-    gross:      r2(r.grossMonthly),
-    isExtra:    true,
-  }))
+  const out: PfSlipRow[] = []
+  for (const r of rows) {
+    const mt = meta[r.employeeId]
+    const total = mt?.totalDays || 30
+    const payable = mt ? mt.payableDays : total
+    if (payable <= 0) continue
+    const ratio = payable / total
+    const lopDays = Math.max(0, Number(lopOverride[r.employeeId] ?? mt?.lopDays ?? 0))
+
+    const basic = r2(r.basic * ratio)
+    out.push({
+      employeeId: r.employeeId,
+      name:       r.name,
+      basic,
+      hra:        r2(r.hra * ratio),
+      transport:  r2(r.transport * ratio),
+      fbp:        r2(r.fbp * ratio),
+      hyi:        r2(r.hyi * ratio),
+      pf:         r2(Math.min(Math.round(basic * 0.12), 1800)),
+      esi:        r2(r.employeeEsi * ratio),
+      pt:         r2(r.pt),
+      lop:        computeLop(r.grossMonthly, total, lopDays),
+      gross:      r2(r.grossMonthly * ratio),
+      isExtra:    true,
+    })
+  }
+  return out
 }
 
 // ─── Workbook (4 per row) ────────────────────────────────────────────────────

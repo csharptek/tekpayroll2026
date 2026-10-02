@@ -127,7 +127,7 @@ export const payrollApi = {
   removeSkip: (id: string) => api.delete(`/api/payroll/skips/${id}`),
   // PF Sheet
   pfSheetEmployees: (cycleId: string) => api.get(`/api/payroll/cycles/${cycleId}/pf-sheet/employees`),
-  pfSheetExport: (cycleId: string, data: { entryEmployeeIds: string[]; extraEmployeeIds: string[]; note?: string }) =>
+  pfSheetExport: (cycleId: string, data: { entryEmployeeIds: string[]; extraEmployeeIds: string[]; extraLop?: Record<string, number>; note?: string }) =>
     api.post(`/api/payroll/cycles/${cycleId}/pf-sheet/export`, data, { responseType: 'blob' }),
   pfSheets: (year?: string) => api.get('/api/payroll/pf-sheets', { params: year ? { year } : {} }),
   pfSheet: (id: string) => api.get(`/api/payroll/pf-sheets/${id}`),

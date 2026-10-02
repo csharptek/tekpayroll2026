@@ -28,6 +28,7 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
   const [extraSel, setExtraSel] = useState<Set<string>>(new Set())
   const [q, setQ] = useState('')
   const [note, setNote] = useState('')
+  const [lop, setLop] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -41,6 +42,7 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
     if (data) {
       setEntrySel(new Set<string>(data.entries.map((e: any) => e.id)))
       setExtraSel(new Set<string>())
+      setLop({})
       setNote('')
       setErr('')
       setQ('')
@@ -67,6 +69,9 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
       const res = await payrollApi.pfSheetExport(cycleId, {
         entryEmployeeIds: Array.from(entrySel),
         extraEmployeeIds: Array.from(extraSel),
+        extraLop: Object.fromEntries(
+          Array.from(extraSel).map(id => [id, Number(lop[id] ?? (data?.others || []).find((o: any) => o.id === id)?.lopDays ?? 0) || 0])
+        ),
         note: note.trim() || undefined,
       })
       saveBlob(res.data, `pf-sheet-${data?.payrollMonth || 'export'}.xlsx`)
@@ -125,7 +130,7 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
 
           <div>
             <p className="text-sm font-semibold text-slate-800 mb-1">Add employees not in this payroll ({extraSel.size} added)</p>
-            <p className="text-xs text-slate-400 mb-2">Full-month breakup from salary structure.</p>
+            <p className="text-xs text-slate-400 mb-2">Prorated for joining / last working day. Set LOP days if any.</p>
             <input
               className="input mb-2"
               placeholder="Search name or code"
@@ -141,6 +146,18 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
                     <span className="text-xs text-slate-400 ml-2">{o.employeeCode}</span>
                   </span>
                   {o.skipReason && <span className="text-xs text-amber-600">Skipped: {o.skipReason}</span>}
+                  <span className="text-xs text-slate-500">{o.payableDays}/{o.totalDays} days</span>
+                  {extraSel.has(o.id) && (
+                    <span className="flex items-center gap-1 text-xs text-slate-500" onClick={e => e.preventDefault()}>
+                      LOP
+                      <input
+                        type="number" min={0} step={0.5}
+                        className="input w-16 py-1"
+                        value={lop[o.id] ?? String(o.lopDays ?? 0)}
+                        onChange={e => setLop({ ...lop, [o.id]: e.target.value })}
+                      />
+                    </span>
+                  )}
                 </label>
               ))}
             </div>

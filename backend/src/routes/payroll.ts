@@ -5,7 +5,7 @@ import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
 import { AuditAction, PayrollStatus } from '@prisma/client'
 import { calculatePayrollForEmployee, isBonusMonth, getEsiConfig, getSalaryInputForDate } from '../services/payrollEngine'
-import { buildEntryRows, buildExtraRows, writePfSheet } from '../services/pfSheetService'
+import { buildEntryRows, buildExtraRows, getExtraMeta, writePfSheet } from '../services/pfSheetService'
 import { saveFile, readFile, deleteFile } from '../utils/fileStorage'
 
 export const payrollRouter = Router()
@@ -788,6 +788,7 @@ payrollRouter.get('/cycles/:id/pf-sheet/employees', requireSuperAdmin, async (re
     prisma.payrollSkip.findMany({ where: { payrollMonth: cycle.payrollMonth }, select: { employeeId: true, reason: true } }),
   ])
   const skipMap = new Map(skips.map(s => [s.employeeId, s.reason || 'Skipped']))
+  const meta = await getExtraMeta(cycle, others.map(o => o.id))
 
   res.json({
     success: true,
@@ -801,7 +802,9 @@ payrollRouter.get('/cycles/:id/pf-sheet/employees', requireSuperAdmin, async (re
           department: e.employee.department, gross: Number(e.proratedGross), net: Number(e.netSalary),
         }))
         .sort((a, b) => a.name.localeCompare(b.name)),
-      others: others.map(o => ({ ...o, skipReason: skipMap.get(o.id) || null })),
+      others: others
+        .map(o => ({ ...o, skipReason: skipMap.get(o.id) || null, ...(meta[o.id] || { totalDays: 30, payableDays: 30, lopDays: 0 }) }))
+        .filter(o => o.payableDays > 0),
     },
   })
 })
@@ -820,7 +823,8 @@ payrollRouter.post('/cycles/:id/pf-sheet/export', requireSuperAdmin, async (req,
   const entryRows = await buildEntryRows(cycle.id, entryEmployeeIds)
   const entryIdSet = new Set((await prisma.payrollEntry.findMany({ where: { cycleId: cycle.id }, select: { employeeId: true } })).map(e => e.employeeId))
   const extraIds = extraRaw.filter(id => !entryIdSet.has(id))
-  const extraRows = await buildExtraRows(cycle.payrollMonth, extraIds)
+  const lopOverride: Record<string, number> = req.body?.extraLop && typeof req.body.extraLop === 'object' ? req.body.extraLop : {}
+  const extraRows = await buildExtraRows(cycle, extraIds, lopOverride)
 
   const rows = [...entryRows, ...extraRows]
   if (!rows.length) throw new AppError('No employees to export', 400)
