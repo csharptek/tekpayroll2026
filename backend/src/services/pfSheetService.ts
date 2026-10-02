@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs'
 import { prisma } from '../utils/prisma'
 import { buildBreakups } from '../routes/salaryBreakups'
-import { computeProration, computeLop } from './payrollEngine'
+import { computeProration } from './payrollEngine'
 
 export interface PfSlipRow {
   employeeId: string
@@ -35,7 +35,8 @@ export async function buildEntryRows(cycleId: string, employeeIds?: string[]): P
   return entries
     .map((e): PfSlipRow => {
       const totalDays = Number(e.totalDays)
-      const ratio = e.isProrated && totalDays > 0 ? Number(e.payableDays) / totalDays : 1
+      const base  = e.isProrated && totalDays > 0 ? Number(e.payableDays) / totalDays : 1
+      const ratio = Math.max(0, base - (totalDays > 0 ? Number(e.lopDays) / totalDays : 0))  // LOP folded into earnings
       return {
         employeeId: e.employeeId,
         name:       e.employee.name,
@@ -47,8 +48,8 @@ export async function buildEntryRows(cycleId: string, employeeIds?: string[]): P
         pf:         r2(Number(e.pfAmount)),
         esi:        r2(Number(e.esiAmount)),
         pt:         r2(Number(e.ptAmount)),
-        lop:        r2(Number(e.lopAmount)),
-        gross:      r2(Number(e.proratedGross)),
+        lop:        0,
+        gross:      r2(Number(e.proratedGross) - Number(e.lopAmount)),
         isExtra:    false,
       }
     })
@@ -113,21 +114,21 @@ export async function buildExtraRows(
     const ratio = payable / total
     const lopDays = Math.max(0, Number(lopOverride[r.employeeId] ?? mt?.lopDays ?? 0))
 
-    const basic = r2(r.basic * ratio)
-    const effRatio = Math.max(0, payable - lopDays) / total   // LOP reduces PF/ESI base
+    const effRatio = Math.max(0, payable - lopDays) / total   // LOP folded into earnings, drives PF/ESI
+    const basic = r2(r.basic * effRatio)
     out.push({
       employeeId: r.employeeId,
       name:       r.name,
       basic,
-      hra:        r2(r.hra * ratio),
-      transport:  r2(r.transport * ratio),
-      fbp:        r2(r.fbp * ratio),
-      hyi:        r2(r.hyi * ratio),
-      pf:         r2(Math.min(Math.round(r.basic * effRatio * 0.12), 1800)),
+      hra:        r2(r.hra * effRatio),
+      transport:  r2(r.transport * effRatio),
+      fbp:        r2(r.fbp * effRatio),
+      hyi:        r2(r.hyi * effRatio),
+      pf:         r2(Math.min(Math.round(basic * 0.12), 1800)),
       esi:        r2(r.employeeEsi * effRatio),
       pt:         r2(r.pt),
-      lop:        computeLop(r.grossMonthly, total, lopDays),
-      gross:      r2(r.grossMonthly * ratio),
+      lop:        0,
+      gross:      r2(r.grossMonthly * effRatio),
       isExtra:    true,
     })
   }
@@ -197,7 +198,6 @@ export async function writePfSheet(rows: PfSlipRow[]): Promise<Buffer> {
             ['Employee PF', emp.pf],
             emp.esi > 0 ? ['Employee ESI', emp.esi] : null,
             emp.pt  > 0 ? ['Professional Tax', emp.pt] : null,
-            emp.lop > 0 ? ['Loss of Pay', emp.lop] : null,
             null,
           ]
         : [null, null, null, null, null]
@@ -212,7 +212,7 @@ export async function writePfSheet(rows: PfSlipRow[]): Promise<Buffer> {
       })
 
       const totRow = startRow + 2 + earn.length
-      const totalDed = emp ? r2(emp.pf + emp.esi + emp.pt + emp.lop) : 0
+      const totalDed = emp ? r2(emp.pf + emp.esi + emp.pt) : 0
       put(totRow, colFor(i, 0), emp ? 'Total Earnings' : undefined,   { fill: totalFill, bold: true })
       put(totRow, colFor(i, 1), emp ? emp.gross : undefined,          { fill: totalFill, bold: true, num: true })
       put(totRow, colFor(i, 2), emp ? 'Total Deductions' : undefined, { fill: totalFill, bold: true })
