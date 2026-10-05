@@ -38,13 +38,20 @@ export function errorHandler(
     });
   }
 
+  // Validation errors — show which field failed
+  if (err.name === 'ZodError') {
+    const issues = ((err as any).issues || (err as any).errors || []) as any[]
+    const msg = issues.map(i => `${(i.path || []).join('.') || 'value'}: ${i.message}`).join('; ')
+    return res.status(400).json({ success: false, error: msg || 'Invalid input', code: 'VALIDATION' })
+  }
+
   // Prisma errors
   if (err.name === 'PrismaClientKnownRequestError') {
     const prismaErr = err as any;
     if (prismaErr.code === 'P2002') {
       return res.status(409).json({
         success: false,
-        error: 'A record with this value already exists.',
+        error: `A record with this value already exists${prismaErr.meta?.target ? ` (${[].concat(prismaErr.meta.target).join(', ')})` : ''}.`,
         code: 'DUPLICATE',
       });
     }
@@ -57,9 +64,12 @@ export function errorHandler(
     }
   }
 
+  const isPrisma = err.name.startsWith('PrismaClient')
   return res.status(500).json({
     success: false,
-    error: process.env.NODE_ENV === 'production'
+    error: isPrisma
+      ? `Database error: ${err.message.trim().split('\n').slice(-3).join(' ').slice(0, 300)}`
+      : process.env.NODE_ENV === 'production'
       ? 'Internal server error. Please try again.'
       : err.message,
     message: err.message,  // always include for debugging
