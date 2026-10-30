@@ -25,3 +25,12 @@ Thumbs.db
 .railway
 tmp/
 temp/
+
+# security hardening
+*.zip
+*.bat
+*.ps1
+/api.js
+backend/api.js
+frontend/api.js
+Claude outputs/
