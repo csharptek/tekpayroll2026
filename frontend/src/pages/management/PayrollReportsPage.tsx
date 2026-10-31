@@ -36,7 +36,7 @@ export default function PayrollReportsPage() {
     const rows = entries.map((e: any) => [
       e.employee?.name, e.employee?.employeeCode, e.employee?.department,
       e.grossSalary, e.basic, e.hra, e.pfAmount, e.esiAmount,
-      e.ptAmount, e.tdsAmount, e.lopAmount, e.loanDeduction, e.netSalary,
+      e.ptAmount, Number(e.tdsAmount) + Number(e.incentiveTdsAmount || 0), e.lopAmount, e.loanDeduction, e.netSalary,
     ])
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -133,7 +133,7 @@ export default function PayrollReportsPage() {
                     <Td className="text-right"><Rupee amount={e.pfAmount} /></Td>
                     <Td className="text-right">{Number(e.esiAmount) > 0 ? <Rupee amount={e.esiAmount} /> : '—'}</Td>
                     <Td className="text-right">{Number(e.ptAmount) > 0 ? <Rupee amount={e.ptAmount} /> : '—'}</Td>
-                    <Td className="text-right">{Number(e.tdsAmount) > 0 ? <Rupee amount={e.tdsAmount} /> : '—'}</Td>
+                    <Td className="text-right">{(Number(e.tdsAmount) + Number(e.incentiveTdsAmount || 0)) > 0 ? <Rupee amount={Number(e.tdsAmount) + Number(e.incentiveTdsAmount || 0)} /> : '—'}</Td>
                     <Td className="text-right">{Number(e.lopAmount) > 0 ? <Rupee amount={e.lopAmount} className="text-red-500" /> : '—'}</Td>
                     <Td className="text-right font-bold"><Rupee amount={e.netSalary} /></Td>
                   </Tr>

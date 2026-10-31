@@ -7,6 +7,7 @@ import { AuditAction, PayrollStatus } from '@prisma/client'
 import { calculatePayrollForEmployee, isBonusMonth, getEsiConfig, getSalaryInputForDate } from '../services/payrollEngine'
 import { buildEntryRows, buildExtraRows, getExtraMeta, writePfSheet } from '../services/pfSheetService'
 import { saveFile, readFile, deleteFile } from '../utils/fileStorage'
+import { getPayrollEligibleEmployees, syncLeaveLopForCycle } from '../services/payrollEligibility'
 
 export const payrollRouter = Router()
 payrollRouter.use(authenticate)
@@ -58,6 +59,7 @@ payrollRouter.post('/cycles', requireSuperAdmin, async (req, res) => {
       salaryDate:  new Date(end.getFullYear(), end.getMonth() + 1, 0),
     },
   })
+  await syncLeaveLopForCycle(cycle as any)
   res.status(201).json({ success: true, data: cycle })
 })
 
@@ -85,9 +87,8 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
     throw new AppError('Cannot run payroll on a locked or disbursed cycle', 400)
   }
 
-  const employees = await prisma.employee.findMany({
-    where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
-  })
+  await syncLeaveLopForCycle(cycle as any)
+  const employees = await getPayrollEligibleEmployees(cycle.cycleStart)
 
   // Fetch skipped employees for this month
   const skippedIds = new Set(
@@ -143,7 +144,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
       // Preserve any manually-set incentive across re-runs of the same cycle
       const existingEntry = await prisma.payrollEntry.findUnique({
         where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: emp.id } },
-        select: { incentive: true },
+        select: { incentive: true, incentiveTdsAmount: true },
       })
 
       const calc = await calculatePayrollForEmployee({
@@ -160,6 +161,9 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
         tdsMonthly:      tdsMonthly,
         reimbursements:  Number(reimbs._sum.amount || 0),
         incentive:       Number(existingEntry?.incentive || 0),
+        incentiveTds:    Number(existingEntry?.incentive || 0) > 0 && existingEntry?.incentiveTdsAmount != null
+          ? Number(existingEntry.incentiveTdsAmount)
+          : undefined,
         employeeStatus:  emp.status,
         prebuiltSalary:  revisionInput.prebuiltSalary,
         isTrainee:       emp.isTrainee,
@@ -298,10 +302,7 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
 
   // Fetch shared data once upfront
   const [allEmployees, esiConfig, skippedSkips] = await Promise.all([
-    prisma.employee.findMany({
-      where: { status: { in: ['ACTIVE', 'ON_NOTICE'] } },
-      orderBy: { name: 'asc' },
-    }),
+    getPayrollEligibleEmployees(start),
     getEsiConfig(),
     prisma.payrollSkip.findMany({ where: { payrollMonth }, select: { employeeId: true } }),
   ])
@@ -780,11 +781,8 @@ payrollRouter.get('/cycles/:id/pf-sheet/employees', requireSuperAdmin, async (re
   const entryIds = entries.map(e => e.employeeId)
 
   const [others, skips] = await Promise.all([
-    prisma.employee.findMany({
-      where: { status: { in: ['ACTIVE', 'ON_NOTICE'] }, id: { notIn: entryIds } },
-      select: { id: true, name: true, employeeCode: true, department: true, status: true },
-      orderBy: { name: 'asc' },
-    }),
+    getPayrollEligibleEmployees(cycle.cycleStart, { id: { notIn: entryIds } })
+      .then(list => list.map(e => ({ id: e.id, name: e.name, employeeCode: e.employeeCode, department: e.department, status: e.status }))),
     prisma.payrollSkip.findMany({ where: { payrollMonth: cycle.payrollMonth }, select: { employeeId: true, reason: true } }),
   ])
   const skipMap = new Map(skips.map(s => [s.employeeId, s.reason || 'Skipped']))

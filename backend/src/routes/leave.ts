@@ -579,12 +579,8 @@ leaveRouter.post('/bulk-entry', requireHR, async (req, res) => {
           } else {
             cycle = matchedCycle
           }
-        } else {
-          cycle = await prisma.payrollCycle.findFirst({
-            where: { status: { in: ['DRAFT', 'CALCULATED'] } },
-            orderBy: { cycleStart: 'desc' },
-          })
         }
+        // No matching cycle yet — synced when that cycle is created / run.
         if (cycle) {
           await prisma.lopEntry.upsert({
             where: { cycleId_employeeId: { cycleId: cycle.id, employeeId } },

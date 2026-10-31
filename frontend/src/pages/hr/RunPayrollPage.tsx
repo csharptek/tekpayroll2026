@@ -277,7 +277,7 @@ export default function RunPayrollPage() {
                       <Td className="text-right"><Rupee amount={entry.pfAmount} className="text-xs" /></Td>
                       <Td className="text-right">{Number(entry.esiAmount) > 0 ? <Rupee amount={entry.esiAmount} className="text-xs" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
                       <Td className="text-right">{Number(entry.ptAmount) > 0 ? <Rupee amount={entry.ptAmount} className="text-xs" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
-                      <Td className="text-right">{Number(entry.tdsAmount) > 0 ? <Rupee amount={entry.tdsAmount} className="text-xs" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
+                      <Td className="text-right">{(Number(entry.tdsAmount) + Number(entry.incentiveTdsAmount || 0)) > 0 ? <Rupee amount={Number(entry.tdsAmount) + Number(entry.incentiveTdsAmount || 0)} className="text-xs" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
                       <Td className="text-right">{Number(entry.reimbursementTotal) > 0 ? <Rupee amount={entry.reimbursementTotal} className="text-xs text-emerald-600" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
                       <Td className="text-right">{Number(entry.loanDeduction) > 0 ? <Rupee amount={entry.loanDeduction} className="text-xs text-amber-600" /> : <span className="text-slate-300 text-xs">—</span>}</Td>
                       <Td className="text-right"><Rupee amount={entry.netSalary} className="text-sm font-bold text-slate-900" /></Td>
@@ -388,7 +388,7 @@ export default function RunPayrollPage() {
                               </div>
                               <div className="flex justify-between py-0.5 text-red-500">
                                 <span>Total Deductions</span>
-                                <Rupee amount={[entry.pfAmount, entry.esiAmount, entry.ptAmount, entry.tdsAmount, entry.lopAmount, entry.incentiveRecovery, entry.loanDeduction].reduce((s: number, v: any) => s + Number(v || 0), 0)} />
+                                <Rupee amount={[entry.pfAmount, entry.esiAmount, entry.ptAmount, entry.tdsAmount, entry.incentiveTdsAmount, entry.lopAmount, entry.incentiveRecovery, entry.loanDeduction].reduce((s: number, v: any) => s + Number(v || 0), 0)} />
                               </div>
                               <div className="flex justify-between py-0.5 font-bold border-t border-slate-200 mt-1 text-brand-700">
                                 <span>Net Salary</span>

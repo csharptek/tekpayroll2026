@@ -1,4 +1,5 @@
 import { prisma } from '../utils/prisma'
+import { getPayrollEligibleEmployees, syncLeaveLopForCycle } from './payrollEligibility'
 import { generateAndDeliverPayslips } from '../services/payslipService'
 import { startCronLog, completeCronLog } from './cronLogger'
 import { getSalaryInputForDate } from './payrollEngine'
@@ -64,20 +65,8 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
     }
 
     const { calculatePayrollForEmployee } = await import('./payrollEngine')
-    const employees = await prisma.employee.findMany({
-      where: {
-        OR: [
-          { status: 'ACTIVE' },
-          {
-            status: 'ON_NOTICE',
-            OR: [
-              { lastWorkingDay: null },
-              { lastWorkingDay: { gte: cycle.cycleStart } },
-            ],
-          },
-        ],
-      },
-    })
+    await syncLeaveLopForCycle(cycle as any)
+    const employees = await getPayrollEligibleEmployees(cycle.cycleStart)
 
     let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0, errCount = 0
     const errors: string[] = []
@@ -93,6 +82,12 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
         })
 
         const revisionInput = await getSalaryInputForDate(emp.id, cycle.cycleStart)
+        const tdsMonthly = Number((emp as any).tdsMonthly ?? 0) || revisionInput.tdsMonthly
+        const existingEntry = await prisma.payrollEntry.findUnique({
+          where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: emp.id } },
+          select: { incentive: true, incentiveTdsAmount: true },
+        })
+        const existingIncentive = Number(existingEntry?.incentive || 0)
 
         const salaryInput = revisionInput
         const calc = await calculatePayrollForEmployee({
@@ -106,7 +101,11 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
           cycleEnd:        cycle.cycleEnd,
           payrollMonth:    cycle.payrollMonth,
           lopDays:         Number(lopEntry?.lopDays || 0),
-          tdsMonthly:      revisionInput.tdsMonthly,
+          tdsMonthly:      tdsMonthly,
+          incentive:       existingIncentive,
+          incentiveTds:    existingIncentive > 0 && existingEntry?.incentiveTdsAmount != null
+            ? Number(existingEntry.incentiveTdsAmount)
+            : undefined,
           employeeStatus:  emp.status,
           reimbursements:  Number(reimbs._sum.amount || 0),
           prebuiltSalary:  revisionInput.prebuiltSalary,
@@ -125,7 +124,7 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
             grossSalary: calc.salary.grandTotalMonthly,
             totalDays: calc.proration.totalDays, payableDays: calc.proration.payableDays,
             isProrated: calc.proration.isProrated, proratedGross: calc.proration.proratedGross,
-            incentive: 0, reimbursementTotal: calc.reimbursements,
+            incentive: calc.incentive, incentiveTdsAmount: calc.deductions.incentiveTds, reimbursementTotal: calc.reimbursements,
             lopDays: Number(lopEntry?.lopDays || 0), lopAmount: calc.deductions.lop,
             pfAmount: calc.deductions.pf, esiAmount: calc.deductions.esi,
             ptAmount: calc.deductions.pt, tdsAmount: calc.deductions.tds,
@@ -138,7 +137,7 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
             transport: calc.salary.transportMonthly, fbp: calc.salary.fbpMonthly,
             hyi: calc.salary.hyiMonthly, grossSalary: calc.salary.grandTotalMonthly,
             totalDays: calc.proration.totalDays, payableDays: calc.proration.payableDays,
-            proratedGross: calc.proration.proratedGross, incentive: 0,
+            proratedGross: calc.proration.proratedGross, incentive: calc.incentive, incentiveTdsAmount: calc.deductions.incentiveTds,
             reimbursementTotal: calc.reimbursements, lopDays: Number(lopEntry?.lopDays || 0),
             lopAmount: calc.deductions.lop, pfAmount: calc.deductions.pf,
             esiAmount: calc.deductions.esi, ptAmount: calc.deductions.pt,

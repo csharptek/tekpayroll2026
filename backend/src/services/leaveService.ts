@@ -615,10 +615,14 @@ export async function cancelLeaveDirectly(
     }
 
     if (lopToReverse > 0) {
-      // Find active payroll cycle
+      // Cycle whose range contains the leave start date (only if still open)
+      const leaveStart = new Date(app.startDate)
       const cycle = await prisma.payrollCycle.findFirst({
-        where: { status: { in: ['DRAFT', 'CALCULATED'] } },
-        orderBy: { cycleStart: 'desc' },
+        where: {
+          status:     { in: ['DRAFT', 'CALCULATED'] },
+          cycleStart: { lte: leaveStart },
+          cycleEnd:   { gte: leaveStart },
+        },
       })
       if (cycle) {
         const lopEntry = await prisma.lopEntry.findUnique({
@@ -843,19 +847,8 @@ async function createLopFromLeave(employeeId: string, leaveApplicationId: string
     return
   }
 
-  // No cycle covers this date at all (e.g. future leave, cycle not created yet)
-  // — safe to use latest open cycle as fallback.
-  const fallbackCycle = await prisma.payrollCycle.findFirst({
-    where: { status: { in: ['DRAFT', 'CALCULATED'] } },
-    orderBy: { cycleStart: 'desc' },
-  })
-  if (!fallbackCycle) return
-
-  await prisma.lopEntry.upsert({
-    where: { cycleId_employeeId: { cycleId: fallbackCycle.id, employeeId } },
-    create: { cycleId: fallbackCycle.id, employeeId, lopDays },
-    update: { lopDays: { increment: lopDays } },
-  })
+  // No cycle covers this date yet — do NOT push into an older open cycle.
+  // syncLeaveLopForCycle() picks it up when the matching cycle is created / run.
 }
 
 // ─── SEED DEFAULT REASONS ────────────────────────────────────────────────────

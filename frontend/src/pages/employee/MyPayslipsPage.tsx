@@ -185,7 +185,7 @@ export default function MyPayslipsPage() {
               {filtered.map((ps: any) => {
                 const entry = entryMap.get(ps.entryId) as any
                 const deductions = entry
-                  ? ['pfAmount','esiAmount','ptAmount','tdsAmount','lopAmount','loanDeduction'].reduce((s: number, k: string) => s + Number(entry[k] || 0), 0)
+                  ? ['pfAmount','esiAmount','ptAmount','tdsAmount','incentiveTdsAmount','lopAmount','loanDeduction'].reduce((s: number, k: string) => s + Number(entry[k] || 0), 0)
                   : 0
                 return (
                   <Tr key={ps.id}>

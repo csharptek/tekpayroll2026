@@ -89,7 +89,7 @@ export default function PayrollRunDetailPage() {
                 <Td className="text-right"><Rupee amount={e.pfAmount} /></Td>
                 <Td className="text-right">{Number(e.esiAmount) > 0 ? <Rupee amount={e.esiAmount} /> : '—'}</Td>
                 <Td className="text-right">{Number(e.ptAmount) > 0 ? <Rupee amount={e.ptAmount} /> : '—'}</Td>
-                <Td className="text-right">{Number(e.tdsAmount) > 0 ? <Rupee amount={e.tdsAmount} /> : '—'}</Td>
+                <Td className="text-right">{(Number(e.tdsAmount) + Number(e.incentiveTdsAmount || 0)) > 0 ? <Rupee amount={Number(e.tdsAmount) + Number(e.incentiveTdsAmount || 0)} /> : '—'}</Td>
                 <Td className="text-right">{Number(e.lopAmount) > 0 ? <Rupee amount={e.lopAmount} className="text-red-500" /> : '—'}</Td>
                 <Td className="text-right">{Number(e.reimbursementTotal) > 0 ? <Rupee amount={e.reimbursementTotal} className="text-emerald-600" /> : '—'}</Td>
                 <Td className="text-right">{Number(e.loanDeduction) > 0 ? <Rupee amount={e.loanDeduction} className="text-red-500" /> : '—'}</Td>
