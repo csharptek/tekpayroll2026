@@ -381,8 +381,10 @@ employeeRouter.post('/:id/convert-to-employee', requireHR, async (req, res) => {
   const trainee = await prisma.employee.findUnique({ where: { id: req.params.id } })
   if (!trainee) throw new AppError('Employee not found', 404)
   if (!trainee.isTrainee) throw new AppError('Employee is not a trainee', 400)
-  if (trainee.status !== 'ACTIVE') throw new AppError('Trainee is not active', 400)
   if (trainee.convertedToEmployeeId) throw new AppError('Trainee already converted', 400)
+  // Allow retry of a previously failed half-conversion (INACTIVE + suffixed email, no link)
+  const isHalfConverted = trainee.status !== 'ACTIVE' && trainee.email.includes('+trainee@')
+  if (trainee.status !== 'ACTIVE' && !isHalfConverted) throw new AppError('Trainee is not active', 400)
 
   const { traineeEndDate } = req.body
   if (!traineeEndDate) throw new AppError('traineeEndDate is required', 400)
@@ -404,49 +406,58 @@ employeeRouter.post('/:id/convert-to-employee', requireHR, async (req, res) => {
   }
   const newCode = `C#TEK${maxNum + 1}`
 
-  // Suffix trainee email to free it up
-  const originalEmail = trainee.email
+  // Original email (strip +trainee suffix if this is a retry)
+  const originalEmail = trainee.email.replace('+trainee@', '@')
   const [localPart, domain] = originalEmail.split('@')
   const traineeEmail = `${localPart}+trainee@${domain}`
 
-  // Deactivate trainee record — suffix email
-  await prisma.employee.update({
-    where: { id: trainee.id },
-    data: {
-      status: 'INACTIVE' as any,
-      email: traineeEmail,
-    },
-  })
-
-  // Create new employee record — inherit profile, not financials
   const company = await prisma.company.findFirst()
   if (!company) throw new AppError('Company not configured', 500)
 
-  const newEmployee = await prisma.employee.create({
-    data: {
-      companyId:    company.id,
-      entraId:      trainee.entraId,
-      employeeCode: newCode,
-      name:         trainee.name,
-      email:        originalEmail,
-      jobTitle:     trainee.jobTitle,
-      department:   trainee.department,
-      mobilePhone:  trainee.mobilePhone,
-      officeLocation: trainee.officeLocation,
-      state:        trainee.state,
-      role:         'EMPLOYEE' as any,
-      isTrainee:    false,
-      joiningDate,
-      annualCtc:    0,  // HR sets salary separately
-      status:       'ACTIVE' as any,
-      convertedFromTraineeId: trainee.id,
-    },
+  const clash = await prisma.employee.findFirst({
+    where: { email: originalEmail, id: { not: trainee.id } },
+    select: { employeeCode: true },
   })
+  if (clash) throw new AppError(`Email ${originalEmail} already used by ${clash.employeeCode}`, 409)
 
-  // Link trainee → new employee
-  await prisma.employee.update({
-    where: { id: trainee.id },
-    data: { convertedToEmployeeId: newEmployee.id },
+  // Atomic: free email + entraId on trainee, create employee, link
+  const newEmployee = await prisma.$transaction(async (tx) => {
+    await tx.employee.update({
+      where: { id: trainee.id },
+      data: {
+        status:  'INACTIVE' as any,
+        email:   traineeEmail,
+        entraId: null,
+      },
+    })
+
+    const created = await tx.employee.create({
+      data: {
+        companyId:    company.id,
+        entraId:      trainee.entraId,
+        employeeCode: newCode,
+        name:         trainee.name,
+        email:        originalEmail,
+        jobTitle:     trainee.jobTitle,
+        department:   trainee.department,
+        mobilePhone:  trainee.mobilePhone,
+        officeLocation: trainee.officeLocation,
+        state:        trainee.state,
+        role:         'EMPLOYEE' as any,
+        isTrainee:    false,
+        joiningDate,
+        annualCtc:    0,  // HR sets salary separately
+        status:       'ACTIVE' as any,
+        convertedFromTraineeId: trainee.id,
+      },
+    })
+
+    await tx.employee.update({
+      where: { id: trainee.id },
+      data: { convertedToEmployeeId: created.id },
+    })
+
+    return created
   })
 
   // Grant pro-rata leave entitlements

@@ -195,7 +195,7 @@ export default function EmployeeDetailPage() {
 
   const showExit  = emp.status === 'ON_NOTICE' || emp.status === 'SEPARATED'
   const canInitiateExit  = isHR && emp.status === 'ACTIVE'
-  const canConvert       = isHR && emp.isTrainee && emp.status === 'ACTIVE' && !emp.convertedToEmployeeId
+  const canConvert       = isHR && emp.isTrainee && !emp.convertedToEmployeeId && (emp.status === 'ACTIVE' || String(emp.email || '').includes('+trainee@'))
 
   const visibleTabs = TABS.filter(t =>
     (t.key !== 'exit' || showExit) &&
