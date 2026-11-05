@@ -374,6 +374,65 @@ employeeRouter.post('/:id/deactivate', requireHR, async (req, res) => {
 });
 
 // ─── CONVERT TRAINEE → EMPLOYEE ──────────────────────────────────────────────
+// Copy personal / statutory / bank data from trainee to converted employee.
+// Only fills what is missing on the new record. Never copies salary.
+async function copyTraineeData(traineeId: string, newId: string) {
+  const t: any = await prisma.employee.findUnique({
+    where: { id: traineeId },
+    include: { bankDetail: true, profile: true, address: true, governmentId: true, employmentDetail: true, documents: true } as any,
+  })
+  const n: any = await prisma.employee.findUnique({
+    where: { id: newId },
+    include: { bankDetail: true, profile: true, address: true, governmentId: true, employmentDetail: true, documents: true } as any,
+  })
+  if (!t || !n) return
+
+  const strip = (o: any) => {
+    if (!o) return o
+    const { id, employeeId, createdAt, updatedAt, ...rest } = o
+    return rest
+  }
+
+  // Scalar statutory fields + job title
+  const scalar: any = {}
+  for (const f of ['panNumber', 'aadhaarNumber', 'pfNumber', 'esiNumber', 'uanNumber']) {
+    if (!n[f] && t[f]) scalar[f] = t[f]
+  }
+  if (n.jobTitle && /trainee/i.test(n.jobTitle)) {
+    const cleaned = n.jobTitle.replace(/\btrainee\b/i, '').replace(/\s+/g, ' ').trim()
+    if (cleaned) scalar.jobTitle = cleaned
+  }
+  if (Object.keys(scalar).length) await prisma.employee.update({ where: { id: newId }, data: scalar })
+
+  if (t.bankDetail && !n.bankDetail)     await prisma.bankDetail.create({ data: { ...strip(t.bankDetail), employeeId: newId } })
+  if (t.profile && !n.profile)           await prisma.employeeProfile.create({ data: { ...strip(t.profile), employeeId: newId } })
+  if (t.address && !n.address)           await prisma.employeeAddress.create({ data: { ...strip(t.address), employeeId: newId } })
+  if (t.governmentId && !n.governmentId) await prisma.governmentId.create({ data: { ...strip(t.governmentId), employeeId: newId } })
+
+  // Employment detail — no probation on conversion
+  if (!n.employmentDetail) {
+    const ed = t.employmentDetail ? strip(t.employmentDetail) : {}
+    await prisma.employmentDetail.create({ data: { ...ed, probationMonths: 0, employeeId: newId } })
+  } else if (n.employmentDetail.probationMonths) {
+    await prisma.employmentDetail.update({ where: { employeeId: newId }, data: { probationMonths: 0 } })
+  }
+
+  // Documents — copy rows (same stored file)
+  if ((t.documents?.length ?? 0) > 0 && (n.documents?.length ?? 0) === 0) {
+    await prisma.employeeDocument.createMany({
+      data: t.documents.map((d: any) => ({ ...strip(d), employeeId: newId })),
+    })
+  }
+}
+
+// Re-grant leaves for converted employee with zero probation
+async function regrantConvertedLeaves(newId: string, joiningDate: Date) {
+  const { grantJoiningLeaves } = await import('../services/leaveService')
+  const used = await prisma.leaveApplication.count({ where: { employeeId: newId } })
+  if (used === 0) await prisma.leaveEntitlement.deleteMany({ where: { employeeId: newId } })
+  await grantJoiningLeaves(newId, joiningDate, false, 0)
+}
+
 // POST /api/employees/:id/convert-to-employee
 // Body: { traineeEndDate: string (ISO date) }
 
@@ -460,10 +519,16 @@ employeeRouter.post('/:id/convert-to-employee', requireHR, async (req, res) => {
     return created
   })
 
-  // Grant pro-rata leave entitlements
+  // Copy personal / statutory / bank data
   try {
-    const { grantJoiningLeaves } = await import('../services/leaveService')
-    await grantJoiningLeaves(newEmployee.id, joiningDate, false)
+    await copyTraineeData(trainee.id, newEmployee.id)
+  } catch (err) {
+    console.error('[CONVERT] Failed to copy trainee data:', err)
+  }
+
+  // Grant pro-rata leave entitlements — no probation on conversion
+  try {
+    await regrantConvertedLeaves(newEmployee.id, joiningDate)
   } catch (err) {
     console.error('[CONVERT] Failed to grant leaves:', err)
   }
@@ -489,6 +554,19 @@ employeeRouter.post('/:id/convert-to-employee', requireHR, async (req, res) => {
   })
 
   res.json({ success: true, data: { newEmployeeId: newEmployee.id, employeeCode: newCode } })
+})
+
+// ─── RESYNC CONVERTED EMPLOYEE FROM TRAINEE ──────────────────────────────────
+// POST /api/employees/:id/resync-from-trainee  (:id = converted employee)
+employeeRouter.post('/:id/resync-from-trainee', requireHR, async (req, res) => {
+  const emp = await prisma.employee.findUnique({ where: { id: req.params.id } })
+  if (!emp) throw new AppError('Employee not found', 404)
+  if (!emp.convertedFromTraineeId) throw new AppError('Employee was not converted from a trainee', 400)
+
+  await copyTraineeData(emp.convertedFromTraineeId, emp.id)
+  await regrantConvertedLeaves(emp.id, emp.joiningDate)
+
+  res.json({ success: true })
 })
 
 // ─── DELETE EMPLOYEE (hard delete — SUPER_ADMIN only) ────────────────────────
