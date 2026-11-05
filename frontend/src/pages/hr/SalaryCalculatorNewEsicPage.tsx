@@ -3,14 +3,17 @@ import { useQuery } from '@tanstack/react-query'
 import { Calculator, RotateCcw, Info, AlertTriangle } from 'lucide-react'
 import api from '../../services/api'
 import { Rupee } from '../../components/ui'
-import { computeSalary, ri, r2, DEFAULT_ESI_EMPLOYEE_RATE, DEFAULT_ESI_EMPLOYER_RATE, DEFAULT_ESI_THRESHOLD, SalaryFormulaOutput } from '../../utils/salaryFormula'
+import { computeSalary, ri, r2, pfCapFromConfig, DEFAULT_ESI_EMPLOYEE_RATE, DEFAULT_ESI_EMPLOYER_RATE, DEFAULT_ESI_THRESHOLD, SalaryFormulaOutput } from '../../utils/salaryFormula'
 
 interface Components { basic: number; hra: number; transport: number; fbp: number; hyi: number }
 
 export default function SalaryCalculatorNewEsicPage() {
   const [ctc,          setCtc]          = useState(0)
   const [basicPct,     setBasicPct]     = useState(45)
-  const [hraPct,       setHraPct]       = useState(35)
+  const [hraPct,       setHraPct]       = useState(40)
+  const [hraOfBasic,   setHraOfBasic]   = useState(true)
+  const [bonusOverride, setBonusOverride] = useState('')
+  const [asOfDate,     setAsOfDate]     = useState(new Date().toISOString().slice(0, 10))
   const [hasIncentive, setHasIncentive] = useState(false)
   const [incentivePct, setIncentivePct] = useState(12)
   const [mediclaim,    setMediclaim]    = useState(0)
@@ -27,6 +30,8 @@ export default function SalaryCalculatorNewEsicPage() {
   const esiEmployeeRate = Number(sysConfig?.ESI_EMPLOYEE_RATE ?? DEFAULT_ESI_EMPLOYEE_RATE)
   const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? DEFAULT_ESI_EMPLOYER_RATE)
   const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? DEFAULT_ESI_THRESHOLD)
+  const pfCap           = pfCapFromConfig(sysConfig, asOfDate)
+  const bonusOverrideNum = bonusOverride.trim() === '' || isNaN(Number(bonusOverride)) ? null : Number(bonusOverride)
 
   const esiApplies   = initialized && computed.esiApplies
   const employeeEsi  = computed.employeeEsi
@@ -35,7 +40,7 @@ export default function SalaryCalculatorNewEsicPage() {
 
   function applyCtc() {
     if (ctc <= 0) return
-    const c = computeSalary({ ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim, esiEmployeeRate, esiEmployerRate, esiThreshold })
+    const c = computeSalary({ ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim, hraOfBasic, bonusAmountOverride: bonusOverrideNum, pfCap, esiEmployeeRate, esiEmployerRate, esiThreshold })
     setComponents({ basic: c.basic, hra: c.hra, transport: c.transport, fbp: c.fbp, hyi: c.hyi })
     setGrandTotal(c.grandTotal)
     setComputed({ employerPf: c.employerPf, employerEsi: c.employerEsi, annualBonus: c.annualBonus, esiApplies: c.esiApplies, employeePf: c.employeePf, employeeEsi: c.employeeEsi, netEstimate: c.netEstimate })
@@ -81,7 +86,8 @@ export default function SalaryCalculatorNewEsicPage() {
           <li>&#8226; Employer PF &amp; Employer ESI are <strong>inside CTC</strong></li>
           <li>&#8226; Grand Monthly = (CTC &#8722; Mediclaim) &#247; 12 &#8722; Bonus/12 &#8722; Employer PF &#8722; Employer ESI</li>
           <li>&#8226; Incentive is <strong>inside CTC</strong> — paid annually in March</li>
-          <li>&#8226; Employee ESI = {(esiEmployeeRate * 100).toFixed(2)}% of Basic | Employee PF = 12% of Basic (max &#8377;1,800)</li>
+          <li>&#8226; Employee ESI = {(esiEmployeeRate * 100).toFixed(2)}% of Basic | Employee PF = 12% of Basic (max &#8377;{pfCap.toLocaleString('en-IN')} as of {asOfDate})</li>
+          <li>&#8226; HRA = % of {hraOfBasic ? 'Basic' : 'CTC (legacy)'}</li>
         </ul>
       </div>
 
@@ -99,11 +105,20 @@ export default function SalaryCalculatorNewEsicPage() {
           </div>
         </div>
         <div>
-          <label className="label text-xs">HRA % of CTC</label>
+          <label className="label text-xs">HRA % of {hraOfBasic ? 'Basic' : 'CTC'}</label>
           <div className="flex items-center gap-1">
-            <input type="number" className="input text-sm w-20" value={hraPct} onChange={e => setHraPct(Number(e.target.value))} min={1} max={50}/>
+            <input type="number" className="input text-sm w-20" value={hraPct} onChange={e => setHraPct(Number(e.target.value))} min={1} max={100}/>
             <span className="text-sm text-slate-400">%</span>
+            <select className="input text-xs w-28 ml-1" value={hraOfBasic ? 'BASIC' : 'CTC'}
+              onChange={e => setHraOfBasic(e.target.value === 'BASIC')}>
+              <option value="BASIC">of Basic</option>
+              <option value="CTC">of CTC (legacy)</option>
+            </select>
           </div>
+        </div>
+        <div>
+          <label className="label text-xs">As of Date (PF ceiling)</label>
+          <input type="date" className="input text-sm" value={asOfDate} onChange={e => setAsOfDate(e.target.value)}/>
         </div>
         <div>
           <label className="label text-xs">Mediclaim (Annual &#8377;)</label>
@@ -127,6 +142,13 @@ export default function SalaryCalculatorNewEsicPage() {
             </div>
           )}
         </div>
+        {hasIncentive && (
+          <div>
+            <label className="label text-xs">Bonus Override (Annual &#8377;)</label>
+            <input type="number" className="input text-sm" value={bonusOverride} min={0}
+              onChange={e => setBonusOverride(e.target.value)} placeholder={`blank = ${incentivePct}% of CTC`}/>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3">
@@ -188,7 +210,7 @@ export default function SalaryCalculatorNewEsicPage() {
                 {/* Employee PF — inside Gross (deducted from Gross later) */}
                 <tr className="text-slate-500 text-xs">
                   <td className="py-1.5">
-                    Employee PF (12% of Basic, max &#8377;1,800)
+                    Employee PF (12% of Basic, max &#8377;{pfCap.toLocaleString('en-IN')})
                     <span className="ml-1 text-[10px] text-blue-600 font-medium">in Gross</span>
                   </td>
                   <td className="py-1.5 text-right font-mono"><Rupee amount={employeePf}/></td>
@@ -208,7 +230,7 @@ export default function SalaryCalculatorNewEsicPage() {
                 {/* Employer contributions — inside CTC */}
                 <tr className="text-slate-500 text-xs">
                   <td className="py-1.5">
-                    Employer PF (12% of Basic, max &#8377;1,800)
+                    Employer PF (12% of Basic, max &#8377;{pfCap.toLocaleString('en-IN')})
                     <span className="ml-1 text-[10px] text-green-600 font-medium">in CTC</span>
                   </td>
                   <td className="py-1.5 text-right font-mono"><Rupee amount={computed.employerPf}/></td>
@@ -233,7 +255,7 @@ export default function SalaryCalculatorNewEsicPage() {
                 )}
                 {hasIncentive && (
                   <tr className="text-amber-600 text-xs">
-                    <td className="py-1.5">Annual Bonus ({incentivePct}%) — paid March</td>
+                    <td className="py-1.5">Annual Bonus ({bonusOverrideNum != null ? 'override' : `${incentivePct}%`}) — paid March</td>
                     <td className="py-1.5 text-right font-mono"><Rupee amount={r2(computed.annualBonus / 12)}/></td>
                     <td className="py-1.5 text-right font-mono"><Rupee amount={computed.annualBonus}/></td>
                   </tr>
@@ -253,7 +275,7 @@ export default function SalaryCalculatorNewEsicPage() {
               <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-2">Employee Deductions</p>
               <div className="space-y-1 text-xs text-slate-600">
                 <div className="flex justify-between">
-                  <span>Employee PF (12% of Basic, max &#8377;1,800)</span>
+                  <span>Employee PF (12% of Basic, max &#8377;{pfCap.toLocaleString('en-IN')})</span>
                   <span className="font-mono font-semibold"><Rupee amount={employeePf}/>/mo</span>
                 </div>
                 {esiApplies ? (

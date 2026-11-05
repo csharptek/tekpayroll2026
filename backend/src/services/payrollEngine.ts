@@ -11,6 +11,8 @@ export interface SalaryInput {
   mediclaim:       number   // annual
   hasIncentive:    boolean
   incentivePercent: number  // default 12
+  bonusAmountOverride?: number | null  // annualized bonus ₹ (overrides CTC × incentivePercent)
+  hraOfBasic?:      boolean   // true = hraPercent is % of Basic
 }
 
 export interface SalaryStructure {
@@ -82,6 +84,53 @@ const DEFAULT_ESI_EMPLOYEE_RATE = 0.0075  // 0.75%
 const DEFAULT_ESI_EMPLOYER_RATE = 0.0325  // 3.25%
 const DEFAULT_ESI_THRESHOLD     = 21000   // ₹21,000 gross - HYI
 
+// ─── PF CONFIG (date-aware wage ceiling) ─────────────────────────────────────
+// Cap = PF_RATE × ceiling. Ceiling switches from PF_WAGE_CEILING_PREV to
+// PF_WAGE_CEILING on PF_CEILING_EFFECTIVE_FROM (YYYY-MM-DD).
+
+export interface PfConfig {
+  rate:          number   // 0.12
+  ceiling:       number   // new ceiling (25000)
+  prevCeiling:   number   // old ceiling (15000)
+  effectiveFrom: Date     // switch date
+}
+
+export const DEFAULT_PF_CONFIG: PfConfig = {
+  rate:          0.12,
+  ceiling:       25000,
+  prevCeiling:   15000,
+  effectiveFrom: new Date('2026-10-01T00:00:00Z'),
+}
+
+export async function getPfConfig(): Promise<PfConfig> {
+  const rows = await prisma.systemConfig.findMany({
+    where: { key: { in: ['PF_RATE', 'PF_WAGE_CEILING', 'PF_WAGE_CEILING_PREV', 'PF_CEILING_EFFECTIVE_FROM'] } },
+  })
+  const map = Object.fromEntries(rows.map(r => [r.key, r.value]))
+  const num = (k: string, d: number) => {
+    const v = Number(map[k]); return map[k] != null && map[k] !== '' && !isNaN(v) && v > 0 ? v : d
+  }
+  const effRaw = map['PF_CEILING_EFFECTIVE_FROM']
+  const eff    = effRaw ? new Date(`${effRaw}T00:00:00Z`) : DEFAULT_PF_CONFIG.effectiveFrom
+  return {
+    rate:          num('PF_RATE', DEFAULT_PF_CONFIG.rate),
+    ceiling:       num('PF_WAGE_CEILING', DEFAULT_PF_CONFIG.ceiling),
+    prevCeiling:   num('PF_WAGE_CEILING_PREV', DEFAULT_PF_CONFIG.prevCeiling),
+    effectiveFrom: isNaN(eff.getTime()) ? DEFAULT_PF_CONFIG.effectiveFrom : eff,
+  }
+}
+
+/** Monthly PF cap (₹) applicable on a given date */
+export function pfCapFor(date: Date, cfg: PfConfig = DEFAULT_PF_CONFIG): number {
+  const ceiling = date.getTime() >= cfg.effectiveFrom.getTime() ? cfg.ceiling : cfg.prevCeiling
+  return Math.round(ceiling * cfg.rate)
+}
+
+/** PF amount (₹/mo) on a basic, for a given date */
+export function pfFor(basicMonthly: number, date: Date, cfg: PfConfig = DEFAULT_PF_CONFIG): number {
+  return Math.min(Math.round(basicMonthly * cfg.rate), pfCapFor(date, cfg))
+}
+
 // ─── LOAD ESI CONFIG FROM DB ─────────────────────────────────────────────────
 
 export async function getEsiConfig() {
@@ -100,21 +149,23 @@ export async function getEsiConfig() {
 
 export function computeSalaryStructure(
   input: SalaryInput,
-  esiConfig = { employeeRate: DEFAULT_ESI_EMPLOYEE_RATE, employerRate: DEFAULT_ESI_EMPLOYER_RATE, threshold: DEFAULT_ESI_THRESHOLD }
+  esiConfig = { employeeRate: DEFAULT_ESI_EMPLOYEE_RATE, employerRate: DEFAULT_ESI_EMPLOYER_RATE, threshold: DEFAULT_ESI_THRESHOLD },
+  asOf: Date = new Date(),
+  pfConfig: PfConfig = DEFAULT_PF_CONFIG
 ): SalaryStructure {
   const { annualCtc, basicPercent, hraPercent, mediclaim, hasIncentive, incentivePercent } = input
 
-  const annualBonus      = hasIncentive ? ri(annualCtc * incentivePercent / 100) : 0
+  const annualBonus      = hasIncentive
+    ? (input.bonusAmountOverride != null ? ri(Number(input.bonusAmountOverride)) : ri(annualCtc * incentivePercent / 100))
+    : 0
   const basicAnnual      = ri(annualCtc * basicPercent / 100)
   const basicMonthly     = ri(basicAnnual / 12)
 
   // ── NEW ESIC RULE: ESI applies when Basic < threshold ────────────────────
   const esiApplies = basicMonthly > 0 && basicMonthly < esiConfig.threshold
 
-  // Employer PF (inside CTC, capped at ₹1,800/mo)
-  const EMPLOYER_PF_CTC_CAP    = 1800
-  const employerPfInCtcMonthly = Math.min(ri(basicMonthly * 0.12), EMPLOYER_PF_CTC_CAP)
-  const employerPfInCtcAnnual  = employerPfInCtcMonthly * 12
+  // Employer PF (inside CTC, capped at rate × wage ceiling for asOf date)
+  const employerPfInCtcMonthly = pfFor(basicMonthly, asOf, pfConfig)
 
   // Employer ESI (inside CTC, computed from Basic)
   const employerEsiInCtcMonthly = esiApplies ? ri(basicMonthly * esiConfig.employerRate) : 0
@@ -124,12 +175,14 @@ export function computeSalaryStructure(
   const annualBonusMonthly = hasIncentive ? ri(annualBonus / 12) : 0
   const grandTotalMonthly = ri((annualCtc - mediclaim) / 12 - annualBonusMonthly - employerPfInCtcMonthly - employerEsiInCtcMonthly)
 
-  // Uncapped actual employer PF (shown informally)
-  const employerPfMonthly = ri(basicMonthly * 0.12)
+  // Employer PF — capped (same as amount inside CTC)
+  const employerPfMonthly = employerPfInCtcMonthly
   const employerPfAnnual  = employerPfMonthly * 12
 
-  const hraAnnual        = ri(annualCtc * hraPercent / 100)
-  const hraMonthly       = ri(hraAnnual / 12)
+  const hraMonthly       = input.hraOfBasic
+    ? ri(basicMonthly * hraPercent / 100)
+    : ri(ri(annualCtc * hraPercent / 100) / 12)
+  const hraAnnual        = hraMonthly * 12
 
   const transportMonthly = input.transportMonthly != null
     ? Math.round(input.transportMonthly)
@@ -141,8 +194,8 @@ export function computeSalaryStructure(
 
   const hyiMonthly = ri(grandTotalMonthly - basicMonthly - hraMonthly - transportMonthly - fbpMonthly)
 
-  // Employee PF deduction — capped at ₹1,800/mo
-  const employeePfMonthly = Math.min(ri(basicMonthly * 0.12), 1800)
+  // Employee PF deduction — capped at rate × wage ceiling for asOf date
+  const employeePfMonthly = pfFor(basicMonthly, asOf, pfConfig)
 
   // Employee ESI — base = Basic (new rule)
   const employeeEsiMonthly = esiApplies ? ri(basicMonthly * esiConfig.employeeRate) : 0
@@ -412,6 +465,8 @@ export async function getSalaryInputForDate(
       annualCtc,
       basicPercent,
       hraPercent,
+      hraOfBasic:          true,
+      bonusAmountOverride: hasIncentive ? annualBonus : null,
       transportMonthly,
       fbpMonthly,
       mediclaim,
@@ -440,6 +495,8 @@ export async function getSalaryInputForDate(
     mediclaim:        Number((emp as any).mediclaim        ?? 0),
     hasIncentive:     Boolean((emp as any).hasIncentive),
     incentivePercent: Number((emp as any).incentivePercent ?? 12),
+    bonusAmountOverride: (emp as any).bonusAmountOverride != null ? Number((emp as any).bonusAmountOverride) : null,
+    hraOfBasic:       Boolean((emp as any).hraOfBasic),
     tdsMonthly:       Number((emp as any).tdsMonthly       ?? 0),
   }
 
@@ -503,6 +560,7 @@ export async function calculatePayrollForEmployee(params: {
   incentiveTds?:   number
   employeeStatus?: string
   esiConfig?: Awaited<ReturnType<typeof getEsiConfig>>
+  pfConfig?:  PfConfig
   prebuiltSalary?: SalaryStructure
   isTrainee?:      boolean
   stipendMonthly?: number
@@ -589,7 +647,18 @@ export async function calculatePayrollForEmployee(params: {
     const salaryInputForCalc: SalaryInput = suppressHyi
       ? { ...salaryInput, hasIncentive: false, incentivePercent: 0 }
       : salaryInput
-    salary = computeSalaryStructure(salaryInputForCalc, esiConfig)
+    salary = computeSalaryStructure(salaryInputForCalc, esiConfig, params.cycleEnd, params.pfConfig ?? await getPfConfig())
+  }
+
+  // March payout: FY payout override (e.g. mid-year PF absorption) replaces annualized bonus
+  if (isBonusMonth(params.payrollMonth) && salary.annualBonus > 0) {
+    const empBonus = await prisma.employee.findUnique({
+      where:  { id: params.employeeId },
+      select: { bonusPayoutOverride: true },
+    })
+    if (empBonus?.bonusPayoutOverride != null) {
+      salary = { ...salary, annualBonus: ri(Number(empBonus.bonusPayoutOverride)) }
+    }
   }
 
   const proration  = computeProration(
@@ -646,9 +715,9 @@ export async function calculatePayrollForEmployee(params: {
 
 // ─── PREVIEW BREAKDOWN (for UI — shows all components before saving) ──────────
 
-export async function previewSalaryBreakdown(input: SalaryInput) {
-  const esiConfig = await getEsiConfig()
-  const s = computeSalaryStructure(input, esiConfig)
+export async function previewSalaryBreakdown(input: SalaryInput, asOf: Date = new Date()) {
+  const [esiConfig, pfConfig] = await Promise.all([getEsiConfig(), getPfConfig()])
+  const s = computeSalaryStructure(input, esiConfig, asOf, pfConfig)
 
   const components = [
     { label: 'Basic',          monthly: s.basicMonthly,     annual: s.basicAnnual,           editable: false },

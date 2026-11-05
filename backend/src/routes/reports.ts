@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireManagement, requireSuperAdmin } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
+import { getPfConfig, pfFor } from '../services/payrollEngine';
 
 export const reportRouter = Router();
 reportRouter.use(authenticate, requireManagement);
@@ -79,6 +80,7 @@ reportRouter.get('/salary-summary', requireSuperAdmin, async (_req, res) => {
     select: { basic: true, pfAmount: true, esiAmount: true, employerPfAmount: true, employerEsiAmount: true },
   });
 
+  const pfCfg = await getPfConfig();
   let totalEmployerPf  = 0;
   let totalEmployerEsi = 0;
   for (const e of entries) {
@@ -86,7 +88,7 @@ reportRouter.get('/salary-summary', requireSuperAdmin, async (_req, res) => {
     if (Number((e as any).employerPfAmount) > 0) {
       totalEmployerPf  += Number((e as any).employerPfAmount);
     } else {
-      totalEmployerPf  += Math.min(Math.round(Number(e.basic) * 0.12), 1800);
+      totalEmployerPf  += pfFor(Number(e.basic), activeCycle.cycleEnd, pfCfg);
     }
     if (Number((e as any).employerEsiAmount) > 0) {
       totalEmployerEsi += Number((e as any).employerEsiAmount);

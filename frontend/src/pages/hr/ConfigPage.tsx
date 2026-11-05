@@ -82,6 +82,13 @@ export default function ConfigPage() {
     { key: 'ESI_THRESHOLD',     label: 'ESI Threshold (₹)', default: '21000',  hint: 'ESI applies if gross ≤ this' },
   ]
 
+  const pfConfigs = [
+    { key: 'PF_RATE',                   label: 'PF Rate',                     default: '0.12',       hint: 'e.g. 0.12 = 12% (employee & employer)' },
+    { key: 'PF_WAGE_CEILING',           label: 'PF Wage Ceiling (₹)',         default: '25000',      hint: 'Current ceiling. Cap = rate × ceiling' },
+    { key: 'PF_WAGE_CEILING_PREV',      label: 'Previous Wage Ceiling (₹)',   default: '15000',      hint: 'Applies before effective date' },
+    { key: 'PF_CEILING_EFFECTIVE_FROM', label: 'Ceiling Effective From',      default: '2026-10-01', hint: 'YYYY-MM-DD' },
+  ]
+
   const noticeConfigs = [
     { key: 'NOTICE_DAYS_RESIGNED',   label: 'Notice Period — Resigned (days)',   default: '90' },
     { key: 'NOTICE_DAYS_TERMINATED', label: 'Notice Period — Terminated (days)', default: '0' },
@@ -220,6 +227,25 @@ export default function ConfigPage() {
               <label className="label">{label}</label>
               <input type="number" step="0.0001" className="input" value={getValue(key, dflt)}
                 onChange={e => set(key, e.target.value)} />
+              <p className="text-xs text-slate-400">{hint}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* ── PF ──────────────────────────────────────────────────────── */}
+      <Section icon={DollarSign} title="PF Configuration" subtitle="PF = rate × Basic, capped at rate × wage ceiling. Ceiling switches on the effective date. After changing, run 'Migrate Salary Snapshots' on Run Tasks.">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          {pfConfigs.map(({ key, label, default: dflt, hint }) => (
+            <div key={key} className="flex flex-col gap-1">
+              <label className="label">{label}</label>
+              {key === 'PF_CEILING_EFFECTIVE_FROM' ? (
+                <input type="date" className="input" value={getValue(key, dflt)}
+                  onChange={e => set(key, e.target.value)} />
+              ) : (
+                <input type="number" step={key === 'PF_RATE' ? '0.01' : '1'} className="input" value={getValue(key, dflt)}
+                  onChange={e => set(key, e.target.value)} />
+              )}
               <p className="text-xs text-slate-400">{hint}</p>
             </div>
           ))}

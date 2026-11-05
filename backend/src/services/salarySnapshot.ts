@@ -2,6 +2,7 @@ import { prisma } from '../utils/prisma'
 import {
   computeSalaryStructure,
   getEsiConfig,
+  getPfConfig,
   getSalaryInputForDate,
   computePt,
 } from './payrollEngine'
@@ -18,7 +19,7 @@ export async function computeAndSaveSnapshot(
   computedBy: string,
   asOf: Date = new Date()
 ): Promise<void> {
-  const esiConfig = await getEsiConfig()
+  const [esiConfig, pfConfig] = await Promise.all([getEsiConfig(), getPfConfig()])
   const emp = await prisma.employee.findUnique({
     where: { id: employeeId },
     select: { id: true, state: true, annualCtc: true },
@@ -28,10 +29,10 @@ export async function computeAndSaveSnapshot(
 
   // skipSnapshot=true → read live employee/revision config, NOT the stale snapshot
   const input = await getSalaryInputForDate(employeeId, asOf, true)
-  const s = computeSalaryStructure(input, esiConfig)
+  const s = computeSalaryStructure(input, esiConfig, asOf, pfConfig)
   const pt = await computePt(s.grandTotalMonthly, emp.state || '')
 
-  const employerPfCapped = Math.min(s.employerPfMonthly, 1800)
+  const employerPfCapped = s.employerPfMonthly
   const netMonthly =
     s.grandTotalMonthly - s.employeePfMonthly - s.employeeEsiMonthly - pt
 

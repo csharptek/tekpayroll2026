@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { authenticate, requireSuperAdmin } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
-import { computeSalaryStructure, getEsiConfig, getSalaryInputForDate, computePt } from '../services/payrollEngine';
+import { computeSalaryStructure, getEsiConfig, getPfConfig, getSalaryInputForDate, computePt } from '../services/payrollEngine';
 
 export const salaryBreakupsRouter = Router();
 salaryBreakupsRouter.use(authenticate, requireSuperAdmin);
@@ -41,7 +41,7 @@ export async function buildBreakups(
   employees: Array<{ id: string; employeeCode: string; name: string; jobTitle: string | null; department: string | null; state: string | null; status: string }>,
   asOf: Date
 ): Promise<BreakupRow[]> {
-  const esiConfig = await getEsiConfig();
+  const [esiConfig, pfConfig] = await Promise.all([getEsiConfig(), getPfConfig()]);
   const rows: BreakupRow[] = [];
 
   for (const emp of employees) {
@@ -58,7 +58,9 @@ export async function buildBreakups(
       mediclaim:        Number(input.mediclaim),
       hasIncentive:     Boolean(input.hasIncentive),
       incentivePercent: Number(input.incentivePercent),
-    }, esiConfig);
+      bonusAmountOverride: (input as any).bonusAmountOverride ?? null,
+      hraOfBasic:       Boolean((input as any).hraOfBasic),
+    }, esiConfig, asOf, pfConfig);
 
     const pt = await computePt(s.grandTotalMonthly, emp.state || '');
 
@@ -79,7 +81,7 @@ export async function buildBreakups(
       grossMonthly: s.grandTotalMonthly,
       employeePf:   s.employeePfMonthly,
       employeeEsi:  s.employeeEsiMonthly,
-      employerPf:   Math.min(s.employerPfMonthly, 1800),
+      employerPf:   s.employerPfMonthly,
       employerEsi:  s.employerEsiMonthly,
       pt,
       netMonthly:   s.grandTotalMonthly - s.employeePfMonthly - s.employeeEsiMonthly - pt,

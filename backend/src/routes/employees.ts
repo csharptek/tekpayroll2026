@@ -26,6 +26,8 @@ const createEmployeeSchema = z.object({
   hraPercent: z.number().min(1).max(100).default(35),
   hasIncentive: z.boolean().default(false),
   incentivePercent: z.number().min(0).max(100).default(12),
+  bonusAmountOverride: z.number().min(0).nullable().optional(),
+  hraOfBasic: z.boolean().default(true),
   transportMonthly: z.number().nullable().optional(),
   fbpMonthly: z.number().nullable().optional(),
   mediclaim: z.number().default(0),
@@ -212,19 +214,44 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
     annualCtc, basicPercent, hraPercent, hasIncentive, incentivePercent, transportMonthly, fbpMonthly,
     mediclaim, tdsMonthly, resignationDate, lastWorkingDay,
     state, joiningDate, panNumber, aadhaarNumber, pfNumber, esiNumber, uanNumber,
-    jobTitle, department, mobilePhone, status, stipendMonthly
+    jobTitle, department, mobilePhone, status, stipendMonthly,
+    bonusAmountOverride, bonusPayoutOverride, hraOfBasic, revisionEffectiveFrom,
   } = req.body;
 
-  // Handle CTC revision — log it separately
+  const numOrNull = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v))
+  const ex: any = existing
+  const prevBonusOverride = ex.bonusAmountOverride != null ? Number(ex.bonusAmountOverride) : null
+  const prevBonusPayout   = ex.bonusPayoutOverride != null ? Number(ex.bonusPayoutOverride) : null
+  const nextBonusOverride = bonusAmountOverride !== undefined ? numOrNull(bonusAmountOverride) : prevBonusOverride
+  const nextBonusPayout   = bonusPayoutOverride !== undefined ? numOrNull(bonusPayoutOverride) : prevBonusPayout
+  const nextHraOfBasic    = hraOfBasic !== undefined ? Boolean(hraOfBasic) : Boolean(ex.hraOfBasic)
+
+  const ctcChanged    = Boolean(annualCtc) && Number(annualCtc) !== Number(existing.annualCtc)
+  const bonusChanged  = nextBonusOverride !== prevBonusOverride || nextBonusPayout !== prevBonusPayout
+  const hraChanged    = nextHraOfBasic !== Boolean(ex.hraOfBasic)
+    || (hraPercent !== undefined && Number(hraPercent) !== Number(ex.hraPercent ?? 35))
+  const salaryFieldsTouched = [annualCtc, basicPercent, hraPercent, hasIncentive, incentivePercent,
+    transportMonthly, fbpMonthly, mediclaim, bonusAmountOverride, bonusPayoutOverride, hraOfBasic]
+    .some(v => v !== undefined)
+
+  const effFrom = revisionEffectiveFrom ? new Date(revisionEffectiveFrom) : new Date()
+  if (isNaN(effFrom.getTime())) throw new AppError('Invalid revision effective date', 400)
+
+  // Handle salary revision — log it separately (CTC, bonus override or HRA basis change)
   const updateData: any = {};
   if (employeeCode && employeeCode !== existing.employeeCode) updateData.employeeCode = employeeCode;
-  if (annualCtc && annualCtc !== Number(existing.annualCtc)) {
+  if (ctcChanged || bonusChanged || hraChanged) {
     await prisma.salaryRevision.create({
       data: {
         employeeId: existing.id,
-        effectiveFrom: new Date(),
+        effectiveFrom: effFrom,
+        previousBonusOverride: prevBonusOverride,
+        newBonusOverride:      nextBonusOverride,
+        newBonusPayout:        nextBonusPayout,
+        previousHraOfBasic:    Boolean(ex.hraOfBasic),
+        newHraOfBasic:         nextHraOfBasic,
         previousCtc:          existing.annualCtc,
-        newCtc:               annualCtc,
+        newCtc:               ctcChanged ? annualCtc : existing.annualCtc,
         previousBasicPct:     (existing as any).basicPercent     ?? 45,
         newBasicPct:          basicPercent     ?? (existing as any).basicPercent     ?? 45,
         previousHraPct:       (existing as any).hraPercent       ?? 35,
@@ -241,13 +268,16 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
         newMediclaim:         mediclaim        ?? (existing as any).mediclaim        ?? 0,
         previousTds:          (existing as any).tdsMonthly       ?? 0,
         newTds:               tdsMonthly       ?? (existing as any).tdsMonthly       ?? 0,
-        reason: req.body.revisionReason || 'CTC revision',
+        reason: req.body.revisionReason || (ctcChanged ? 'CTC revision' : 'Salary structure revision'),
         revisedBy: req.user!.id,
         revisedByName: req.user!.name,
       },
     });
-    updateData.annualCtc = annualCtc;
+    if (ctcChanged) updateData.annualCtc = annualCtc;
   }
+  if (bonusAmountOverride !== undefined) updateData.bonusAmountOverride = nextBonusOverride;
+  if (bonusPayoutOverride !== undefined) updateData.bonusPayoutOverride = nextBonusPayout;
+  if (hraOfBasic !== undefined) updateData.hraOfBasic = nextHraOfBasic;
 
   if (hasIncentive !== undefined) updateData.hasIncentive = hasIncentive;
   if (incentivePercent !== undefined) updateData.incentivePercent = incentivePercent;
@@ -285,6 +315,16 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
     where: { id: req.params.id },
     data: updateData,
   });
+
+  // Salary changed → refresh active salary snapshot (payroll source of truth)
+  if (salaryFieldsTouched && !existing.isTrainee && Number(updated.annualCtc) > 0) {
+    try {
+      const { computeAndSaveSnapshot } = await import('../services/salarySnapshot')
+      await computeAndSaveSnapshot(existing.id, req.user!.id, effFrom)
+    } catch (err) {
+      console.error('[SNAPSHOT] Failed to refresh salary snapshot:', err)
+    }
+  }
 
   // Recalculate leave entitlements if joining date changed
   if (joiningDate && new Date(joiningDate).toISOString() !== existing.joiningDate?.toISOString()) {

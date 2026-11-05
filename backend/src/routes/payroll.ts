@@ -400,7 +400,7 @@ payrollRouter.post('/dry-run', requireSuperAdmin, async (req, res) => {
       lopDays,
       lopAmount:     calc.deductions.lop,
       pfAmount:          calc.deductions.pf,
-      employerPfAmount:  Math.min(calc.salary.employerPfMonthly, 1800),
+      employerPfAmount:  calc.salary.employerPfMonthly,
       esiAmount:         calc.deductions.esi,
       employerEsiAmount: calc.salary.employerEsiMonthly,
       ptAmount:      calc.deductions.pt,

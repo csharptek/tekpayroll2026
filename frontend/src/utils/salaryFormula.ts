@@ -3,13 +3,33 @@
 //  - Employer PF & Employer ESI are INSIDE CTC
 //  - Employee PF & Employee ESI are INSIDE Gross (deducted later)
 //  - ESI applies when Basic < ESI_THRESHOLD (default ₹21,000)
-//  - Employer PF capped at ₹1,800/mo, Employee PF capped at ₹1,800/mo
+//  - PF = 12% of Basic, capped at rate × wage ceiling (date-aware, from config)
 //  - Incentive is inside CTC, paid annually in March
 //  - Grand Monthly = (CTC − Mediclaim) ÷ 12 − Bonus/12 − EmployerPF − EmployerESI
 //  - Transport = Gross × 2%, FBP = Gross × 2%, HYI = Gross − Basic − HRA − Transport − FBP
 
-export const EMPLOYER_PF_CAP = 1800
-export const EMPLOYEE_PF_CAP = 1800
+export const DEFAULT_PF_RATE               = 0.12
+export const DEFAULT_PF_WAGE_CEILING       = 25000
+export const DEFAULT_PF_WAGE_CEILING_PREV  = 15000
+export const DEFAULT_PF_EFFECTIVE_FROM     = '2026-10-01'
+export const DEFAULT_PF_CAP = Math.round(DEFAULT_PF_RATE * DEFAULT_PF_WAGE_CEILING)
+/** @deprecated use pfCapFromConfig */
+export const EMPLOYER_PF_CAP = DEFAULT_PF_CAP
+/** @deprecated use pfCapFromConfig */
+export const EMPLOYEE_PF_CAP = DEFAULT_PF_CAP
+
+/** Monthly PF cap (₹) from system config for a given date (YYYY-MM-DD or Date). */
+export function pfCapFromConfig(sysConfig: Record<string, any> | undefined, on: Date | string = new Date()): number {
+  const num = (k: string, d: number) => {
+    const v = Number(sysConfig?.[k]); return sysConfig?.[k] != null && sysConfig?.[k] !== '' && !isNaN(v) && v > 0 ? v : d
+  }
+  const rate    = num('PF_RATE', DEFAULT_PF_RATE)
+  const ceiling = num('PF_WAGE_CEILING', DEFAULT_PF_WAGE_CEILING)
+  const prev    = num('PF_WAGE_CEILING_PREV', DEFAULT_PF_WAGE_CEILING_PREV)
+  const eff     = String(sysConfig?.PF_CEILING_EFFECTIVE_FROM || DEFAULT_PF_EFFECTIVE_FROM)
+  const onStr   = typeof on === 'string' ? on.slice(0, 10) : on.toISOString().slice(0, 10)
+  return Math.round(rate * (onStr >= eff ? ceiling : prev))
+}
 export const DEFAULT_ESI_EMPLOYEE_RATE = 0.0075
 export const DEFAULT_ESI_EMPLOYER_RATE = 0.0325
 export const DEFAULT_ESI_THRESHOLD     = 21000
@@ -26,6 +46,9 @@ export interface SalaryFormulaInput {
   incentivePct: number
   hasIncentive: boolean
   mediclaim: number
+  bonusAmountOverride?: number | null   // annualized bonus ₹ (overrides CTC × incentivePct)
+  hraOfBasic?: boolean                  // true = hraPct is % of Basic
+  pfCap?: number                        // monthly PF cap ₹
   transportOverride?: number | null
   fbpOverride?: number | null
   esiEmployeeRate?: number
@@ -53,17 +76,20 @@ export function computeSalary(input: SalaryFormulaInput): SalaryFormulaOutput {
   const {
     ctc, basicPct, hraPct, incentivePct, hasIncentive, mediclaim,
     transportOverride = null, fbpOverride = null,
+    bonusAmountOverride = null, hraOfBasic = false, pfCap = DEFAULT_PF_CAP,
     esiEmployeeRate = DEFAULT_ESI_EMPLOYEE_RATE,
     esiEmployerRate = DEFAULT_ESI_EMPLOYER_RATE,
     esiThreshold    = DEFAULT_ESI_THRESHOLD,
   } = input
 
-  const annualBonus = hasIncentive ? ri(ctc * incentivePct / 100) : 0
+  const annualBonus = hasIncentive
+    ? (bonusAmountOverride != null ? ri(bonusAmountOverride) : ri(ctc * incentivePct / 100))
+    : 0
   const basic = ri(ctc * basicPct / 100 / 12)
-  const hra   = ri(ctc * hraPct   / 100 / 12)
+  const hra   = hraOfBasic ? ri(basic * hraPct / 100) : ri(ctc * hraPct / 100 / 12)
 
   // Employer contributions — inside CTC
-  const employerPf  = Math.min(ri(basic * 0.12), EMPLOYER_PF_CAP)
+  const employerPf  = Math.min(ri(basic * DEFAULT_PF_RATE), pfCap)
   const esiApplies  = basic > 0 && basic < esiThreshold
   const employerEsi = esiApplies ? ri(basic * esiEmployerRate) : 0
 
@@ -76,7 +102,7 @@ export function computeSalary(input: SalaryFormulaInput): SalaryFormulaOutput {
   const hyi       = ri(grandTotal - basic - hra - transport - fbp)
 
   // Employee deductions — inside Gross
-  const employeePf  = Math.min(ri(basic * 0.12), EMPLOYEE_PF_CAP)
+  const employeePf  = Math.min(ri(basic * DEFAULT_PF_RATE), pfCap)
   const employeeEsi = esiApplies ? ri(basic * esiEmployeeRate) : 0
 
   const netEstimate = r2(grandTotal - employeePf - employeeEsi)

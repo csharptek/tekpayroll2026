@@ -5,7 +5,7 @@ import { authenticate, requireHR, requireSuperAdmin } from '../middleware/auth'
 import { AppError } from '../middleware/errorHandler'
 import { randomUUID } from 'crypto'
 import { sendEmail, sendEmailWithAttachment, getDocEmailConfig } from '../services/emailService'
-import { computeSalaryStructure, getEsiConfig, getSalaryInputForDate, computePt } from '../services/payrollEngine'
+import { computeSalaryStructure, getEsiConfig, getPfConfig, getSalaryInputForDate, computePt } from '../services/payrollEngine'
 import { saveFile, readFile, getFileUrl } from '../utils/fileStorage'
 
 export const documentsRouter = Router()
@@ -105,11 +105,13 @@ documentsRouter.post('/compute-salary', async (req: any, res) => {
     mediclaim:        Number((emp as any).mediclaim ?? 0),
     hasIncentive:     Boolean((emp as any).hasIncentive),
     incentivePercent: Number((emp as any).incentivePercent ?? 12),
+    bonusAmountOverride: (emp as any).bonusAmountOverride != null ? Number((emp as any).bonusAmountOverride) : null,
+    hraOfBasic:       Boolean((emp as any).hraOfBasic),
     tdsMonthly:       Number((emp as any).tdsMonthly ?? 0),
   }
 
   const input = { ...baseInput, annualCtc: latestCtc }
-  const s = computeSalaryStructure(input, esiConfig)
+  const s = computeSalaryStructure(input, esiConfig, new Date(), await getPfConfig())
   const pt = await computePt(s.grandTotalMonthly, (emp as any).state || '')
 
   const netMonthly = s.grandTotalMonthly - s.employeePfMonthly - s.employeeEsiMonthly - pt
@@ -126,7 +128,7 @@ documentsRouter.post('/compute-salary', async (req: any, res) => {
       grandTotalMonthly: s.grandTotalMonthly,
       employeePfMonthly: s.employeePfMonthly,
       employeeEsiMonthly: s.employeeEsiMonthly,
-      employerPfMonthly: Math.min(s.employerPfMonthly, 1800),
+      employerPfMonthly: s.employerPfMonthly,
       employerEsiMonthly: s.employerEsiMonthly,
       ptMonthly: pt,
       netMonthly,

@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs'
 import { prisma } from '../utils/prisma'
 import { buildBreakups } from '../routes/salaryBreakups'
-import { computeProration } from './payrollEngine'
+import { computeProration, getPfConfig, pfFor } from './payrollEngine'
 
 export interface PfSlipRow {
   employeeId: string
@@ -29,14 +29,20 @@ export async function buildEntryRows(cycleId: string, employeeIds?: string[]): P
       cycleId,
       ...(employeeIds ? { employeeId: { in: employeeIds } } : {}),
     },
-    include: { employee: { select: { id: true, name: true } } },
+    include: { employee: { select: { id: true, name: true } }, cycle: { select: { payrollMonth: true } } },
   })
+  const pfCfg = await getPfConfig()
 
   return entries
     .map((e): PfSlipRow => {
       const totalDays = Number(e.totalDays)
       const base  = e.isProrated && totalDays > 0 ? Number(e.payableDays) / totalDays : 1
       const ratio = Math.max(0, base - (totalDays > 0 ? Number(e.lopDays) / totalDays : 0))  // LOP folded into earnings
+      // Statutory PF for the month (date-aware wage ceiling). Locked entries computed
+      // before a ceiling change are raised to the statutory amount; never lowered.
+      const [py, pm] = (e as any).cycle.payrollMonth.split('-').map((n: string) => parseInt(n))
+      const monthEndAt = new Date(Date.UTC(py, pm, 0, 23, 59, 59))
+      const pfStatutory = pfFor(Number(e.basic), monthEndAt, pfCfg)
       return {
         employeeId: e.employeeId,
         name:       e.employee.name,
@@ -45,7 +51,7 @@ export async function buildEntryRows(cycleId: string, employeeIds?: string[]): P
         transport:  r2(Number(e.transport) * ratio),
         fbp:        r2(Number(e.fbp) * ratio),
         hyi:        r2(Number(e.hyi) * ratio),
-        pf:         r2(Number(e.pfAmount)),
+        pf:         r2(Math.max(Number(e.pfAmount), pfStatutory)),
         esi:        r2(Number(e.esiAmount)),
         pt:         r2(Number(e.ptAmount)),
         lop:        0,
@@ -93,7 +99,8 @@ export async function buildExtraRows(
 ): Promise<PfSlipRow[]> {
   if (!employeeIds.length) return []
   const [y, m] = cycle.payrollMonth.split('-').map(n => parseInt(n))
-  const asOf = new Date(y, m, 0, 23, 59, 59)
+  const asOf = new Date(Date.UTC(y, m, 0, 23, 59, 59))
+  const pfCfg = await getPfConfig()
 
   const employees = await prisma.employee.findMany({
     where: { id: { in: employeeIds } },
@@ -124,7 +131,7 @@ export async function buildExtraRows(
       transport:  r2(r.transport * effRatio),
       fbp:        r2(r.fbp * effRatio),
       hyi:        r2(r.hyi * effRatio),
-      pf:         r2(Math.min(Math.round(basic * 0.12), 1800)),
+      pf:         r2(pfFor(basic, asOf, pfCfg)),
       esi:        r2(r.employeeEsi * effRatio),
       pt:         r2(r.pt),
       lop:        0,

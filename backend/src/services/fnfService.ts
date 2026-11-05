@@ -1,6 +1,6 @@
 import { prisma } from '../utils/prisma'
 import { AppError } from '../middleware/errorHandler'
-import { computeSalaryStructure, computeEsi, computePt, computeLop, getSalaryInputForDate, getHyiSlab } from './payrollEngine'
+import { computeSalaryStructure, computeEsi, computePt, computeLop, getSalaryInputForDate, getHyiSlab, getPfConfig, pfFor } from './payrollEngine'
 
 export interface FnfCycleBreakdown {
   cycleLabel:    string
@@ -214,6 +214,7 @@ export async function calculateFnf(
     },
   })
 
+  const pfCfg = await getPfConfig()
   while (cursor <= lwdMonthStart) {
     const mStart = monthStart(cursor)
     const mEnd   = monthEnd(cursor)
@@ -232,9 +233,11 @@ export async function calculateFnf(
       // Explicitly zero HYI: employee is on notice, no incentive for this period.
       let salary = salaryInput.prebuiltSalary
         ? { ...salaryInput.prebuiltSalary, hyiMonthly: 0, grandTotalMonthly: salaryInput.prebuiltSalary.grandTotalMonthly - salaryInput.prebuiltSalary.hyiMonthly }
-        : computeSalaryStructure({ ...salaryInput, hasIncentive: false, incentivePercent: 0 })
+        : computeSalaryStructure({ ...salaryInput, hasIncentive: false, incentivePercent: 0 }, undefined, mEnd, pfCfg)
 
       const grossMonthly   = salary.grandTotalMonthly
+      // PF wage ceiling is date-aware: month before effective date → old cap
+      const pfMonthly      = pfFor(salary.basicMonthly, mEnd, pfCfg)
       const proratedSalary = isLwdMonth
         ? r2((grossMonthly / totalDays) * salaryDays)
         : grossMonthly
@@ -246,7 +249,7 @@ export async function calculateFnf(
       const hraMonthly        = prorateComp(salary.hraMonthly)
       const transportMonthly  = prorateComp(salary.transportMonthly)
       const fbpMonthly        = prorateComp(salary.fbpMonthly)
-      const pfAmount  = isLwdMonth ? r2((salary.employeePfMonthly / totalDays) * salaryDays) : salary.employeePfMonthly
+      const pfAmount  = isLwdMonth ? r2((pfMonthly / totalDays) * salaryDays) : pfMonthly
       const esiAmount = isLwdMonth ? r2((computeEsi(salary.esiBase) / totalDays) * salaryDays) : computeEsi(salary.esiBase)
       const ptAmount  = await computePt(grossMonthly, employee.state || '')
       const tdsAmount = isLwdMonth ? r2((salaryInput.tdsMonthly / totalDays) * salaryDays) : salaryInput.tdsMonthly

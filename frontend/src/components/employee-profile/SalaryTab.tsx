@@ -20,7 +20,11 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
     mediclaim:        Number(emp.mediclaim) || 0,
     hasIncentive:     Boolean(emp.hasIncentive),
     incentivePercent: Number(emp.incentivePercent) || 12,
+    hraOfBasic:          Boolean(emp.hraOfBasic),
+    bonusAmountOverride: emp.bonusAmountOverride != null ? Number(emp.bonusAmountOverride) : null,
+    bonusPayoutOverride: emp.bonusPayoutOverride != null ? Number(emp.bonusPayoutOverride) : null,
   })
+  const [effectiveFrom, setEffectiveFrom] = useState<string>(new Date().toISOString().slice(0, 10))
 
   const [stipend, setStipend] = useState<string>(emp.stipendMonthly ? String(Number(emp.stipendMonthly)) : '')
   const [revisionReason, setRevisionReason] = useState('')
@@ -29,6 +33,12 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
   const [showSalary, setShowSalary] = useState(false)
 
   const ctcChanged = salaryInput.annualCtc !== Number(emp.annualCtc)
+  const numOrNull  = (v: any) => (v == null ? null : Number(v))
+  const structureChanged = ctcChanged
+    || (salaryInput.bonusAmountOverride ?? null) !== numOrNull(emp.bonusAmountOverride)
+    || (salaryInput.bonusPayoutOverride ?? null) !== numOrNull(emp.bonusPayoutOverride)
+    || Boolean(salaryInput.hraOfBasic) !== Boolean(emp.hraOfBasic)
+    || Number(salaryInput.hraPercent) !== Number(emp.hraPercent)
   const isTrainee  = Boolean(emp.isTrainee)
 
   const mut = useMutation({
@@ -45,6 +55,10 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
         transportMonthly: salaryInput.transportMonthly,
         fbpMonthly:       salaryInput.fbpMonthly,
         mediclaim:        salaryInput.mediclaim,
+        hraOfBasic:          Boolean(salaryInput.hraOfBasic),
+        bonusAmountOverride: salaryInput.bonusAmountOverride ?? null,
+        bonusPayoutOverride: salaryInput.bonusPayoutOverride ?? null,
+        revisionEffectiveFrom: effectiveFrom,
         revisionReason,
       })
     },
@@ -116,6 +130,7 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
           initialValues={salaryInput}
           onChange={setSalaryInput}
           showInstructions={true}
+          asOfDate={effectiveFrom}
         />
       )}
 
@@ -142,15 +157,26 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
         </div>
       )}
 
-      {isHR && ctcChanged && (
+      {isHR && (
+        <div className="max-w-xs">
+          <label className="block text-xs font-medium text-slate-500 mb-1.5">Effective From</label>
+          <input type="date" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-brand-400 focus:outline-none"
+            value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)}/>
+          <p className="text-[10px] text-slate-400 mt-1">Drives PF ceiling and revision date. Click Generate Breakup after changing.</p>
+        </div>
+      )}
+
+      {isHR && structureChanged && (
         <div>
           <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-xl border border-blue-100 text-xs text-blue-700 mb-3">
             <AlertTriangle size={13} className="flex-shrink-0 mt-0.5"/>
             <span>
-              CTC changing from{' '}
-              <HiddenRupee amount={emp.annualCtc} show={showSalary} className="font-semibold text-blue-700" />{' '}
-              to{' '}
-              <HiddenRupee amount={salaryInput.annualCtc} show={showSalary} className="font-semibold text-blue-700" />.
+              {ctcChanged ? (<>
+                CTC changing from{' '}
+                <HiddenRupee amount={emp.annualCtc} show={showSalary} className="font-semibold text-blue-700" />{' '}
+                to{' '}
+                <HiddenRupee amount={salaryInput.annualCtc} show={showSalary} className="font-semibold text-blue-700" />.
+              </>) : <>Salary structure changing.</>}
               {' '}This will log a salary revision.
             </span>
           </div>
@@ -182,6 +208,9 @@ export default function SalaryTab({ emp, isHR, onSaved }: { emp: any; isHR: bool
                     {' → '}
                     <HiddenRupee amount={r.newCtc} show={showSalary} className="font-medium text-slate-700" />
                   </span>
+                  {r.newBonusOverride != null && (
+                    <span className="text-amber-600 ml-2 text-xs">· Bonus <HiddenRupee amount={r.newBonusOverride} show={showSalary} className="text-amber-600 text-xs" /></span>
+                  )}
                   {r.reason && <span className="text-slate-400 ml-2 text-xs">· {r.reason}</span>}
                 </div>
                 <div className="text-xs text-slate-400">

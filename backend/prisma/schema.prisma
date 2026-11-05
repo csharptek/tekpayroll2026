@@ -197,6 +197,9 @@ model Employee {
   // Incentive / Annual Bonus
   hasIncentive        Boolean  @default(false)
   incentivePercent    Decimal  @default(12) @db.Decimal(5, 2)   // % of CTC
+  bonusAmountOverride Decimal? @db.Decimal(12, 2)  // annualized bonus ₹; overrides CTC × incentivePercent
+  bonusPayoutOverride Decimal? @db.Decimal(12, 2)  // this FY March payout ₹; overrides annualized bonus at payout
+  hraOfBasic          Boolean  @default(false)     // true = hraPercent is % of Basic; false = % of CTC (legacy)
   // Annual/Joining bonus = CTC × incentivePercent (paid in March every year)
   // Computed field — not stored, calculated from above
 
@@ -305,6 +308,11 @@ model SalaryRevision {
   newMediclaim         Decimal  @default(0) @db.Decimal(10, 2)
   previousTds          Decimal  @default(0) @db.Decimal(10, 2)
   newTds               Decimal  @default(0) @db.Decimal(10, 2)
+  previousBonusOverride Decimal? @db.Decimal(12, 2)
+  newBonusOverride      Decimal? @db.Decimal(12, 2)
+  newBonusPayout        Decimal? @db.Decimal(12, 2)
+  previousHraOfBasic    Boolean  @default(false)
+  newHraOfBasic         Boolean  @default(false)
 
   reason          String?
   revisedBy       String

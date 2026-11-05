@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { RotateCcw, AlertTriangle, Info } from 'lucide-react'
 import { Rupee } from './ui'
-import { computeSalary, ri, r2, DEFAULT_ESI_EMPLOYEE_RATE, DEFAULT_ESI_EMPLOYER_RATE, DEFAULT_ESI_THRESHOLD } from '../utils/salaryFormula'
+import { computeSalary, ri, r2, pfCapFromConfig, DEFAULT_PF_RATE, DEFAULT_ESI_EMPLOYEE_RATE, DEFAULT_ESI_EMPLOYER_RATE, DEFAULT_ESI_THRESHOLD } from '../utils/salaryFormula'
 
 export interface SalaryOutput {
   annualCtc:        number
@@ -14,6 +14,9 @@ export interface SalaryOutput {
   mediclaim:        number
   hasIncentive:     boolean
   incentivePercent: number
+  hraOfBasic?:          boolean
+  bonusAmountOverride?: number | null
+  bonusPayoutOverride?: number | null
 }
 
 interface Components { basic: number; hra: number; transport: number; fbp: number; hyi: number }
@@ -22,12 +25,20 @@ interface Props {
   onChange: (val: SalaryOutput) => void
   initialValues?: Partial<SalaryOutput>
   showInstructions?: boolean
+  /** Date the structure applies from (YYYY-MM-DD) — drives the PF wage ceiling */
+  asOfDate?: string
 }
 
-export default function SalaryCalculatorForm({ onChange, initialValues, showInstructions = true }: Props) {
+const numOrNull = (v: string) => (v.trim() === '' || isNaN(Number(v)) ? null : Number(v))
+
+export default function SalaryCalculatorForm({ onChange, initialValues, showInstructions = true, asOfDate }: Props) {
+  const isNew = !((initialValues?.annualCtc ?? 0) > 0)
   const [ctc,          setCtc]          = useState(initialValues?.annualCtc        ?? 0)
   const [basicPct,     setBasicPct]     = useState(initialValues?.basicPercent      ?? 45)
-  const [hraPct,       setHraPct]       = useState(initialValues?.hraPercent        ?? 35)
+  const [hraOfBasic,   setHraOfBasic]   = useState<boolean>(initialValues?.hraOfBasic ?? isNew)
+  const [hraPct,       setHraPct]       = useState(initialValues?.hraPercent        ?? (isNew ? 40 : 35))
+  const [bonusOverride, setBonusOverride] = useState<string>(initialValues?.bonusAmountOverride != null ? String(initialValues.bonusAmountOverride) : '')
+  const [bonusPayout,   setBonusPayout]   = useState<string>(initialValues?.bonusPayoutOverride != null ? String(initialValues.bonusPayoutOverride) : '')
   const [hasIncentive, setHasIncentive] = useState(initialValues?.hasIncentive      ?? false)
   const [incentivePct, setIncentivePct] = useState(initialValues?.incentivePercent  ?? 12)
   const [mediclaim,    setMediclaim]    = useState(initialValues?.mediclaim          ?? 0)
@@ -40,10 +51,12 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   const esiEmployeeRate = Number(sysConfig?.ESI_EMPLOYEE_RATE ?? DEFAULT_ESI_EMPLOYEE_RATE)
   const esiEmployerRate = Number(sysConfig?.ESI_EMPLOYER_RATE ?? DEFAULT_ESI_EMPLOYER_RATE)
   const esiThreshold    = Number(sysConfig?.ESI_THRESHOLD     ?? DEFAULT_ESI_THRESHOLD)
+  const pfCap           = pfCapFromConfig(sysConfig, asOfDate || new Date())
 
   function runCompute(c: number, bp: number, hp: number, ip: number, hi: boolean, m: number) {
     return computeSalary({
       ctc: c, basicPct: bp, hraPct: hp, incentivePct: ip, hasIncentive: hi, mediclaim: m,
+      hraOfBasic, bonusAmountOverride: numOrNull(bonusOverride), pfCap,
       esiEmployeeRate, esiEmployerRate, esiThreshold,
     })
   }
@@ -66,9 +79,10 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
   const [initialized, setInitialized] = useState((initialValues?.annualCtc ?? 0) > 0)
 
   // Derived
-  const employerPf    = Math.min(ri(components.basic * 0.12), 1800)
-  const employeePf    = Math.min(ri(components.basic * 0.12), 1800)
-  const annualBonus   = hasIncentive ? r2(ctc * incentivePct / 100) : 0
+  const employerPf    = Math.min(ri(components.basic * DEFAULT_PF_RATE), pfCap)
+  const employeePf    = Math.min(ri(components.basic * DEFAULT_PF_RATE), pfCap)
+  const bonusOverrideNum = numOrNull(bonusOverride)
+  const annualBonus   = hasIncentive ? (bonusOverrideNum != null ? ri(bonusOverrideNum) : r2(ctc * incentivePct / 100)) : 0
   const allocated     = r2(components.basic + components.hra + components.transport + components.fbp + components.hyi)
   const remainder     = r2(grandTotal - allocated)
   const isOver        = remainder < -1
@@ -88,6 +102,9 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
       mediclaim,
       hasIncentive,
       incentivePercent: incentivePct,
+      hraOfBasic,
+      bonusAmountOverride: hasIncentive ? bonusOverrideNum : null,
+      bonusPayoutOverride: hasIncentive ? numOrNull(bonusPayout) : null,
     })
   }
 
@@ -127,6 +144,8 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
             <li>&#8226; Employer PF &amp; Employer ESI are <strong>inside CTC</strong></li>
             <li>&#8226; Employee PF &amp; Employee ESI are <strong>inside Gross</strong> (deducted)</li>
             <li>&#8226; Grand Monthly = (CTC &#8722; Mediclaim) &#247; 12 &#8722; Bonus/12 &#8722; Employer PF &#8722; Employer ESI</li>
+            <li>&#8226; PF = 12% of Basic, max <strong>&#8377;{pfCap.toLocaleString('en-IN')}</strong>/mo{asOfDate ? ` (as of ${asOfDate})` : ''}</li>
+            <li>&#8226; HRA = % of {hraOfBasic ? 'Basic' : 'CTC (legacy)'}</li>
             <li>&#8226; Transport = 2% of Gross, FBP = 2% of Gross, HYI = balancer</li>
           </ul>
         </div>
@@ -146,10 +165,15 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
           </div>
         </div>
         <div>
-          <label className="label text-xs">HRA % of CTC</label>
+          <label className="label text-xs">HRA % of {hraOfBasic ? 'Basic' : 'CTC'}</label>
           <div className="flex items-center gap-1">
-            <input type="number" className="input text-sm w-20" value={hraPct} onChange={e => setHraPct(Number(e.target.value))} min={1} max={50}/>
+            <input type="number" className="input text-sm w-20" value={hraPct} onChange={e => setHraPct(Number(e.target.value))} min={1} max={100}/>
             <span className="text-sm text-slate-400">%</span>
+            <select className="input text-xs w-28 ml-1" value={hraOfBasic ? 'BASIC' : 'CTC'}
+              onChange={e => setHraOfBasic(e.target.value === 'BASIC')}>
+              <option value="BASIC">of Basic</option>
+              <option value="CTC">of CTC (legacy)</option>
+            </select>
           </div>
         </div>
         <div>
@@ -174,6 +198,22 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
             </div>
           )}
         </div>
+        {hasIncentive && (
+          <>
+            <div>
+              <label className="label text-xs">Bonus Override (Annual &#8377;)</label>
+              <input type="number" className="input text-sm" value={bonusOverride} min={0}
+                onChange={e => setBonusOverride(e.target.value)} placeholder={`blank = ${incentivePct}% of CTC`}/>
+              <p className="text-[10px] text-slate-400 mt-0.5">Annualized. Used in breakup.</p>
+            </div>
+            <div>
+              <label className="label text-xs">This FY Payout (March &#8377;)</label>
+              <input type="number" className="input text-sm" value={bonusPayout} min={0}
+                onChange={e => setBonusPayout(e.target.value)} placeholder="blank = annual bonus"/>
+              <p className="text-[10px] text-slate-400 mt-0.5">Mid-year change only.</p>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex gap-3">
@@ -235,7 +275,7 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
                 {/* Employee PF/ESI — inside Gross */}
                 <tr className="text-slate-500 text-xs">
                   <td className="py-1.5">
-                    Employee PF (12% of Basic, max &#8377;1,800)
+                    Employee PF (12% of Basic, max &#8377;{pfCap.toLocaleString('en-IN')})
                     <span className="ml-1 text-[10px] text-blue-600 font-medium">in Gross</span>
                   </td>
                   <td className="py-1.5 text-right font-mono"><Rupee amount={employeePf}/></td>
@@ -255,7 +295,7 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
                 {/* Employer PF/ESI — inside CTC */}
                 <tr className="text-slate-500 text-xs">
                   <td className="py-1.5">
-                    Employer PF (12% of Basic, max &#8377;1,800)
+                    Employer PF (12% of Basic, max &#8377;{pfCap.toLocaleString('en-IN')})
                     <span className="ml-1 text-[10px] text-green-600 font-medium">in CTC</span>
                   </td>
                   <td className="py-1.5 text-right font-mono"><Rupee amount={employerPf}/></td>
@@ -280,7 +320,7 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
                 )}
                 {hasIncentive && (
                   <tr className="text-amber-600 text-xs">
-                    <td className="py-1.5">Annual Bonus ({incentivePct}%) — paid March</td>
+                    <td className="py-1.5">Annual Bonus ({bonusOverrideNum != null ? 'override' : `${incentivePct}%`}) — paid March{numOrNull(bonusPayout) != null ? ` · FY payout ₹${Number(bonusPayout).toLocaleString('en-IN')}` : ''}</td>
                     <td className="py-1.5 text-right font-mono"><Rupee amount={r2(annualBonus / 12)}/></td>
                     <td className="py-1.5 text-right font-mono"><Rupee amount={annualBonus}/></td>
                   </tr>
@@ -305,7 +345,7 @@ export default function SalaryCalculatorForm({ onChange, initialValues, showInst
               <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-2">Employee Deductions</p>
               <div className="space-y-1 text-xs text-slate-600">
                 <div className="flex justify-between">
-                  <span>Employee PF (12% of Basic, max &#8377;1,800)</span>
+                  <span>Employee PF (12% of Basic, max &#8377;{pfCap.toLocaleString('en-IN')})</span>
                   <span className="font-mono font-semibold"><Rupee amount={employeePf}/>/mo</span>
                 </div>
                 {esiApplies ? (
