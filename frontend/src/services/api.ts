@@ -123,6 +123,8 @@ export const payrollApi = {
   preview: (data: any) => api.post('/api/payroll/dry-run', data),
   // PayrollSkip
   getSkips: (payrollMonth: string) => api.get(`/api/payroll/skips/${payrollMonth}`),
+  precheck: (month?: string) => api.get('/api/payroll/precheck', { params: month ? { month } : {} }),
+  precheckEmail: (month: string) => api.post('/api/payroll/precheck/email', { month }),
   addSkip: (data: { employeeId: string; payrollMonth: string; reason?: string }) => api.post('/api/payroll/skips', data),
   removeSkip: (id: string) => api.delete(`/api/payroll/skips/${id}`),
   // PF Sheet

@@ -19,6 +19,7 @@ import RunPayrollPage from './pages/hr/RunPayrollPage'
 import PayrollCyclesPage from './pages/hr/PayrollCyclesPage'
 import PayrollRunDetailPage from './pages/hr/PayrollRunDetailPage'
 import PayrollPreviewPage from './pages/hr/PayrollPreviewPage'
+import PayrollPrecheckPage from './pages/hr/PayrollPrecheckPage'
 import LopManagementPage from './pages/hr/LopManagementPage'
 import IncentivesPage from './pages/hr/IncentivesPage'
 import ReimbursementsPage from './pages/hr/ReimbursementsPage'
@@ -138,6 +139,7 @@ export default function App() {
           {/* Financial routes — SUPER_ADMIN only */}
           <Route path="payroll" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollCyclesPage /></RequireAuth>} />
           <Route path="payroll/preview" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollPreviewPage /></RequireAuth>} />
+          <Route path="payroll/pre-check" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollPrecheckPage /></RequireAuth>} />
           <Route path="payroll/:id/run" element={<RequireAuth roles={['SUPER_ADMIN']}><RunPayrollPage /></RequireAuth>} />
           <Route path="payroll/:id/detail" element={<RequireAuth roles={['SUPER_ADMIN']}><PayrollRunDetailPage /></RequireAuth>} />
           <Route path="payroll/:id/lop" element={<RequireAuth roles={['SUPER_ADMIN']}><LopManagementPage /></RequireAuth>} />

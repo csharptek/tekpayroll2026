@@ -14,6 +14,7 @@ const JOB_LABELS: Record<string, string> = {
   'holiday-greetings':  'Holiday Greetings',
   'rollover-reminder':  'Leave Rollover Reminder',
   'lwd-reminder':       'LWD Reminder',
+  'payroll-precheck':   'Payroll Pre-run Check',
 }
 
 const JOB_SCHEDULES: Record<string, string> = {
@@ -23,6 +24,7 @@ const JOB_SCHEDULES: Record<string, string> = {
   'holiday-greetings':  'Daily at 8:00 AM IST',
   'rollover-reminder':  'Daily at 9:00 AM IST (fires only Dec 25)',
   'lwd-reminder':       'Daily at 7:00 AM IST',
+  'payroll-precheck':   '25th of every month, 9:00 AM IST',
 }
 
 const STATUS_CONFIG = {

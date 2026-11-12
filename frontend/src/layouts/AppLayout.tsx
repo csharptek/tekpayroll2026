@@ -86,6 +86,7 @@ const SUPER_ADMIN_NAV = [
     items: [
       { label: 'Payroll Cycles',      icon: CreditCard, to: '/hr/payroll' },
       { label: 'Payroll Preview',     icon: FileSearch, to: '/hr/payroll/preview' },
+      { label: 'Pre-run Check',       icon: FileSearch, to: '/hr/payroll/pre-check' },
       { label: 'Payslips',            icon: FileText,   to: '/hr/payslips' },
       { label: 'Payslip Vault',       icon: Archive,    to: '/hr/payslip-vault' },
       { label: 'Bulk Form 16',        icon: Upload,     to: '/hr/form16-bulk' },

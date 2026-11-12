@@ -464,3 +464,22 @@ export async function cronLwdReminder(triggeredBy: 'cron' | 'manual' = 'cron') {
     throw err
   }
 }
+
+
+// ─── CRON: PAYROLL PRE-RUN CHECK (25th, read-only email) ─────────────────────
+export async function cronPayrollPrecheck(triggeredBy: 'cron' | 'manual' = 'cron', month?: string) {
+  const { defaultPrecheckMonth, sendPayrollPrecheckEmail } = await import('./payrollPrecheck')
+  const payrollMonth = month || defaultPrecheckMonth()
+  const log = await startCronLog('payroll-precheck', triggeredBy)
+  try {
+    const { sentTo, result } = await sendPayrollPrecheckEmail(payrollMonth)
+    await completeCronLog(log.id, 'success', log.startedAt, {
+      message: `Pre-run check ${payrollMonth}: ${result.counts.manual} to pay, ${result.counts.errors} errors, ${result.counts.warnings} warnings. Sent to ${sentTo.length}`,
+      meta: { payrollMonth, ...result.counts, sentTo },
+    })
+    return { sentTo, counts: result.counts }
+  } catch (err: any) {
+    await completeCronLog(log.id, 'failed', log.startedAt, { message: `Pre-run check failed: ${err.message}` })
+    throw err
+  }
+}

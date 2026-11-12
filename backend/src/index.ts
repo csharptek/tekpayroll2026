@@ -29,7 +29,7 @@ import { form16BulkRouter } from './routes/form16Bulk'
 import { cronRouter } from './routes/cron';
 import { documentsRouter } from './routes/documents';
 import cron from 'node-cron';
-import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder } from './services/cronJobs';
+import { cronRunPayroll, cronGeneratePayslips, cronSyncEntraId, cronSendHolidayGreetings, cronLeaveRolloverReminder, cronLwdReminder, cronPayrollPrecheck } from './services/cronJobs';
 import { policiesRouter } from './routes/policies';
 import { exitRouter } from './routes/exit';
 import { assetRouter } from './routes/assets';
@@ -122,6 +122,7 @@ app.use(errorHandler);
 // IST 07:00 daily   = UTC 01:30 daily     → 30 1 * * *
 
 cron.schedule('30 3 27 * *', () => cronRunPayroll('cron').catch(console.error))
+cron.schedule('30 3 25 * *', () => cronPayrollPrecheck('cron').catch(console.error))   // 09:00 IST, read-only email
 cron.schedule('30 2 5 * *',  () => cronGeneratePayslips('cron').catch(console.error))
 cron.schedule('30 20 * * *', () => cronSyncEntraId('cron').catch(console.error))
 cron.schedule('30 2 * * *',  () => cronSendHolidayGreetings('cron').catch(console.error))

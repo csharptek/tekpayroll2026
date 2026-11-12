@@ -7,6 +7,7 @@ export type CronJobName =
   | 'holiday-greetings'
   | 'rollover-reminder'
   | 'lwd-reminder'
+  | 'payroll-precheck'
 
 export async function startCronLog(jobName: CronJobName, triggeredBy: 'cron' | 'manual' = 'cron') {
   return prisma.cronLog.create({

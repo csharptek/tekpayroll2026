@@ -8,6 +8,7 @@ import { calculatePayrollForEmployee, isBonusMonth, getEsiConfig, getSalaryInput
 import { buildEntryRows, buildExtraRows, getExtraMeta, writePfSheet, writeEcr, writeEsic } from '../services/pfSheetService'
 import { saveFile, readFile, deleteFile } from '../utils/fileStorage'
 import { getPayrollEligibleEmployees, syncLeaveLopForCycle } from '../services/payrollEligibility'
+import { buildPayrollPrecheck, defaultPrecheckMonth } from '../services/payrollPrecheck'
 
 export const payrollRouter = Router()
 payrollRouter.use(authenticate)
@@ -739,6 +740,22 @@ payrollRouter.get('/cycles/:id/summary', requireSuperAdmin, async (req, res) => 
     orderBy: { employee: { name: 'asc' } },
   })
   res.json({ success: true, data: entries })
+})
+
+// ─── PRE-RUN CHECK (read-only) ────────────────────────────────────────────────
+
+payrollRouter.get('/precheck', requireSuperAdmin, async (req, res) => {
+  const month = String(req.query.month || defaultPrecheckMonth())
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new AppError('month must be YYYY-MM', 400)
+  res.json({ success: true, data: await buildPayrollPrecheck(month) })
+})
+
+payrollRouter.post('/precheck/email', requireSuperAdmin, async (req, res) => {
+  const month = String(req.body?.month || defaultPrecheckMonth())
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new AppError('month must be YYYY-MM', 400)
+  const { cronPayrollPrecheck } = await import('../services/cronJobs')
+  const out = await cronPayrollPrecheck('manual', month)
+  res.json({ success: true, data: out })
 })
 
 // ─── PAYROLL SKIP MANAGEMENT ──────────────────────────────────────────────────
