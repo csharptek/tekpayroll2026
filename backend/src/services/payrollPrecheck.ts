@@ -187,6 +187,7 @@ export async function buildPayrollPrecheck(payrollMonth: string): Promise<Preche
     },
     select: {
       id: true, name: true, employeeCode: true, status: true, lastWorkingDay: true, pfZeroWage: true,
+      excludeFromPayroll: true, excludeFromPayrollReason: true,
       fnfWizardSession: { select: { status: true } },
       fnfSettlement:    { select: { status: true } },
     },
@@ -194,7 +195,8 @@ export async function buildPayrollPrecheck(payrollMonth: string): Promise<Preche
   })
   const excluded: PrecheckExcluded[] = others.map((o: any) => {
     let reason = `Status ${o.status}`
-    if (o.pfZeroWage) reason = 'Unpaid leave — PF reported with 0 wages'
+    if (o.excludeFromPayroll) reason = `Excluded from payroll${o.excludeFromPayrollReason ? ` — ${o.excludeFromPayrollReason}` : ''}`
+    else if (o.pfZeroWage) reason = 'Unpaid leave — PF reported with 0 wages'
     else if (o.fnfWizardSession?.status === 'COMPLETED' || ['APPROVED', 'SETTLED'].includes(o.fnfSettlement?.status)) reason = 'Final settlement done'
     else if (o.lastWorkingDay && new Date(o.lastWorkingDay) < new Date(cycleStart)) reason = `Left before cycle (${d10(o.lastWorkingDay)})`
     else if (!['ACTIVE', 'ON_NOTICE'].includes(o.status) && o.lastWorkingDay) reason = `${o.status} — left ${d10(o.lastWorkingDay)} (salary via F&F)`

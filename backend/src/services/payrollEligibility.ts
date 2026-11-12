@@ -22,6 +22,7 @@ export async function getPayrollEligibleEmployees(cycleStart: Date, extraWhere: 
 export function isPayrollEligible(emp: any, cycleStart: Date): boolean {
   if (!['ACTIVE', 'ON_NOTICE'].includes(emp.status)) return false
   if (emp.pfZeroWage) return false
+  if (emp.excludeFromPayroll) return false
   if (emp.fnfWizardSession?.status === 'COMPLETED') return false
   if (emp.fnfSettlement && ['APPROVED', 'SETTLED'].includes(emp.fnfSettlement.status)) return false
   if (emp.lastWorkingDay && new Date(emp.lastWorkingDay) < new Date(cycleStart)) return false

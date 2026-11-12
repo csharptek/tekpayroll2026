@@ -202,6 +202,8 @@ model Employee {
   hraOfBasic          Boolean  @default(false)     // true = hraPercent is % of Basic; false = % of CTC (legacy)
   pfZeroWage          Boolean  @default(false)     // unpaid leave: no salary, PF/ESIC reported with 0 wages
   pfZeroWageSince     DateTime?
+  excludeFromPayroll       Boolean @default(false)   // never picked by payroll (consultant, dummy account, not working)
+  excludeFromPayrollReason String?
   // Annual/Joining bonus = CTC × incentivePercent (paid in March every year)
   // Computed field — not stored, calculated from above
 

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, User, Briefcase, DollarSign, Phone, GraduationCap,
-  Building2, CreditCard, FileText, LogOut, UserMinus, X, UserCheck, Eye, EyeOff, PauseCircle, PlayCircle,
+  Building2, CreditCard, FileText, LogOut, UserMinus, X, UserCheck, Eye, EyeOff, PauseCircle, PlayCircle, Ban,
 } from 'lucide-react'
 import { employeeApi, exitApi, payslipApi, payrollApi } from '../../services/api'
 import { PageHeader, Button, Alert, Skeleton, StatusBadge } from '../../components/ui'
@@ -176,6 +176,12 @@ export default function EmployeeDetailPage() {
   const [showConvertModal, setShowConvertModal] = useState(false)
   const [showCtc, setShowCtc]   = useState(false)
   const [confirmUnpaid, setConfirmUnpaid] = useState(false)
+  const [confirmExclude, setConfirmExclude] = useState(false)
+  const [excludeReason, setExcludeReason]   = useState('')
+  const excludeMut = useMutation({
+    mutationFn: (on: boolean) => employeeApi.update(id!, { excludeFromPayroll: on, excludeFromPayrollReason: on ? excludeReason : null }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['employee-full', id] }); setConfirmExclude(false); setExcludeReason('') },
+  })
   const unpaidMut = useMutation({
     mutationFn: (on: boolean) => employeeApi.update(id!, { pfZeroWage: on }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employee-full', id] }); setConfirmUnpaid(false) },
@@ -217,6 +223,32 @@ export default function EmployeeDetailPage() {
           onClose={() => setShowConvertModal(false)}
           onDone={(newId) => { setShowConvertModal(false); navigate(`/hr/employees/${newId}`) }}
         />
+      )}
+      {confirmExclude && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-800">
+              {emp.excludeFromPayroll ? 'Include in payroll' : 'Exclude from payroll'} — {emp.name}
+            </h3>
+            <p className="text-xs text-slate-600">
+              {emp.excludeFromPayroll
+                ? 'Employee will be picked by payroll runs again (manual and auto).'
+                : 'Employee is never picked by payroll runs (manual and auto) until included again. Status and login are not changed.'}
+            </p>
+            {!emp.excludeFromPayroll && (
+              <input className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl" placeholder="Reason (e.g. Consultant — paid separately)"
+                value={excludeReason} onChange={e => setExcludeReason(e.target.value)} maxLength={300} />
+            )}
+            {emp.excludeFromPayroll && emp.excludeFromPayrollReason && (
+              <p className="text-xs text-slate-500">Reason: {emp.excludeFromPayrollReason}</p>
+            )}
+            {excludeMut.isError && <p className="text-xs text-red-500">Update failed</p>}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setConfirmExclude(false)}>Cancel</Button>
+              <Button loading={excludeMut.isPending} onClick={() => excludeMut.mutate(!emp.excludeFromPayroll)}>Confirm</Button>
+            </div>
+          </div>
+        </div>
       )}
       {confirmUnpaid && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -266,6 +298,16 @@ export default function EmployeeDetailPage() {
         actions={
           <div className="flex items-center gap-3">
             <StatusBadge status={emp.status} />
+            {emp.excludeFromPayroll && (
+              <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full" title={emp.excludeFromPayrollReason || ''}>
+                Not in payroll
+              </span>
+            )}
+            {isSuperAdmin && (
+              <Button icon={<Ban size={14} />} variant="secondary" onClick={() => setConfirmExclude(true)}>
+                {emp.excludeFromPayroll ? 'Include in Payroll' : 'Exclude from Payroll'}
+              </Button>
+            )}
             {emp.pfZeroWage && (
               <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Unpaid leave</span>
             )}

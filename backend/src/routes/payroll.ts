@@ -818,7 +818,7 @@ payrollRouter.get('/cycles/:id/pf-sheet/employees', requireSuperAdmin, async (re
   const [eligible, exitedInMonth, unpaidLeave, skips] = await Promise.all([
     getPayrollEligibleEmployees(cycle.cycleStart, { id: { notIn: entryIds } }),
     prisma.employee.findMany({
-      where: { id: { notIn: entryIds }, lastWorkingDay: { gte: cycle.cycleStart, lte: monthEnd }, isTrainee: false },
+      where: { id: { notIn: entryIds }, lastWorkingDay: { gte: cycle.cycleStart, lte: monthEnd }, isTrainee: false, excludeFromPayroll: false },
       select: sel,
     }),
     prisma.employee.findMany({
