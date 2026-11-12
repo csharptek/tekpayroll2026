@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, User, Briefcase, DollarSign, Phone, GraduationCap,
-  Building2, CreditCard, FileText, LogOut, UserMinus, X, UserCheck, Eye, EyeOff,
+  Building2, CreditCard, FileText, LogOut, UserMinus, X, UserCheck, Eye, EyeOff, PauseCircle, PlayCircle,
 } from 'lucide-react'
 import { employeeApi, exitApi, payslipApi, payrollApi } from '../../services/api'
 import { PageHeader, Button, Alert, Skeleton, StatusBadge } from '../../components/ui'
@@ -175,6 +175,11 @@ export default function EmployeeDetailPage() {
   const [showExitModal, setShowExitModal]       = useState(false)
   const [showConvertModal, setShowConvertModal] = useState(false)
   const [showCtc, setShowCtc]   = useState(false)
+  const [confirmUnpaid, setConfirmUnpaid] = useState(false)
+  const unpaidMut = useMutation({
+    mutationFn: (on: boolean) => employeeApi.update(id!, { pfZeroWage: on }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['employee-full', id] }); setConfirmUnpaid(false) },
+  })
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const isHR         = user?.role === 'HR' || user?.role === 'SUPER_ADMIN'
@@ -213,6 +218,25 @@ export default function EmployeeDetailPage() {
           onDone={(newId) => { setShowConvertModal(false); navigate(`/hr/employees/${newId}`) }}
         />
       )}
+      {confirmUnpaid && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-800">
+              {emp.pfZeroWage ? 'End unpaid leave' : 'Mark unpaid leave'} — {emp.name}
+            </h3>
+            <p className="text-xs text-slate-600">
+              {emp.pfZeroWage
+                ? 'Employee returns to payroll from the next run. PF/ESIC resume on actual wages.'
+                : 'Employee is excluded from payroll. PF sheet, ECR and ESIC report 0 wages with the full month as non-contributory days. No exit is recorded.'}
+            </p>
+            {unpaidMut.isError && <p className="text-xs text-red-500">Update failed</p>}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setConfirmUnpaid(false)}>Cancel</Button>
+              <Button loading={unpaidMut.isPending} onClick={() => unpaidMut.mutate(!emp.pfZeroWage)}>Confirm</Button>
+            </div>
+          </div>
+        </div>
+      )}
       {showExitModal && (
         <InitiateExitModal
           empId={emp.id}
@@ -242,6 +266,18 @@ export default function EmployeeDetailPage() {
         actions={
           <div className="flex items-center gap-3">
             <StatusBadge status={emp.status} />
+            {emp.pfZeroWage && (
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Unpaid leave</span>
+            )}
+            {isSuperAdmin && !emp.isTrainee && ['ACTIVE', 'ON_NOTICE'].includes(emp.status) && (
+              <Button
+                icon={emp.pfZeroWage ? <PlayCircle size={14} /> : <PauseCircle size={14} />}
+                variant="secondary"
+                onClick={() => setConfirmUnpaid(true)}
+              >
+                {emp.pfZeroWage ? 'End Unpaid Leave' : 'Unpaid Leave'}
+              </Button>
+            )}
             {canConvert && (
               <Button
                 icon={<UserCheck size={14} />}

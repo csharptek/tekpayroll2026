@@ -5,7 +5,7 @@ import { AppError } from '../middleware/errorHandler'
 import { createAuditLog } from '../middleware/audit'
 import { AuditAction, PayrollStatus } from '@prisma/client'
 import { calculatePayrollForEmployee, isBonusMonth, getEsiConfig, getSalaryInputForDate } from '../services/payrollEngine'
-import { buildEntryRows, buildExtraRows, getExtraMeta, writePfSheet } from '../services/pfSheetService'
+import { buildEntryRows, buildExtraRows, getExtraMeta, writePfSheet, writeEcr, writeEsic } from '../services/pfSheetService'
 import { saveFile, readFile, deleteFile } from '../utils/fileStorage'
 import { getPayrollEligibleEmployees, syncLeaveLopForCycle } from '../services/payrollEligibility'
 
@@ -88,7 +88,12 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
   }
 
   await syncLeaveLopForCycle(cycle as any)
-  const employees = await getPayrollEligibleEmployees(cycle.cycleStart)
+  // Optional partial run: only (re)calculate the given employees, leave other entries untouched
+  const onlyIds: string[] | null = Array.isArray(req.body?.employeeIds) && req.body.employeeIds.length
+    ? req.body.employeeIds.map(String)
+    : null
+  const employees = await getPayrollEligibleEmployees(cycle.cycleStart, onlyIds ? { id: { in: onlyIds } } : {})
+  if (onlyIds && employees.length === 0) throw new AppError('Selected employees are not eligible for this payroll', 400)
 
   // Fetch skipped employees for this month
   const skippedIds = new Set(
@@ -107,7 +112,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
     where:  { cycleId: cycle.id },
     select: { employeeId: true },
   })
-  const staleIds = existingEntries
+  const staleIds = onlyIds ? [] : existingEntries
     .map(e => e.employeeId)
     .filter(id => !activeIds.has(id) && !skippedIds.has(id))
   if (staleIds.length > 0) {
@@ -253,19 +258,26 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
     }
   }
 
+  // Cycle totals from all saved entries (correct for full and partial runs)
+  const agg = await prisma.payrollEntry.aggregate({
+    where: { cycleId: cycle.id },
+    _sum:   { grossSalary: true, netSalary: true, pfAmount: true, employerPfAmount: true, esiAmount: true, employerEsiAmount: true },
+    _count: { _all: true },
+  })
+  void totalGross; void totalNet; void totalPf; void totalEmployerPf; void totalEsi; void totalEmployerEsi
   await prisma.payrollCycle.update({
     where: { id: cycle.id },
     data: {
       status: PayrollStatus.CALCULATED,
       runAt: new Date(),
       runBy: req.user!.id,
-      totalGross,
-      totalNet,
-      totalPf,
-      totalEmployerPf,
-      totalEsi,
-      totalEmployerEsi,
-      employeeCount: activeEmployees.length,
+      totalGross:       Number(agg._sum.grossSalary ?? 0),
+      totalNet:         Number(agg._sum.netSalary ?? 0),
+      totalPf:          Number(agg._sum.pfAmount ?? 0),
+      totalEmployerPf:  Number(agg._sum.employerPfAmount ?? 0),
+      totalEsi:         Number(agg._sum.esiAmount ?? 0),
+      totalEmployerEsi: Number(agg._sum.employerEsiAmount ?? 0),
+      employeeCount:    agg._count._all,
     },
   })
 
@@ -273,7 +285,7 @@ payrollRouter.post('/cycles/:id/run', requireSuperAdmin, async (req, res) => {
     user: req.user!,
     action: AuditAction.PAYROLL_RUN,
     recordId: cycle.id,
-    description: `Payroll run for ${cycle.payrollMonth} — ${employees.length} employees`,
+    description: `Payroll run for ${cycle.payrollMonth} — ${employees.length} employees${onlyIds ? ' (partial)' : ''}`,
   })
 
   // Leave module hooks — auto-approve pending leaves + take monthly balance snapshot
@@ -780,11 +792,31 @@ payrollRouter.get('/cycles/:id/pf-sheet/employees', requireSuperAdmin, async (re
   })
   const entryIds = entries.map(e => e.employeeId)
 
-  const [others, skips] = await Promise.all([
-    getPayrollEligibleEmployees(cycle.cycleStart, { id: { notIn: entryIds } })
-      .then(list => list.map(e => ({ id: e.id, name: e.name, employeeCode: e.employeeCode, department: e.department, status: e.status }))),
+  // Candidates: eligible employees not in the run
+  //   + anyone whose last working day falls in this month (any status, incl. F&F settled)
+  //   + employees on unpaid leave (reported with 0 wages)
+  const monthEnd = new Date(cycle.cycleEnd); monthEnd.setHours(23, 59, 59, 999)
+  const sel = { id: true, name: true, employeeCode: true, department: true, status: true, pfZeroWage: true, lastWorkingDay: true }
+  const [eligible, exitedInMonth, unpaidLeave, skips] = await Promise.all([
+    getPayrollEligibleEmployees(cycle.cycleStart, { id: { notIn: entryIds } }),
+    prisma.employee.findMany({
+      where: { id: { notIn: entryIds }, lastWorkingDay: { gte: cycle.cycleStart, lte: monthEnd }, isTrainee: false },
+      select: sel,
+    }),
+    prisma.employee.findMany({
+      where: { id: { notIn: entryIds }, pfZeroWage: true, status: { in: ['ACTIVE', 'ON_NOTICE'] } },
+      select: sel,
+    }),
     prisma.payrollSkip.findMany({ where: { payrollMonth: cycle.payrollMonth }, select: { employeeId: true, reason: true } }),
   ])
+  const byId = new Map<string, any>()
+  for (const e of eligible as any[]) byId.set(e.id, { ...e, autoInclude: false, tag: null })
+  for (const e of exitedInMonth as any[]) byId.set(e.id, { ...e, autoInclude: true, tag: `Exited ${new Date(e.lastWorkingDay).toISOString().slice(0, 10)}` })
+  for (const e of unpaidLeave as any[]) byId.set(e.id, { ...e, autoInclude: true, tag: 'Unpaid leave — 0 wages' })
+  const others = [...byId.values()].map(e => ({
+    id: e.id, name: e.name, employeeCode: e.employeeCode, department: e.department, status: e.status,
+    autoInclude: e.autoInclude, tag: e.tag, zeroWage: Boolean(e.pfZeroWage),
+  }))
   const skipMap = new Map(skips.map(s => [s.employeeId, s.reason || 'Skipped']))
   const meta = await getExtraMeta(cycle, others.map(o => o.id))
 
@@ -802,7 +834,8 @@ payrollRouter.get('/cycles/:id/pf-sheet/employees', requireSuperAdmin, async (re
         .sort((a, b) => a.name.localeCompare(b.name)),
       others: others
         .map(o => ({ ...o, skipReason: skipMap.get(o.id) || null, ...(meta[o.id] || { totalDays: 30, payableDays: 30, lopDays: 0 }) }))
-        .filter(o => o.payableDays > 0),
+        .filter(o => o.payableDays > 0 || o.zeroWage)
+        .sort((a, b) => Number(b.autoInclude) - Number(a.autoInclude) || a.name.localeCompare(b.name)),
     },
   })
 })
@@ -824,10 +857,27 @@ payrollRouter.post('/cycles/:id/pf-sheet/export', requireSuperAdmin, async (req,
   const lopOverride: Record<string, number> = req.body?.extraLop && typeof req.body.extraLop === 'object' ? req.body.extraLop : {}
   const extraRows = await buildExtraRows(cycle, extraIds, lopOverride)
 
-  const rows = [...entryRows, ...extraRows]
+  const rows = [...entryRows, ...extraRows].sort((a, b) => a.name.localeCompare(b.name))
   if (!rows.length) throw new AppError('No employees to export', 400)
 
-  const buf = await writePfSheet(rows)
+  const format = String(req.body?.format || 'xlsx')
+  if (format === 'ecr' || format === 'esic') {
+    res.setHeader('Access-Control-Expose-Headers', 'X-Missing, Content-Disposition')
+    if (format === 'ecr') {
+      const { text, missing } = await writeEcr(rows, cycle.payrollMonth)
+      res.setHeader('X-Missing', encodeURIComponent(missing.join(', ')))
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename="ecr-${cycle.payrollMonth}.txt"`)
+      return res.send(text)
+    }
+    const { buf: esicBuf, missing } = await writeEsic(rows)
+    res.setHeader('X-Missing', encodeURIComponent(missing.join(', ')))
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="esic-${cycle.payrollMonth}.xlsx"`)
+    return res.send(esicBuf)
+  }
+
+  const buf = await writePfSheet(rows, cycle.payrollMonth)
   const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
   const fileName = `pf-sheet-${cycle.payrollMonth}.xlsx`
   const fileKey = `${cycle.payrollMonth}/pf-sheet-${cycle.payrollMonth}-${stamp}.xlsx`

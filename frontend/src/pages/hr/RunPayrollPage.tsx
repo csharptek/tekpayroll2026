@@ -44,6 +44,8 @@ export default function RunPayrollPage() {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
 
   const [runConfirm,      setRunConfirm]      = useState(false)
+  const [addOpen,         setAddOpen]         = useState(false)
+  const [addSel,          setAddSel]          = useState<Set<string>>(new Set())
   const [lockConfirm,     setLockConfirm]     = useState(false)
   const [unlockConfirm,   setUnlockConfirm]   = useState(false)
   const [disburseConfirm, setDisburseConfirm] = useState(false)
@@ -63,6 +65,15 @@ export default function RunPayrollPage() {
   const runMut = useMutation({
     mutationFn: () => payrollApi.run(id!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payroll-cycle', id] }); setRunConfirm(false) },
+  })
+  const partialMut = useMutation({
+    mutationFn: (ids: string[]) => payrollApi.run(id!, ids),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payroll-cycle', id] }); setAddOpen(false); setAddSel(new Set()) },
+  })
+  const { data: allEmps } = useQuery({
+    queryKey: ['employees-for-run'],
+    queryFn: () => employeeApi.list({ limit: 500 }).then(r => r.data.data),
+    enabled: addOpen,
   })
   const lockMut = useMutation({
     mutationFn: () => payrollApi.lock(id!),
@@ -154,6 +165,7 @@ export default function RunPayrollPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               {canRun      && <Button icon={<RefreshCw size={14} />} onClick={() => setRunConfirm(true)} loading={runMut.isPending}>{status === 'CALCULATED' ? 'Re-run Payroll' : 'Run Payroll'}</Button>}
+              {canRun && status === 'CALCULATED' && <Button variant="secondary" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>Add Employee to Run</Button>}
               {canLock     && <Button variant="secondary" icon={<Lock size={14} />} onClick={() => setLockConfirm(true)}>Lock Cycle</Button>}
               {canUnlock   && <Button variant="secondary" icon={<Unlock size={14} />} onClick={() => setUnlockConfirm(true)}>Unlock</Button>}
               {canDisburse && <Button variant="primary" icon={<Banknote size={14} />} onClick={() => setDisburseConfirm(true)}>Mark Disbursed</Button>}
@@ -433,6 +445,31 @@ export default function RunPayrollPage() {
       <ConfirmModal open={runConfirm} onClose={() => setRunConfirm(false)} title="Run Payroll"
         message={`This will calculate salaries for all active employees in ${cycle?.payrollMonth}. Existing calculations will be overwritten.`}
         onConfirm={() => runMut.mutate()} loading={runMut.isPending} />
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Employee to Run"
+        footer={
+          <>
+            {partialMut.isError && <span className="text-xs text-red-500 mr-auto self-center">{(partialMut.error as any)?.response?.data?.error || 'Failed'}</span>}
+            <Button variant="secondary" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button icon={<Play size={14} />} disabled={addSel.size === 0} loading={partialMut.isPending}
+              onClick={() => partialMut.mutate(Array.from(addSel))}>Calculate ({addSel.size})</Button>
+          </>
+        }>
+        <p className="text-xs text-slate-500 mb-3">Calculates only the selected employees. Other entries stay unchanged.</p>
+        <div className="border border-slate-100 rounded-lg max-h-72 overflow-y-auto divide-y divide-slate-50">
+          {((allEmps || []) as any[])
+            .filter(e => ['ACTIVE', 'ON_NOTICE'].includes(e.status) && !entries.some((x: any) => x.employeeId === e.id))
+            .map(e => (
+              <label key={e.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                <input type="checkbox" checked={addSel.has(e.id)} onChange={() => {
+                  const n = new Set(addSel); n.has(e.id) ? n.delete(e.id) : n.add(e.id); setAddSel(n)
+                }} />
+                <span className="flex-1 text-sm text-slate-800">{String(e.name).split('|')[0].trim()}
+                  <span className="text-xs text-slate-400 ml-2">{e.employeeCode}</span>
+                </span>
+              </label>
+            ))}
+        </div>
+      </Modal>
       <ConfirmModal open={lockConfirm} onClose={() => setLockConfirm(false)} title="Lock Cycle"
         message="Locking prevents further edits. Only a Super Admin can unlock. Proceed?"
         onConfirm={() => lockMut.mutate()} loading={lockMut.isPending} variant="primary" />

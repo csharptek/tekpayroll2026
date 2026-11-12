@@ -198,7 +198,7 @@ export function computeSalaryStructure(
   const employeePfMonthly = pfFor(basicMonthly, asOf, pfConfig)
 
   // Employee ESI — base = Basic (new rule)
-  const employeeEsiMonthly = esiApplies ? ri(basicMonthly * esiConfig.employeeRate) : 0
+  const employeeEsiMonthly = esiApplies ? esiCeil(basicMonthly * esiConfig.employeeRate) : 0
   const employerEsiMonthly = employerEsiInCtcMonthly
   const employerEsiAnnual  = employerEsiInCtcAnnual
   const esiBase            = basicMonthly  // retained for backward compat; now represents ESI base = Basic
@@ -265,6 +265,11 @@ export function computeLop(grandTotalMonthly: number, totalDays: number, lopDays
 export function computeEsi(esiBase: number, employeeRate = DEFAULT_ESI_EMPLOYEE_RATE, threshold = DEFAULT_ESI_THRESHOLD): number {
   if (esiBase > threshold) return 0
   return r2(esiBase * employeeRate)
+}
+
+/** ESIC rounds contributions up to the next higher rupee */
+export function esiCeil(amount: number): number {
+  return Math.ceil(Math.round(amount * 100) / 100)
 }
 
 // ─── PROFESSIONAL TAX ────────────────────────────────────────────────────────
@@ -637,17 +642,24 @@ export async function calculatePayrollForEmployee(params: {
     params.resignationDate
   )
 
+  const pfConfig = params.pfConfig ?? await getPfConfig()
   let salary: SalaryStructure
   if (params.prebuiltSalary) {
     // Use snapshot values directly — no recomputation
-    salary = suppressHyi
-      ? { ...params.prebuiltSalary, hyiMonthly: 0, annualBonus: 0 }
-      : params.prebuiltSalary
+    salary = params.prebuiltSalary
   } else {
-    const salaryInputForCalc: SalaryInput = suppressHyi
-      ? { ...salaryInput, hasIncentive: false, incentivePercent: 0 }
-      : salaryInput
-    salary = computeSalaryStructure(salaryInputForCalc, esiConfig, params.cycleEnd, params.pfConfig ?? await getPfConfig())
+    salary = computeSalaryStructure(salaryInput, esiConfig, params.cycleEnd, pfConfig)
+  }
+  // On notice (same HYI slab): HYI and annual bonus not paid — gross drops by HYI
+  if (suppressHyi && salary.hyiMonthly > 0) {
+    salary = {
+      ...salary,
+      grandTotalMonthly: r2(salary.grandTotalMonthly - salary.hyiMonthly),
+      hyiMonthly:  0,
+      annualBonus: 0,
+    } as SalaryStructure
+  } else if (suppressHyi) {
+    salary = { ...salary, annualBonus: 0 }
   }
 
   // March payout: FY payout override (e.g. mid-year PF absorption) replaces annualized bonus
@@ -674,9 +686,23 @@ export async function calculatePayrollForEmployee(params: {
   const bonusMonth    = isBonusMonth(params.payrollMonth)
   const annualBonus   = bonusMonth ? salary.annualBonus : 0
 
-  // When snapshot present — PF, ESI, PT read directly from it. No recomputation.
-  const pf  = salary.employeePfMonthly
-  const esi = salary.employeeEsiMonthly
+  // PF / ESI on EARNED basic (after joining/exit proration and LOP).
+  // PF: 12% capped at the wage ceiling applicable for the cycle month.
+  // ESI: applicable per structure; ESIC rounds contributions UP to the next rupee.
+  const earnedRatio = proration.totalDays > 0
+    ? Math.max(0, (proration.payableDays - Number(params.lopDays || 0)) / proration.totalDays)
+    : 1
+  const earnedBasic = r2(salary.basicMonthly * earnedRatio)
+  const pf          = pfFor(earnedBasic, params.cycleEnd, pfConfig)
+  const esiApplies  = salary.esiApplies || salary.employeeEsiMonthly > 0
+  const esi         = esiApplies ? esiCeil(earnedBasic * esiConfig.employeeRate) : 0
+  salary = {
+    ...salary,
+    employeePfMonthly:  pf,
+    employerPfMonthly:  pf,
+    employeeEsiMonthly: esi,
+    employerEsiMonthly: esiApplies ? esiCeil(earnedBasic * esiConfig.employerRate) : 0,
+  }
   const pt  = (params.prebuiltSalary as any)?.ptMonthly !== undefined
     ? (params.prebuiltSalary as any).ptMonthly
     : await computePt(salary.grandTotalMonthly, params.state)

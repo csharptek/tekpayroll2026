@@ -216,6 +216,7 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
     state, joiningDate, panNumber, aadhaarNumber, pfNumber, esiNumber, uanNumber,
     jobTitle, department, mobilePhone, status, stipendMonthly,
     bonusAmountOverride, bonusPayoutOverride, hraOfBasic, revisionEffectiveFrom,
+    pfZeroWage,
   } = req.body;
 
   const numOrNull = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v))
@@ -296,6 +297,10 @@ employeeRouter.put('/:id', requireHR, async (req, res) => {
   if (aadhaarNumber) updateData.aadhaarNumber = aadhaarNumber;
   if (pfNumber) updateData.pfNumber = pfNumber;
   if (esiNumber) updateData.esiNumber = esiNumber;
+  if (pfZeroWage !== undefined) {
+    updateData.pfZeroWage      = Boolean(pfZeroWage)
+    updateData.pfZeroWageSince = pfZeroWage ? ((existing as any).pfZeroWageSince ?? new Date()) : null
+  }
   if (uanNumber) updateData.uanNumber = uanNumber;
   if (jobTitle) updateData.jobTitle = jobTitle;
   if (department) updateData.department = department;

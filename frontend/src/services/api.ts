@@ -112,7 +112,7 @@ export const payrollApi = {
   cycles: () => api.get('/api/payroll/cycles'),
   cycle: (id: string) => api.get(`/api/payroll/cycles/${id}`),
   createCycle: (data: any) => api.post('/api/payroll/cycles', data),
-  run: (id: string) => api.post(`/api/payroll/cycles/${id}/run`),
+  run: (id: string, employeeIds?: string[]) => api.post(`/api/payroll/cycles/${id}/run`, employeeIds?.length ? { employeeIds } : {}),
   lock: (id: string) => api.post(`/api/payroll/cycles/${id}/lock`),
   unlock: (id: string, reason: string) => api.post(`/api/payroll/cycles/${id}/unlock`, { reason }),
   disburse: (id: string) => api.post(`/api/payroll/cycles/${id}/disburse`),
@@ -127,7 +127,7 @@ export const payrollApi = {
   removeSkip: (id: string) => api.delete(`/api/payroll/skips/${id}`),
   // PF Sheet
   pfSheetEmployees: (cycleId: string) => api.get(`/api/payroll/cycles/${cycleId}/pf-sheet/employees`),
-  pfSheetExport: (cycleId: string, data: { entryEmployeeIds: string[]; extraEmployeeIds: string[]; extraLop?: Record<string, number>; note?: string }) =>
+  pfSheetExport: (cycleId: string, data: { entryEmployeeIds: string[]; extraEmployeeIds: string[]; extraLop?: Record<string, number>; note?: string; format?: 'xlsx' | 'ecr' | 'esic' }) =>
     api.post(`/api/payroll/cycles/${cycleId}/pf-sheet/export`, data, { responseType: 'blob' }),
   pfSheets: (year?: string) => api.get('/api/payroll/pf-sheets', { params: year ? { year } : {} }),
   pfSheet: (id: string) => api.get(`/api/payroll/pf-sheets/${id}`),

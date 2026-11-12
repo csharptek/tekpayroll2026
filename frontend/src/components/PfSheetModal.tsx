@@ -10,8 +10,8 @@ interface Props {
   onClose: () => void
 }
 
-export function saveBlob(data: BlobPart, fileName: string) {
-  const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+export function saveBlob(data: BlobPart, fileName: string, type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+  const blob = new Blob([data], { type })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -29,8 +29,9 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
   const [q, setQ] = useState('')
   const [note, setNote] = useState('')
   const [lop, setLop] = useState<Record<string, string>>({})
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
+  const [warn, setWarn] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['pf-sheet-employees', cycleId],
@@ -41,10 +42,11 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
   useEffect(() => {
     if (data) {
       setEntrySel(new Set<string>(data.entries.map((e: any) => e.id)))
-      setExtraSel(new Set<string>())
+      setExtraSel(new Set<string>((data.others || []).filter((o: any) => o.autoInclude).map((o: any) => o.id)))
       setLop({})
       setNote('')
       setErr('')
+      setWarn('')
       setQ('')
     }
   }, [data])
@@ -62,11 +64,13 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
     setter(n)
   }
 
-  async function download() {
-    setBusy(true)
+  async function download(format: 'xlsx' | 'ecr' | 'esic' = 'xlsx') {
+    setBusy(format)
     setErr('')
+    setWarn('')
     try {
       const res = await payrollApi.pfSheetExport(cycleId, {
+        format,
         entryEmployeeIds: Array.from(entrySel),
         extraEmployeeIds: Array.from(extraSel),
         extraLop: Object.fromEntries(
@@ -74,13 +78,24 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
         ),
         note: note.trim() || undefined,
       })
-      saveBlob(res.data, `pf-sheet-${data?.payrollMonth || 'export'}.xlsx`)
-      qc.invalidateQueries({ queryKey: ['pf-sheets'] })
-      onClose()
+      const month = data?.payrollMonth || 'export'
+      if (format === 'ecr') {
+        saveBlob(res.data, `ecr-${month}.txt`, 'text/plain')
+      } else {
+        saveBlob(res.data, format === 'esic' ? `esic-${month}.xlsx` : `pf-sheet-${month}.xlsx`)
+      }
+      const missing = decodeURIComponent(String(res.headers?.['x-missing'] || ''))
+      if (missing) {
+        setWarn(`${format === 'ecr' ? 'UAN' : 'ESIC IP no.'} missing — excluded: ${missing}`)
+      } else if (format === 'xlsx') {
+        qc.invalidateQueries({ queryKey: ['pf-sheets'] })
+        onClose()
+      }
+      if (format === 'xlsx') qc.invalidateQueries({ queryKey: ['pf-sheets'] })
     } catch (e: any) {
       setErr('Export failed')
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
@@ -96,9 +111,16 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
       footer={
         <>
           {err && <span className="text-sm text-red-500 mr-auto self-center">{err}</span>}
+          {!err && warn && <span className="text-xs text-amber-600 mr-auto self-center max-w-xs">{warn}</span>}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button icon={<Download size={14} />} loading={busy} disabled={total === 0} onClick={download}>
-            Download ({total})
+          <Button variant="secondary" icon={<Download size={14} />} loading={busy === 'ecr'} disabled={total === 0 || !!busy} onClick={() => download('ecr')}>
+            ECR .txt
+          </Button>
+          <Button variant="secondary" icon={<Download size={14} />} loading={busy === 'esic'} disabled={total === 0 || !!busy} onClick={() => download('esic')}>
+            ESIC .xlsx
+          </Button>
+          <Button icon={<Download size={14} />} loading={busy === 'xlsx'} disabled={total === 0 || !!busy} onClick={() => download('xlsx')}>
+            PF Sheet ({total})
           </Button>
         </>
       }
@@ -130,7 +152,7 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
 
           <div>
             <p className="text-sm font-semibold text-slate-800 mb-1">Add employees not in this payroll ({extraSel.size} added)</p>
-            <p className="text-xs text-slate-400 mb-2">Prorated for joining / last working day. Set LOP days if any.</p>
+            <p className="text-xs text-slate-400 mb-2">Prorated for joining / last working day. Set LOP days if any. Exited this month and unpaid-leave employees are pre-selected.</p>
             <input
               className="input mb-2"
               placeholder="Search name or code"
@@ -145,7 +167,8 @@ export default function PfSheetModal({ cycleId, open, onClose }: Props) {
                   <span className="flex-1 text-sm text-slate-800">{o.name}
                     <span className="text-xs text-slate-400 ml-2">{o.employeeCode}</span>
                   </span>
-                  {o.skipReason && <span className="text-xs text-amber-600">Skipped: {o.skipReason}</span>}
+                  {o.tag && <span className="text-xs text-blue-600">{o.tag}</span>}
+                  {!o.tag && o.skipReason && <span className="text-xs text-amber-600">Skipped: {o.skipReason}</span>}
                   <span className="text-xs text-slate-500">{o.payableDays}/{o.totalDays} days</span>
                   {extraSel.has(o.id) && (
                     <span className="flex items-center gap-1 text-xs text-slate-500" onClick={e => e.preventDefault()}>

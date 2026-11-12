@@ -200,6 +200,8 @@ model Employee {
   bonusAmountOverride Decimal? @db.Decimal(12, 2)  // annualized bonus ₹; overrides CTC × incentivePercent
   bonusPayoutOverride Decimal? @db.Decimal(12, 2)  // this FY March payout ₹; overrides annualized bonus at payout
   hraOfBasic          Boolean  @default(false)     // true = hraPercent is % of Basic; false = % of CTC (legacy)
+  pfZeroWage          Boolean  @default(false)     // unpaid leave: no salary, PF/ESIC reported with 0 wages
+  pfZeroWageSince     DateTime?
   // Annual/Joining bonus = CTC × incentivePercent (paid in March every year)
   // Computed field — not stored, calculated from above
 
