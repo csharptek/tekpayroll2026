@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, Clock, AlertTriangle, RefreshCw, Scissors, Search, ArrowUpDown } from 'lucide-react'
 import { leaveApi } from '../../services/api'
@@ -61,10 +61,26 @@ export default function HRLeavePage() {
   const [cancelReqId, setCancelReqId]       = useState<string | null>(null)
   const [cancelReqNewEnd, setCancelReqNewEnd] = useState('')
 
-  const { data: appsData, isLoading: appsLoading } = useQuery({
-    queryKey: ['hr-leave-apps', filterStatus, filterKind, page],
-    queryFn: () => leaveApi.allApplications({ status: filterStatus || undefined, leaveKind: filterKind || undefined, page, limit: 200 }).then(r => r.data),
+  const PAGE_SIZE = 50
+  const [debouncedName, setDebouncedName] = useState('')
+  useEffect(() => {
+    const h = setTimeout(() => setDebouncedName(filterName.trim()), 350)
+    return () => clearTimeout(h)
+  }, [filterName])
+
+  const { data: appsData, isLoading: appsLoading, isFetching: appsFetching } = useQuery({
+    queryKey: ['hr-leave-apps', filterStatus, filterKind, debouncedName, filterFromDate, filterToDate, page],
+    queryFn: () => leaveApi.allApplications({
+      status:    filterStatus   || undefined,
+      leaveKind: filterKind     || undefined,
+      search:    debouncedName  || undefined,
+      fromDate:  filterFromDate || undefined,
+      toDate:    filterToDate   || undefined,
+      page,
+      limit: PAGE_SIZE,
+    }).then(r => r.data),
     enabled: tab === 'applications',
+    placeholderData: (prev: any) => prev,
   })
 
   const { data: cancelReqs, isLoading: cancelLoading } = useQuery({
@@ -122,32 +138,16 @@ export default function HRLeavePage() {
   })
 
   const rawApps = appsData?.data || []
+  const totalApps: number = appsData?.pagination?.total ?? rawApps.length
+  const totalPages = Math.max(1, Math.ceil(totalApps / PAGE_SIZE))
+  const rangeStart = totalApps === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const rangeEnd   = Math.min(page * PAGE_SIZE, totalApps)
 
   // Client-side filter + sort
   const apps = useMemo(() => {
     let list = [...rawApps]
 
-    // Name filter
-    if (filterName.trim()) {
-      const q = filterName.trim().toLowerCase()
-      list = list.filter((a: any) =>
-        a.employee?.name?.toLowerCase().includes(q) ||
-        a.employee?.employeeCode?.toLowerCase().includes(q)
-      )
-    }
-
-    // Date range filter (leave start date)
-    if (filterFromDate) {
-      const from = new Date(filterFromDate)
-      list = list.filter((a: any) => new Date(a.startDate) >= from)
-    }
-    if (filterToDate) {
-      const to = new Date(filterToDate)
-      to.setHours(23, 59, 59)
-      list = list.filter((a: any) => new Date(a.startDate) <= to)
-    }
-
-    // Sort
+    // Sort (within current page)
     if (sortField !== 'none') {
       list.sort((a: any, b: any) => {
         const av = sortField === 'startDate' ? new Date(a.startDate).getTime() : new Date(a.createdAt).getTime()
@@ -157,7 +157,7 @@ export default function HRLeavePage() {
     }
 
     return list
-  }, [rawApps, filterName, filterFromDate, filterToDate, sortField, sortDir])
+  }, [rawApps, sortField, sortDir])
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -245,11 +245,12 @@ export default function HRLeavePage() {
           </div>
 
           {/* Result count */}
-          {(filterName || filterFromDate || filterToDate) && (
-            <div className="px-4 py-2 text-xs text-slate-500 border-b border-slate-50">
-              Showing {apps.length} result{apps.length !== 1 ? 's' : ''}
-            </div>
-          )}
+          <div className="px-4 py-2 text-xs text-slate-500 border-b border-slate-50 flex items-center justify-between">
+            <span>
+              Showing {rangeStart}–{rangeEnd} of {totalApps} result{totalApps !== 1 ? 's' : ''}
+              {appsFetching && !appsLoading && <span className="ml-2 text-slate-400">Loading…</span>}
+            </span>
+          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[900px]">
@@ -403,6 +404,23 @@ export default function HRLeavePage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-xs text-slate-500">
+              <span>Page {page} of {totalPages}</span>
+              <div className="flex items-center gap-1">
+                <button className="px-2.5 py-1 rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-slate-50"
+                  disabled={page <= 1} onClick={() => setPage(1)}>First</button>
+                <button className="px-2.5 py-1 rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-slate-50"
+                  disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</button>
+                <button className="px-2.5 py-1 rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-slate-50"
+                  disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</button>
+                <button className="px-2.5 py-1 rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-slate-50"
+                  disabled={page >= totalPages} onClick={() => setPage(totalPages)}>Last</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

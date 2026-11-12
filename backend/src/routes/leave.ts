@@ -224,11 +224,22 @@ leaveRouter.get('/my', async (req, res) => {
 leaveRouter.get('/applications', async (req, res) => {
   // All authenticated users can view applications (for calendar)
   // HR/SuperAdmin see all; others also see all for calendar purposes
-  const { status, leaveKind, employeeId, year, month, page = '1', limit = '50' } = req.query
+  const { status, leaveKind, employeeId, year, month, search, fromDate, toDate, page = '1', limit = '50' } = req.query
   const where: any = {}
   if (status)     where.status     = status
   if (leaveKind)  where.leaveKind  = leaveKind
   if (employeeId) where.employeeId = employeeId
+
+  // Employee name / code search
+  const searchStr = typeof search === 'string' ? search.trim() : ''
+  if (searchStr) {
+    where.employee = {
+      OR: [
+        { name:         { contains: searchStr, mode: 'insensitive' } },
+        { employeeCode: { contains: searchStr, mode: 'insensitive' } },
+      ],
+    }
+  }
 
   // Month/year filter for calendar
   if (year && month) {
@@ -247,8 +258,16 @@ leaveRouter.get('/applications', async (req, res) => {
     where.startDate = { gte: new Date(`${y}-01-01`), lte: new Date(`${y}-12-31`) }
   }
 
-  const pageNum  = parseInt(page as string)
-  const limitNum = parseInt(limit as string)
+  // Leave start-date range filter
+  if (fromDate || toDate) {
+    const range: any = { ...(where.startDate || {}) }
+    if (typeof fromDate === 'string' && fromDate) range.gte = new Date(`${fromDate}T00:00:00.000Z`)
+    if (typeof toDate === 'string' && toDate)     range.lte = new Date(`${toDate}T23:59:59.999Z`)
+    where.startDate = range
+  }
+
+  const pageNum  = Math.max(1, parseInt(page as string) || 1)
+  const limitNum = Math.min(1000, Math.max(1, parseInt(limit as string) || 50))
 
   const [applications, total] = await Promise.all([
     prisma.lvApplication.findMany({
