@@ -233,6 +233,20 @@ export default function ConfigPage() {
         </div>
       </Section>
 
+      {/* ── Payroll automation ─────────────────────────────────────── */}
+      <Section icon={Calendar} title="Payroll Automation" subtitle="Auto run on the 27th. Each switch can be turned off to restore the old behaviour.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="label">Auto run respects payroll skips</label>
+            <select className="input" value={getValue('AUTO_RUN_RESPECT_SKIPS', 'true')}
+              onChange={e => set('AUTO_RUN_RESPECT_SKIPS', e.target.value)}>
+              <option value="true">On — skipped employees are not paid (same as manual run)</option>
+              <option value="false">Off — old behaviour (auto run ignores skips)</option>
+            </select>
+          </div>
+        </div>
+      </Section>
+
       {/* ── PF ──────────────────────────────────────────────────────── */}
       <Section icon={DollarSign} title="PF Configuration" subtitle="PF = rate × Basic, capped at rate × wage ceiling. Ceiling switches on the effective date. After changing, run 'Migrate Salary Snapshots' on Run Tasks.">
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">

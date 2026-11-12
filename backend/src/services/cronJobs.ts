@@ -66,7 +66,15 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
 
     const { calculatePayrollForEmployee } = await import('./payrollEngine')
     await syncLeaveLopForCycle(cycle as any)
-    const employees = await getPayrollEligibleEmployees(cycle.cycleStart)
+    const eligibleAll = await getPayrollEligibleEmployees(cycle.cycleStart)
+
+    // Respect payroll skips (same as manual run). Switch: AUTO_RUN_RESPECT_SKIPS (default ON)
+    const respectCfg = await prisma.systemConfig.findUnique({ where: { key: 'AUTO_RUN_RESPECT_SKIPS' } })
+    const respectSkips = (respectCfg?.value ?? 'true') !== 'false'
+    const skippedIds = respectSkips
+      ? new Set((await prisma.payrollSkip.findMany({ where: { payrollMonth: cycle.payrollMonth }, select: { employeeId: true } })).map(s => s.employeeId))
+      : new Set<string>()
+    const employees = eligibleAll.filter(e => !skippedIds.has(e.id))
 
     let totalGross = 0, totalNet = 0, totalPf = 0, totalEsi = 0, errCount = 0
     const errors: string[] = []
@@ -173,7 +181,7 @@ export async function cronRunPayroll(triggeredBy: 'cron' | 'manual' = 'cron') {
     await completeCronLog(log.id, status, log.startedAt, {
       message: msg,
       errorMessage: errors.length ? errors.join('\n') : undefined,
-      meta: { payrollMonth, employees: employees.length, totalGross, totalNet, totalPf, totalEsi, errors: errCount },
+      meta: { payrollMonth, employees: employees.length, skipped: skippedIds.size, respectSkips, totalGross, totalNet, totalPf, totalEsi, errors: errCount },
     })
 
     console.log(`[CRON] ${msg}`)

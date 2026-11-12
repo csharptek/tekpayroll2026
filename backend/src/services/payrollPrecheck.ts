@@ -73,6 +73,8 @@ export async function buildPayrollPrecheck(payrollMonth: string): Promise<Preche
     prisma.payrollSkip.findMany({ where: { payrollMonth }, select: { employeeId: true, reason: true } }),
   ])
   const skipMap  = new Map(skips.map(s => [s.employeeId, s.reason || 'Skipped']))
+  const respectCfg = await prisma.systemConfig.findUnique({ where: { key: 'AUTO_RUN_RESPECT_SKIPS' } })
+  const autoRespectsSkips = (respectCfg?.value ?? 'true') !== 'false'
   const eligIds  = eligible.map(e => e.id)
 
   const [details, pendingLeaves, pendingReimbs, revisions] = await Promise.all([
@@ -166,13 +168,15 @@ export async function buildPayrollPrecheck(payrollMonth: string): Promise<Preche
     const rv = revMap.get(e.id);   if (rv) issues.push({ severity: 'info', message: `Salary revision effective ${d10(rv)}` })
 
     if (skipReason) {
-      issues.unshift({ severity: 'warning', message: `Skipped (${skipReason}) — manual run excludes, auto run (27th) still pays` })
+      issues.unshift(autoRespectsSkips
+        ? { severity: 'info',    message: `Skipped (${skipReason}) — not paid` }
+        : { severity: 'warning', message: `Skipped (${skipReason}) — manual run excludes, auto run (27th) still pays` })
     }
 
     picks.push({
       id: e.id, name: clean(e.name), employeeCode: e.employeeCode, department: e.department,
       status: e.status, isTrainee: Boolean(e.isTrainee), estGross,
-      inManual: !skipReason, inAuto: true, skipReason, issues,
+      inManual: !skipReason, inAuto: autoRespectsSkips ? !skipReason : true, skipReason, issues,
     })
   }
 
@@ -216,8 +220,8 @@ export async function buildPayrollPrecheck(payrollMonth: string): Promise<Preche
     excluded,
     counts: {
       manual:   picks.filter(p => p.inManual).length,
-      auto:     picks.length,
-      autoOnly: picks.filter(p => !p.inManual).length,
+      auto:     picks.filter(p => p.inAuto).length,
+      autoOnly: picks.filter(p => p.inAuto && !p.inManual).length,
       excluded: excluded.length,
       errors:   sevCount('error'),
       warnings: sevCount('warning'),
