@@ -80,7 +80,9 @@ export async function buildPayrollPrecheck(payrollMonth: string): Promise<Preche
       where: { id: { in: eligIds } },
       select: {
         id: true, uanNumber: true, esiNumber: true, panNumber: true,
-        bankDetail: { select: { accountNumber: true, ifscCode: true } },
+        bankDetail:   { select: { accountNumber: true, ifscCode: true } },
+        bankAccounts: { select: { accountNumber: true, ifscCode: true } },
+        governmentId: { select: { uanNumber: true, esicNumber: true, panNumber: true } },
       },
     }),
     prisma.leaveApplication.findMany({
@@ -147,11 +149,17 @@ export async function buildPayrollPrecheck(payrollMonth: string): Promise<Preche
       issues.push({ severity: 'info', message: 'On notice — paid monthly (no skip set)' })
     }
 
-    if (!det.bankDetail?.accountNumber || !det.bankDetail?.ifscCode) issues.push({ severity: 'warning', message: 'Bank details missing' })
+    const hasBank = (det.bankAccounts || []).some((b: any) => b.accountNumber && b.ifscCode)
+      || (det.bankDetail?.accountNumber && det.bankDetail?.ifscCode)
+    const gid = det.governmentId || {}
+    const uan = String(gid.uanNumber || det.uanNumber || '').trim()
+    const pan = String(gid.panNumber || det.panNumber || '').trim()
+    const esic = String(gid.esicNumber || det.esiNumber || '').trim()
+    if (!hasBank) issues.push({ severity: 'warning', message: 'Bank details missing' })
     if (!e.isTrainee) {
-      if (!String(det.uanNumber || '').trim()) issues.push({ severity: 'warning', message: 'UAN missing' })
-      if (!String(det.panNumber || '').trim()) issues.push({ severity: 'warning', message: 'PAN missing' })
-      if (esiApplies && !String(det.esiNumber || '').trim()) issues.push({ severity: 'warning', message: 'ESIC number missing' })
+      if (!uan) issues.push({ severity: 'warning', message: 'UAN missing' })
+      if (!pan) issues.push({ severity: 'warning', message: 'PAN missing' })
+      if (esiApplies && !esic) issues.push({ severity: 'warning', message: 'ESIC number missing' })
     }
     const lc = leaveCnt.get(e.id); if (lc) issues.push({ severity: 'warning', message: `${lc} pending leave request(s) in cycle` })
     const rc = reimbCnt.get(e.id); if (rc) issues.push({ severity: 'warning', message: `${rc} pending reimbursement(s)` })

@@ -62,7 +62,7 @@ export async function buildEntryRows(cycleId: string, employeeIds?: string[]): P
       ...(employeeIds ? { employeeId: { in: employeeIds } } : {}),
     },
     include: {
-      employee: { select: { id: true, name: true, employeeCode: true, uanNumber: true, esiNumber: true, lastWorkingDay: true } },
+      employee: { select: { id: true, name: true, employeeCode: true, uanNumber: true, esiNumber: true, lastWorkingDay: true, governmentId: { select: { uanNumber: true, esicNumber: true } } } },
       cycle:    { select: { payrollMonth: true, cycleStart: true, cycleEnd: true } },
     },
   })
@@ -87,8 +87,8 @@ export async function buildEntryRows(cycleId: string, employeeIds?: string[]): P
         employeeId: e.employeeId,
         name:       emp.name,
         code:       emp.employeeCode,
-        uan:        String(emp.uanNumber || '').trim(),
-        esiNumber:  String(emp.esiNumber || '').trim(),
+        uan:        String(emp.governmentId?.uanNumber || emp.uanNumber || '').trim(),
+        esiNumber:  String(emp.governmentId?.esicNumber || emp.esiNumber || '').trim(),
         ...lines,
         pf:         pfFor(earnedBasic, monthEnd, pfCfg),
         paidPf:     r2(Number(e.pfAmount)),
@@ -158,6 +158,7 @@ export async function buildExtraRows(
     select: {
       id: true, employeeCode: true, name: true, jobTitle: true, department: true, state: true, status: true,
       uanNumber: true, esiNumber: true,
+      governmentId: { select: { uanNumber: true, esicNumber: true } },
     },
     orderBy: { name: 'asc' },
   })
@@ -172,7 +173,7 @@ export async function buildExtraRows(
     if (!mt?.zeroWage) continue
     out.push({
       employeeId: e.id, name: e.name, code: e.employeeCode,
-      uan: String(e.uanNumber || '').trim(), esiNumber: String(e.esiNumber || '').trim(),
+      uan: String((e as any).governmentId?.uanNumber || e.uanNumber || '').trim(), esiNumber: String((e as any).governmentId?.esicNumber || e.esiNumber || '').trim(),
       basic: 0, hra: 0, transport: 0, fbp: 0, hyi: 0, gross: 0,
       pf: 0, paidPf: 0, esi: 0, paidEsi: 0, esiApplies: false, pt: 0, lop: 0,
       totalDays: mt.totalDays, workedDays: 0, ncpDays: mt.totalDays,
@@ -201,8 +202,8 @@ export async function buildExtraRows(
       employeeId: r.employeeId,
       name:       r.name,
       code:       e?.employeeCode || '',
-      uan:        String(e?.uanNumber || '').trim(),
-      esiNumber:  String(e?.esiNumber || '').trim(),
+      uan:        String(e?.governmentId?.uanNumber || e?.uanNumber || '').trim(),
+      esiNumber:  String(e?.governmentId?.esicNumber || e?.esiNumber || '').trim(),
       ...lines,
       pf, paidPf: pf,
       esi, paidEsi: esi,
